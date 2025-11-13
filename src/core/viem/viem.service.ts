@@ -2,8 +2,8 @@
  */
 
 import { Injectable, Logger } from "@nestjs/common";
-import { privateKeyToAccount } from "viem/accounts";
 import { isAddress } from "viem";
+import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 
 @Injectable()
 export class ViemService {
@@ -27,13 +27,7 @@ export class ViemService {
      * Generates a new wallet with address and private key
      */
     generateWallet(): { address: string; privateKey: string } {
-        // Generate a random 32-byte private key
-        const randomBytes = new Uint8Array(32);
-        crypto.getRandomValues(randomBytes);
-        const privateKey = `0x${Array.from(randomBytes)
-            .map((b) => b.toString(16).padStart(2, "0"))
-            .join("")}`;
-
+        const privateKey = generatePrivateKey();
         const account = privateKeyToAccount(privateKey as `0x${string}`);
 
         this.logger.log(`Generated new wallet: ${account.address}`);

@@ -6,7 +6,8 @@ BEGIN;
 CREATE TABLE deposit_wallets (
   id SERIAL PRIMARY KEY,
   wallet_address VARCHAR(255) NOT NULL,
-  primary_key VARCHAR(255) NOT NULL
+  paired_wallet_address VARCHAR(255) NOT NULL,
+  paired_wallet_primary_key VARCHAR(255) NOT NULL
 );
 
 COMMIT;
@@ -15,6 +16,6 @@ COMMIT;
 BEGIN;
 
 -- Example rollback:
--- DROP TABLE IF EXISTS users;
+DROP TABLE IF EXISTS deposit_wallets;
 
 COMMIT;

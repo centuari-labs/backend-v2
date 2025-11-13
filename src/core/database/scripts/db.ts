@@ -50,4 +50,9 @@ program
     .description("Run all seed files")
     .action(() => exec("run-seed"));
 
+program
+    .command("reset")
+    .description("Reset all migration files")
+    .action(() => exec("reset-migration"));
+
 program.parse(process.argv);

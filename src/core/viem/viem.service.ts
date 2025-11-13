@@ -2,6 +2,8 @@
  */
 
 import { Injectable, Logger } from "@nestjs/common";
+import { privateKeyToAccount } from "viem/accounts";
+import { isAddress } from "viem";
 
 @Injectable()
 export class ViemService {
@@ -11,6 +13,34 @@ export class ViemService {
      * viem public client has complex generic recursion issues,
      * so we use 'any' type here to avoid TypeScript compiler crashes.
      */
-    private clients = new Map<any, any>();
-    private walletClients = new Map<string, any>();
+    // private clients = new Map<any, any>();
+    // private walletClients = new Map<string, any>();
+
+    /**
+     * Validates if a string is a valid Ethereum address
+     */
+    isValidAddress(address: string): boolean {
+        return isAddress(address);
+    }
+
+    /**
+     * Generates a new wallet with address and private key
+     */
+    generateWallet(): { address: string; privateKey: string } {
+        // Generate a random 32-byte private key
+        const randomBytes = new Uint8Array(32);
+        crypto.getRandomValues(randomBytes);
+        const privateKey = `0x${Array.from(randomBytes)
+            .map((b) => b.toString(16).padStart(2, "0"))
+            .join("")}`;
+
+        const account = privateKeyToAccount(privateKey as `0x${string}`);
+
+        this.logger.log(`Generated new wallet: ${account.address}`);
+
+        return {
+            address: account.address,
+            privateKey,
+        };
+    }
 }

@@ -2,8 +2,9 @@
  */
 
 import { Injectable, Logger } from "@nestjs/common";
-import { isAddress } from "viem";
+import { createPublicClient, http, isAddress } from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
+import { base } from "viem/chains";
 
 @Injectable()
 export class ViemService {
@@ -13,7 +14,7 @@ export class ViemService {
      * viem public client has complex generic recursion issues,
      * so we use 'any' type here to avoid TypeScript compiler crashes.
      */
-    // private clients = new Map<any, any>();
+    private publicClient = new Map<any, any>();
     // private walletClients = new Map<string, any>();
 
     /**
@@ -21,6 +22,20 @@ export class ViemService {
      */
     isValidAddress(address: string): boolean {
         return isAddress(address);
+    }
+
+    getClient(chainId: number): any {
+        if (!this.publicClient.has(chainId)) {
+            const client = createPublicClient({
+                chain: base,
+                transport: http(),
+            });
+
+            this.publicClient.set(chainId, client);
+            this.logger.log(`Created new Viem client for chainId: ${chainId}`);
+        }
+
+        return this.publicClient.get(chainId);
     }
 
     /**

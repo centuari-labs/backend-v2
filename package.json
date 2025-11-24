@@ -28,6 +28,7 @@
         "@nestjs/platform-express": "^11.0.1",
         "@privy-io/server-auth": "^1.32.5",
         "dotenv": "^17.2.3",
+        "jose": "^6.1.2",
         "passport": "^0.7.0",
         "passport-jwt": "^4.0.1",
         "pg": "^8.16.3",

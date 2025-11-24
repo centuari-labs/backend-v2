@@ -1,6 +1,5 @@
-/** biome-ignore-all lint/correctness/noUnusedFunctionParameters: <explanation> */
-/** biome-ignore-all lint/suspicious/noExplicitAny: <explanation> */
 import { Controller, Get, Req, UseGuards } from "@nestjs/common";
+import { type Request } from "express";
 import { PrivyGuard } from "./core/privy/privy.guard";
 
 @Controller()
@@ -10,12 +9,14 @@ export class AppController {
         return "Hello World!";
     }
 
-  @Get('me')
-  @UseGuards(PrivyGuard)
-  async getMe(@Req() req: any) {
-      return {
-          message: 'Authenticated via Privy!',
-          user: req.user,
-      };
-  }
+    @Get("me")
+    @UseGuards(PrivyGuard)
+    async getMe(
+        @Req() req: Request & { user: Record<string, string | number> },
+    ) {
+        return {
+            message: "Authenticated via Privy!",
+            user: req.user,
+        };
+    }
 }

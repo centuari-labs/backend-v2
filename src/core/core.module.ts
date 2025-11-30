@@ -1,10 +1,12 @@
 import { Module } from "@nestjs/common";
 import { DatabaseService } from "./database/database.service";
-import { ViemService } from "./viem/viem.service";
 import { NatsService } from "./nats/nats.service";
+import { PrivyService } from "./privy/privy.service";
+import { ViemService } from "./viem/viem.service";
 
 @Module({
-    providers: [ViemService, DatabaseService, NatsService],
-    exports: [ViemService, DatabaseService, NatsService],
+    imports: [],
+    exports: [ViemService, DatabaseService, PrivyService, NatsService],
+    providers: [ViemService, DatabaseService, PrivyService, NatsService],
 })
 export class CoreModule {}

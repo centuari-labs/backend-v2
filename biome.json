@@ -35,5 +35,10 @@
                 "organizeImports": "on"
             }
         }
+    },
+    "javascript": {
+        "parser": {
+            "unsafeParameterDecoratorsEnabled": true
+        }
     }
 }

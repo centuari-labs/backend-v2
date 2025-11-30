@@ -2,9 +2,10 @@ import { Module } from "@nestjs/common";
 import { AppController } from "./app.controller";
 import { CoreModule } from "./core/core.module";
 import { InterfaceModule } from "./interface/interface.module";
+import { OrdersModule } from "./interface/orders/orders.module";
 
 @Module({
-    imports: [InterfaceModule, CoreModule],
+    imports: [InterfaceModule, CoreModule, OrdersModule],
     controllers: [AppController],
     providers: [],
 })

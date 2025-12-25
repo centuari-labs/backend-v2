@@ -119,11 +119,6 @@ export class OrdersService {
     ): Promise<Order> {
         // Validate loan token exists
         await this.tokensService.validateToken(dto.loanToken);
-        
-        // Validate collateral tokens if provided
-        if (dto.collateralAddress && dto.collateralAddress.length > 0) {
-            await this.tokensService.validateTokens(dto.collateralAddress);
-        }
 
         const order = this.orderRepository.create({
             walletAddress,
@@ -133,8 +128,6 @@ export class OrdersService {
             assetAddress: dto.loanToken,
             amount: dto.amount,
             remainingAmount: dto.amount,
-            collateralAssetAddress: dto.collateralAddress?.[0] ?? null,
-            collateralAmount: dto.collateralAmount?.[0] ?? null,
             status: order_status.pending,
             durationDays: this.calculateDurationDays(dto.dates),
         });
@@ -164,11 +157,6 @@ export class OrdersService {
     ): Promise<Order> {
         // Validate loan token exists
         await this.tokensService.validateToken(dto.loanToken);
-        
-        // Validate collateral tokens if provided
-        if (dto.collateralAddress && dto.collateralAddress.length > 0) {
-            await this.tokensService.validateTokens(dto.collateralAddress);
-        }
 
         const order = this.orderRepository.create({
             walletAddress,
@@ -179,8 +167,6 @@ export class OrdersService {
             amount: dto.amount,
             remainingAmount: dto.amount,
             interestRate: dto.interestRate.toString(),
-            collateralAssetAddress: dto.collateralAddress?.[0] ?? null,
-            collateralAmount: dto.collateralAmount?.[0] ?? null,
             status: order_status.pending,
             durationDays: this.calculateDurationDays(dto.dates),
         });

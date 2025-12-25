@@ -120,8 +120,10 @@ export class OrdersService {
         // Validate loan token exists
         await this.tokensService.validateToken(dto.loanToken);
         
-        // Validate all collateral tokens exist
-        await this.tokensService.validateTokens(dto.collateralAddress);
+        // Validate collateral tokens if provided
+        if (dto.collateralAddress && dto.collateralAddress.length > 0) {
+            await this.tokensService.validateTokens(dto.collateralAddress);
+        }
 
         const order = this.orderRepository.create({
             walletAddress,
@@ -131,8 +133,8 @@ export class OrdersService {
             assetAddress: dto.loanToken,
             amount: dto.amount,
             remainingAmount: dto.amount,
-            collateralAssetAddress: dto.collateralAddress[0],
-            collateralAmount: dto.collateralAmount[0],
+            collateralAssetAddress: dto.collateralAddress?.[0] ?? null,
+            collateralAmount: dto.collateralAmount?.[0] ?? null,
             status: order_status.pending,
             durationDays: this.calculateDurationDays(dto.dates),
         });
@@ -163,8 +165,10 @@ export class OrdersService {
         // Validate loan token exists
         await this.tokensService.validateToken(dto.loanToken);
         
-        // Validate all collateral tokens exist
-        await this.tokensService.validateTokens(dto.collateralAddress);
+        // Validate collateral tokens if provided
+        if (dto.collateralAddress && dto.collateralAddress.length > 0) {
+            await this.tokensService.validateTokens(dto.collateralAddress);
+        }
 
         const order = this.orderRepository.create({
             walletAddress,
@@ -175,8 +179,8 @@ export class OrdersService {
             amount: dto.amount,
             remainingAmount: dto.amount,
             interestRate: dto.interestRate.toString(),
-            collateralAssetAddress: dto.collateralAddress[0],
-            collateralAmount: dto.collateralAmount[0],
+            collateralAssetAddress: dto.collateralAddress?.[0] ?? null,
+            collateralAmount: dto.collateralAmount?.[0] ?? null,
             status: order_status.pending,
             durationDays: this.calculateDurationDays(dto.dates),
         });
@@ -241,6 +245,9 @@ export class OrdersService {
             order_history_reasons.order_cancelled_by_user,
         );
 
+        // Publish cancellation event to NATS
+        await this.publishCancelOrderToNats(orderId, walletAddress);
+
         return updatedOrder;
     }
 
@@ -294,6 +301,28 @@ export class OrdersService {
         } catch (error) {
             this.logger.error(
                 `Failed to publish order ${order.id} to NATS: ${error.message}`,
+            );
+        }
+    }
+
+    private async publishCancelOrderToNats(
+        orderId: number,
+        walletAddress: string,
+    ): Promise<void> {
+        const subject = nats_subjects.orders.cancel;
+        try {
+            await this.natsService.publish(subject, {
+                event: subject,
+                timestamp: new Date().toISOString(),
+                data: {
+                    orderId,
+                    walletAddress,
+                },
+            });
+            this.logger.debug(`Published cancel order ${orderId} to ${subject}`);
+        } catch (error) {
+            this.logger.error(
+                `Failed to publish cancel order ${orderId} to NATS: ${error.message}`,
             );
         }
     }

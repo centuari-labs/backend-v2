@@ -1,11 +1,25 @@
 import { Module } from "@nestjs/common";
+import { TypeOrmModule } from "@nestjs/typeorm";
 import { AppController } from "./app.controller";
+import { AuthModule } from "./auth/auth.module";
 import { CoreModule } from "./core/core.module";
-import { InterfaceModule } from "./interface/interface.module";
-import { OrdersModule } from "./interface/orders/orders.module";
+import { OrdersModule } from "./orders/orders.module";
+import { TokensModule } from "./tokens/tokens.module";
 
 @Module({
-    imports: [InterfaceModule, CoreModule, OrdersModule],
+    imports: [
+        TypeOrmModule.forRoot({
+            type: "postgres",
+            url: process.env.DATABASE_URL,
+            autoLoadEntities: true,
+            synchronize: false, // Don't auto-sync in production - use migrations
+            logging: process.env.NODE_ENV === "development",
+        }),
+        AuthModule,
+        CoreModule,
+        OrdersModule,
+        TokensModule,
+    ],
     controllers: [AppController],
     providers: [],
 })

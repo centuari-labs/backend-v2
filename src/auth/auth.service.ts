@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, Logger } from "@nestjs/common";
-import { DatabaseService } from "../../core/database/database.service";
-import { ViemService } from "../../core/viem/viem.service";
+import { DatabaseService } from "../core/database/database.service";
+import { ViemService } from "../core/viem/viem.service";
 import type { DepositWalletResponse } from "./dto/validate-wallet.dto";
 
 @Injectable()

@@ -1,7 +1,7 @@
 /** biome-ignore-all lint/suspicious/noExplicitAny: viem public client has complex generic recursion issues, so we use 'any' type here to avoid TypeScript compiler crashes.
  */
 
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { Injectable, Logger, UnauthorizedException } from "@nestjs/common";
 import { PrivyClient } from "@privy-io/server-auth";
@@ -11,7 +11,7 @@ import * as jose from "jose";
 export class PrivyService {
     private readonly logger = new Logger(PrivyService.name);
     private privy: PrivyClient;
-    private readonly verificationKey: string;
+    private readonly verificationKey: string | null;
 
     constructor() {
         this.privy = new PrivyClient(
@@ -19,20 +19,31 @@ export class PrivyService {
             process.env.PRIVY_PROJECT_SECRET as string,
         );
 
-        this.verificationKey = readFileSync(
-            join(
-                __dirname,
-                "..",
-                "..",
-                "..",
-                "keys",
-                "verificationKey.pub.key",
-            ),
-            "utf-8",
+        // Try to load verification key if it exists
+        const keyPath = join(
+            __dirname,
+            "..",
+            "..",
+            "..",
+            "keys",
+            "verificationKeyPrivy.key.pub",
         );
+        
+        if (existsSync(keyPath)) {
+            this.verificationKey = readFileSync(keyPath, "utf-8");
+            this.logger.log("Verification key loaded successfully");
+        } else {
+            this.verificationKey = null;
+            this.logger.warn(
+                "Verification key not found at keys/verificationKey.pub.key - getUserInfo will not work"
+            );
+        }
     }
 
     async getVerificationKey() {
+        if (!this.verificationKey) {
+            throw new Error("Verification key is not configured");
+        }
         const key = await jose.importSPKI(this.verificationKey, "ES256");
         return key;
     }

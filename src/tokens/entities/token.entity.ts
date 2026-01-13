@@ -18,6 +18,9 @@ export class Token {
     @Column({ type: "int", default: 18 })
     decimals: number;
 
+    @Column({ name: "token_image", type: "varchar", length: 255, nullable: true })
+    imageUrl: string | null;
+
     @Column({ name: "is_active", default: true })
     isActive: boolean;
 

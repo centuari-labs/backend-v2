@@ -1,68 +1,80 @@
-import { Column, CreateDateColumn, Entity, Index, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
-
-export type OrderType = "lend_market" | "lend_limit" | "borrow_market" | "borrow_limit";
-export type OrderCategory = "lend" | "borrow";
-export type OrderStatus = "pending" | "partial" | "filled" | "cancelled";
+import {
+    Column,
+    CreateDateColumn,
+    Entity,
+    Index,
+    PrimaryGeneratedColumn,
+    UpdateDateColumn,
+} from "typeorm";
+import { OrderSide, OrderType, OrderStatus } from "../constants/order.constants";
 
 @Entity("orders")
 export class Order {
-    @PrimaryGeneratedColumn()
-    id: number;
+    @PrimaryGeneratedColumn("uuid", { name: "order_id" })
+    orderId: string;
 
     @Column({ name: "wallet_address", type: "varchar", length: 255 })
     @Index()
     walletAddress: string;
 
-    @Column({ name: "order_type", type: "varchar", length: 50 })
+    @Column({ name: "loan_token", type: "varchar", length: 255 })
     @Index()
-    orderType: OrderType;
+    loanToken: string;
 
-    @Column({ name: "order_category", type: "varchar", length: 50 })
+    @Column("int", { array: true })
+    maturities: number[];
+
+    @Column({ name: "timestamp", type: "bigint" }) // Using bigint for timestamp to be safe, though user asked for number
+    timestamp: number;
+
+    @Column({
+        name: "side",
+        type: "enum",
+        enum: OrderSide,
+    })
     @Index()
-    orderCategory: OrderCategory;
+    side: OrderSide;
 
-    @Column({ name: "is_market_order", type: "boolean", default: false })
-    isMarketOrder: boolean;
-
-    @Column({ name: "asset_address", type: "varchar", length: 255 })
+    @Column({
+        name: "type",
+        type: "enum",
+        enum: OrderType,
+    })
     @Index()
-    assetAddress: string;
+    type: OrderType;
 
-    @Column({ type: "decimal", precision: 36, scale: 18 })
-    amount: string;
-
-    @Column({ name: "limit_price", type: "decimal", precision: 36, scale: 18, nullable: true })
-    limitPrice: string | null;
-
-    @Column({ name: "limit_expiry", type: "timestamp", nullable: true })
-    limitExpiry: Date | null;
-
-    @Column({ name: "interest_rate", type: "decimal", precision: 10, scale: 6, nullable: true })
-    interestRate: string | null;
-
-    @Column({ name: "duration_days", type: "int", nullable: true })
-    durationDays: number | null;
-
-    @Column({ name: "collateral_asset_address", type: "varchar", length: 255, nullable: true })
-    collateralAssetAddress: string | null;
-
-    @Column({ name: "collateral_amount", type: "decimal", precision: 36, scale: 18, nullable: true })
-    collateralAmount: string | null;
-
-    @Column({ name: "collateral_ratio", type: "decimal", precision: 10, scale: 6, nullable: true })
-    collateralRatio: string | null;
-
-    @Column({ type: "varchar", length: 50, default: "pending" })
+    @Column({
+        name: "status",
+        type: "enum",
+        enum: OrderStatus,
+        default: OrderStatus.Open,
+    })
     @Index()
     status: OrderStatus;
 
-    @Column({ name: "filled_amount", type: "decimal", precision: 36, scale: 18, default: 0 })
-    filledAmount: string;
+    @Column({ name: "original_amount", type: "decimal", precision: 36, scale: 0 }) // user regex suggests integer string, but usually amounts are large
+    originalAmount: string;
 
-    @Column({ name: "remaining_amount", type: "decimal", precision: 36, scale: 18 })
+    @Column({ name: "remaining_amount", type: "decimal", precision: 36, scale: 0 })
     remainingAmount: string;
 
-    @Column({ name: "transaction_hash", type: "varchar", length: 255, nullable: true })
+    @Column({ name: "settlement_fee_amount", type: "decimal", precision: 36, scale: 0 })
+    settlementFeeAmount: string;
+
+    @Column({
+        name: "rate",
+        type: "int",
+        nullable: true,
+        comment: "Interest rate in basis points (1% = 100 bp)",
+    })
+    rate: number | null;
+
+    @Column({
+        name: "transaction_hash",
+        type: "varchar",
+        length: 255,
+        nullable: true,
+    })
     transactionHash: string | null;
 
     @Column({ name: "block_number", type: "bigint", nullable: true })

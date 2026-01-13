@@ -40,10 +40,23 @@ export class AuthGuard implements CanActivate {
     }
 
     private async extractWalletAddress(privyResult: { userId: string }): Promise<string> {
-        // The wallet address can be extracted from Privy user data
-        // This is a simplified implementation - in production you might need to
-        // fetch the full user profile from Privy to get linked wallet addresses
-        // Privy userIds are typically in format: did:privy:xxxxx
-        return privyResult.userId; // Placeholder - should be actual wallet
+        try {
+            const user = await this.privyService.getUser(privyResult.userId);
+            // Find the first linked account that is a wallet
+            // @ts-ignore - linkedAccounts types might be complex
+            const walletAccount = user.linkedAccounts.find(
+                (account: any) => account.type === 'wallet'
+            );
+
+            if (walletAccount && (walletAccount as any).address) {
+                return (walletAccount as any).address;
+            }
+            
+            // Fallback to userId if no wallet found (shouldn't happen for valid users)
+            return privyResult.userId;
+        } catch (error) {
+            console.error("Failed to extract wallet address:", error);
+            return privyResult.userId;
+        }
     }
 }

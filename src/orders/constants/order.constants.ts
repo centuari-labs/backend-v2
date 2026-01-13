@@ -1,21 +1,19 @@
-export const order_type = {
-    lend_market: "lend_market",
-    lend_limit: "lend_limit",
-    borrow_market: "borrow_market",
-    borrow_limit: "borrow_limit",
-} as const;
+export enum OrderSide {
+    Lend = "lend",
+    Borrow = "borrow",
+}
 
-export const order_category = {
-    lend: "lend",
-    borrow: "borrow",
-} as const;
+export enum OrderType {
+    Market = "market",
+    Limit = "limit",
+}
 
-export const order_status = {
-    pending: "pending",
-    partial: "partial",
-    filled: "filled",
-    cancelled: "cancelled",
-} as const;
+export enum OrderStatus {
+    Open = "open",
+    Filled = "filled",
+    Cancelled = "cancelled",
+    Partial = "partial", // Keeping partial just in case, though not explicitly in user request default schema, it's common. User default was Open.
+}
 
 export const order_group_status = {
     active: "active",

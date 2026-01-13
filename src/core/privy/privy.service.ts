@@ -15,8 +15,8 @@ export class PrivyService {
 
     constructor() {
         this.privy = new PrivyClient(
-            process.env.PRIVY_APP_ID as string,
-            process.env.PRIVY_PROJECT_SECRET as string,
+            process.env.NEXT_PUBLIC_PRIVY_APP_ID as string,
+            process.env.NEXT_PUBLIC_PRIVY_PROJECT_SECRET as string,
         );
 
         // Try to load verification key if it exists
@@ -80,6 +80,15 @@ export class PrivyService {
                 err as any,
             );
             throw new Error("Failed to fetch user info");
+        }
+    }
+
+    async getUser(userId: string) {
+        try {
+            return await this.privy.getUser(userId);
+        } catch (error) {
+            this.logger.error(`Failed to fetch user ${userId}: ${(error as Error).message}`);
+            throw error;
         }
     }
 }

@@ -1,27 +1,27 @@
 import {
-    Injectable,
-    NotFoundException,
     BadRequestException,
     ForbiddenException,
+    Injectable,
     Logger,
+    NotFoundException,
 } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
+import { NatsService } from "../core/nats/nats.service";
+import { TokensService } from "../tokens/tokens.service";
+import { NATS_SUBJECTS } from "./constants/nats-subjects.constants";
+import {
+    OrderSide,
+    OrderStatus,
+    OrderType,
+} from "./constants/order.constants";
+import { order_history_reasons } from "./constants/order-history.constants";
+import type { CreateBorrowLimitOrderDto } from "./dto/create-borrow-limit-order.dto";
+import type { CreateBorrowMarketOrderDto } from "./dto/create-borrow-market-order.dto";
+import type { CreateLendLimitOrderDto } from "./dto/create-lend-limit-order.dto";
+import type { CreateLendMarketOrderDto } from "./dto/create-lend-market-order.dto";
 import { Order } from "./entities/order.entity";
 import { OrderHistory } from "./entities/order-history.entity";
-import { TokensService } from "../tokens/tokens.service";
-import { NatsService } from "../core/nats/nats.service";
-import type { CreateLendMarketOrderDto } from "./dto/create-lend-market-order.dto";
-import type { CreateLendLimitOrderDto } from "./dto/create-lend-limit-order.dto";
-import type { CreateBorrowMarketOrderDto } from "./dto/create-borrow-market-order.dto";
-import type { CreateBorrowLimitOrderDto } from "./dto/create-borrow-limit-order.dto";
-import {
-    order_type,
-    order_category,
-    order_status,
-} from "./constants/order.constants";
-import { nats_subjects } from "./constants/nats-subjects.constants";
-import { order_history_reasons } from "./constants/order-history.constants";
 
 @Injectable()
 export class OrdersService {
@@ -45,31 +45,30 @@ export class OrdersService {
 
         const order = this.orderRepository.create({
             walletAddress,
-            orderType: order_type.lend_market,
-            orderCategory: order_category.lend,
-            isMarketOrder: true,
-            assetAddress: dto.loanToken,
-            amount: dto.amount,
+            side: OrderSide.Lend,
+            type: OrderType.Market,
+            loanToken: dto.loanToken,
+            originalAmount: dto.amount,
             remainingAmount: dto.amount,
-            status: order_status.pending,
-            durationDays: this.calculateDurationDays(dto.dates),
+            settlementFeeAmount: "0",
+            status: OrderStatus.Open,
+            maturities: dto.maturities,
+            timestamp: Date.now(),
+            rate: null, // Market order has no rate initially
         });
 
         const savedOrder = await this.orderRepository.save(order);
 
         await this.createOrderHistoryEntry(
-            savedOrder.id,
+            savedOrder.orderId,
             null,
-            order_status.pending,
+            OrderStatus.Open,
             null,
-            "0",
+            savedOrder.remainingAmount,
             order_history_reasons.order_created,
         );
 
-        await this.publishOrderToNats(
-            nats_subjects.orders.lend.market.created,
-            savedOrder,
-        );
+        await this.publishOrderToNats(NATS_SUBJECTS.LEND_MARKET, savedOrder);
 
         return savedOrder;
     }
@@ -83,32 +82,30 @@ export class OrdersService {
 
         const order = this.orderRepository.create({
             walletAddress,
-            orderType: order_type.lend_limit,
-            orderCategory: order_category.lend,
-            isMarketOrder: false,
-            assetAddress: dto.loanToken,
-            amount: dto.amount,
+            side: OrderSide.Lend,
+            type: OrderType.Limit,
+            loanToken: dto.loanToken,
+            originalAmount: dto.amount,
             remainingAmount: dto.amount,
-            interestRate: dto.interestRate.toString(),
-            status: order_status.pending,
-            durationDays: this.calculateDurationDays(dto.dates),
+            settlementFeeAmount: "0",
+            rate: dto.rate,
+            status: OrderStatus.Open,
+            maturities: dto.maturities,
+            timestamp: Date.now(),
         });
 
         const savedOrder = await this.orderRepository.save(order);
 
         await this.createOrderHistoryEntry(
-            savedOrder.id,
+            savedOrder.orderId,
             null,
-            order_status.pending,
+            OrderStatus.Open,
             null,
-            "0",
+            savedOrder.remainingAmount,
             order_history_reasons.order_created,
         );
 
-        await this.publishOrderToNats(
-            nats_subjects.orders.lend.limit.created,
-            savedOrder,
-        );
+        await this.publishOrderToNats(NATS_SUBJECTS.LEND_LIMIT, savedOrder);
 
         return savedOrder;
     }
@@ -122,31 +119,30 @@ export class OrdersService {
 
         const order = this.orderRepository.create({
             walletAddress,
-            orderType: order_type.borrow_market,
-            orderCategory: order_category.borrow,
-            isMarketOrder: true,
-            assetAddress: dto.loanToken,
-            amount: dto.amount,
+            side: OrderSide.Borrow,
+            type: OrderType.Market,
+            loanToken: dto.loanToken,
+            originalAmount: dto.amount,
             remainingAmount: dto.amount,
-            status: order_status.pending,
-            durationDays: this.calculateDurationDays(dto.dates),
+            settlementFeeAmount: "0",
+            status: OrderStatus.Open,
+            maturities: dto.maturities,
+            timestamp: Date.now(),
+            rate: null,
         });
 
         const savedOrder = await this.orderRepository.save(order);
 
         await this.createOrderHistoryEntry(
-            savedOrder.id,
+            savedOrder.orderId,
             null,
-            order_status.pending,
+            OrderStatus.Open,
             null,
-            "0",
+            savedOrder.remainingAmount,
             order_history_reasons.order_created,
         );
 
-        await this.publishOrderToNats(
-            nats_subjects.orders.borrow.market.created,
-            savedOrder,
-        );
+        await this.publishOrderToNats(NATS_SUBJECTS.BORROW_MARKET, savedOrder);
 
         return savedOrder;
     }
@@ -160,40 +156,38 @@ export class OrdersService {
 
         const order = this.orderRepository.create({
             walletAddress,
-            orderType: order_type.borrow_limit,
-            orderCategory: order_category.borrow,
-            isMarketOrder: false,
-            assetAddress: dto.loanToken,
-            amount: dto.amount,
+            side: OrderSide.Borrow,
+            type: OrderType.Limit,
+            loanToken: dto.loanToken,
+            originalAmount: dto.amount,
             remainingAmount: dto.amount,
-            interestRate: dto.interestRate.toString(),
-            status: order_status.pending,
-            durationDays: this.calculateDurationDays(dto.dates),
+            settlementFeeAmount: "0",
+            rate: dto.rate,
+            status: OrderStatus.Open,
+            maturities: dto.maturities,
+            timestamp: Date.now(),
         });
 
         const savedOrder = await this.orderRepository.save(order);
 
         await this.createOrderHistoryEntry(
-            savedOrder.id,
+            savedOrder.orderId,
             null,
-            order_status.pending,
+            OrderStatus.Open,
             null,
-            "0",
+            savedOrder.remainingAmount,
             order_history_reasons.order_created,
         );
 
-        await this.publishOrderToNats(
-            nats_subjects.orders.borrow.limit.created,
-            savedOrder,
-        );
+        await this.publishOrderToNats(NATS_SUBJECTS.BORROW_LIMIT, savedOrder);
 
         return savedOrder;
     }
 
-    async cancelOrder(orderId: number, walletAddress: string): Promise<Order> {
+    async cancelOrder(orderId: string, walletAddress: string): Promise<Order> {
         // Find the order
         const order = await this.orderRepository.findOne({
-            where: { id: orderId },
+            where: { orderId: orderId },
         });
 
         if (!order) {
@@ -205,29 +199,33 @@ export class OrdersService {
             throw new ForbiddenException("You do not own this order");
         }
 
-        // Validate status - can only cancel pending or partial orders
-        const cancellableStatuses = [order_status.pending, order_status.partial] as string[];
+        // Validate status - can only cancel open or partial orders
+        const cancellableStatuses = [
+            OrderStatus.Open,
+            OrderStatus.Partial,
+        ] as OrderStatus[];
         if (!cancellableStatuses.includes(order.status)) {
             throw new BadRequestException(
-                "Order can only be cancelled when status is pending or partial"
+                "Order can only be cancelled when status is open or partial",
             );
         }
 
         const previousStatus = order.status;
-        
+        const previousRemaining = order.remainingAmount;
+
         // Update order
-        order.status = order_status.cancelled;
+        order.status = OrderStatus.Cancelled;
         order.cancelledAt = new Date();
-        
+
         const updatedOrder = await this.orderRepository.save(order);
 
         // Create history entry
         await this.createOrderHistoryEntry(
             orderId,
             previousStatus,
-            order_status.cancelled,
-            order.filledAmount,
-            order.filledAmount,
+            OrderStatus.Cancelled,
+            previousRemaining,
+            order.remainingAmount,
             order_history_reasons.order_cancelled_by_user,
         );
 
@@ -237,26 +235,14 @@ export class OrdersService {
         return updatedOrder;
     }
 
-    private calculateDurationDays(dates: string[]): number {
-        if (!dates || dates.length === 0) return 0;
-        
-        const now = new Date();
-        const latestDate = dates
-            .map(d => new Date(d))
-            .reduce((latest, current) => current > latest ? current : latest);
-        
-        const diffTime = latestDate.getTime() - now.getTime();
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-        
-        return Math.max(0, diffDays);
-    }
+
 
     private async createOrderHistoryEntry(
-        orderId: number,
+        orderId: string,
         previousStatus: string | null,
         newStatus: string,
-        previousFilledAmount: string | null,
-        newFilledAmount: string,
+        previousRemainingAmount: string | null,
+        newRemainingAmount: string,
         changeReason: string,
         transactionHash?: string,
     ): Promise<void> {
@@ -264,8 +250,8 @@ export class OrdersService {
             orderId,
             previousStatus: previousStatus as any,
             newStatus: newStatus as any,
-            previousFilledAmount,
-            newFilledAmount,
+            previousRemainingAmount,
+            newRemainingAmount,
             changeReason,
             transactionHash: transactionHash || null,
         });
@@ -283,19 +269,19 @@ export class OrdersService {
                 timestamp: new Date().toISOString(),
                 data: order,
             });
-            this.logger.debug(`Published order ${order.id} to ${subject}`);
+            this.logger.debug(`Published order ${order.orderId} to ${subject}`);
         } catch (error) {
             this.logger.error(
-                `Failed to publish order ${order.id} to NATS: ${error.message}`,
+                `Failed to publish order ${order.orderId} to NATS: ${error.message}`,
             );
         }
     }
 
     private async publishCancelOrderToNats(
-        orderId: number,
+        orderId: string,
         walletAddress: string,
     ): Promise<void> {
-        const subject = nats_subjects.orders.cancel;
+        const subject = NATS_SUBJECTS.CANCEL;
         try {
             await this.natsService.publish(subject, {
                 event: subject,
@@ -305,7 +291,9 @@ export class OrdersService {
                     walletAddress,
                 },
             });
-            this.logger.debug(`Published cancel order ${orderId} to ${subject}`);
+            this.logger.debug(
+                `Published cancel order ${orderId} to ${subject}`,
+            );
         } catch (error) {
             this.logger.error(
                 `Failed to publish cancel order ${orderId} to NATS: ${error.message}`,

@@ -1,21 +1,21 @@
 import {
-    Controller,
-    Post,
     Body,
-    Param,
-    ParseIntPipe,
+    Controller,
     HttpCode,
     HttpStatus,
+    Param,
+    ParseUUIDPipe,
     Patch,
+    Post,
     UseGuards,
 } from "@nestjs/common";
-import { OrdersService } from "./orders.service";
-import { CreateLendMarketOrderDto } from "./dto/create-lend-market-order.dto";
-import { CreateLendLimitOrderDto } from "./dto/create-lend-limit-order.dto";
-import { CreateBorrowMarketOrderDto } from "./dto/create-borrow-market-order.dto";
-import { CreateBorrowLimitOrderDto } from "./dto/create-borrow-limit-order.dto";
-import { AuthGuard } from "../common/guards/auth.guard";
 import { Wallet } from "../common/decorators/wallet.decorator";
+import { AuthGuard } from "../common/guards/auth.guard";
+import { CreateBorrowLimitOrderDto } from "./dto/create-borrow-limit-order.dto";
+import { CreateBorrowMarketOrderDto } from "./dto/create-borrow-market-order.dto";
+import { CreateLendLimitOrderDto } from "./dto/create-lend-limit-order.dto";
+import { CreateLendMarketOrderDto } from "./dto/create-lend-market-order.dto";
+import { OrdersService } from "./orders.service";
 
 @Controller("orders")
 @UseGuards(AuthGuard)
@@ -60,7 +60,7 @@ export class OrdersController {
 
     @Patch(":id/cancel")
     async cancelOrder(
-        @Param("id", ParseIntPipe) id: number,
+        @Param("id", ParseUUIDPipe) id: string,
         @Wallet() walletAddress: string,
     ) {
         return this.ordersService.cancelOrder(id, walletAddress);

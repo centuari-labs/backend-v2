@@ -1,0 +1,68 @@
+import {
+    Body,
+    Controller,
+    HttpCode,
+    HttpStatus,
+    Param,
+    ParseUUIDPipe,
+    Patch,
+    Post,
+    UseGuards,
+} from "@nestjs/common";
+import { Wallet } from "../common/decorators/wallet.decorator";
+import { AuthGuard } from "../common/guards/auth.guard";
+import { CreateBorrowLimitOrderDto } from "./dto/create-borrow-limit-order.dto";
+import { CreateBorrowMarketOrderDto } from "./dto/create-borrow-market-order.dto";
+import { CreateLendLimitOrderDto } from "./dto/create-lend-limit-order.dto";
+import { CreateLendMarketOrderDto } from "./dto/create-lend-market-order.dto";
+import { OrdersService } from "./orders.service";
+
+@Controller("orders")
+@UseGuards(AuthGuard)
+export class OrdersController {
+    constructor(private readonly ordersService: OrdersService) {}
+
+    @Post("lend/market")
+    @HttpCode(HttpStatus.CREATED)
+    async createLendMarketOrder(
+        @Body() dto: CreateLendMarketOrderDto,
+        @Wallet() walletAddress: string,
+    ) {
+        return this.ordersService.createLendMarketOrder(dto, walletAddress);
+    }
+
+    @Post("lend/limit")
+    @HttpCode(HttpStatus.CREATED)
+    async createLendLimitOrder(
+        @Body() dto: CreateLendLimitOrderDto,
+        @Wallet() walletAddress: string,
+    ) {
+        return this.ordersService.createLendLimitOrder(dto, walletAddress);
+    }
+
+    @Post("borrow/market")
+    @HttpCode(HttpStatus.CREATED)
+    async createBorrowMarketOrder(
+        @Body() dto: CreateBorrowMarketOrderDto,
+        @Wallet() walletAddress: string,
+    ) {
+        return this.ordersService.createBorrowMarketOrder(dto, walletAddress);
+    }
+
+    @Post("borrow/limit")
+    @HttpCode(HttpStatus.CREATED)
+    async createBorrowLimitOrder(
+        @Body() dto: CreateBorrowLimitOrderDto,
+        @Wallet() walletAddress: string,
+    ) {
+        return this.ordersService.createBorrowLimitOrder(dto, walletAddress);
+    }
+
+    @Patch(":id/cancel")
+    async cancelOrder(
+        @Param("id", ParseUUIDPipe) id: string,
+        @Wallet() walletAddress: string,
+    ) {
+        return this.ordersService.cancelOrder(id, walletAddress);
+    }
+}

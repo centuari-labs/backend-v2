@@ -1,28 +1,34 @@
 import { Column, CreateDateColumn, Entity, Index, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
 
-@Entity("supported_tokens")
+@Entity("assets")
 export class Token {
-    @PrimaryGeneratedColumn()
-    id: number;
+    @PrimaryGeneratedColumn("uuid")
+    id: string;
 
-    @Column({ length: 255, unique: true })
+    @Column({ name: "token_address", type: "text", unique: true })
     @Index()
-    address: string;
+    tokenAddress: string;
 
-    @Column({ length: 20 })
+    @Column({ type: "text" })
     symbol: string;
 
-    @Column({ length: 100 })
+    @Column({ type: "text" })
     name: string;
 
-    @Column({ type: "int", default: 18 })
-    decimals: number;
+    @Column({ name: "image_url", type: "text" })
+    imageUrl: string;
 
-    @Column({ name: "token_image", type: "varchar", length: 255, nullable: true })
-    imageUrl: string | null;
+    @Column({ name: "is_loan_token", type: "boolean" })
+    isLoanToken: boolean;
 
-    @Column({ name: "is_active", default: true })
-    isActive: boolean;
+    @Column({ name: "lltv", type: "decimal" })
+    LLTV: number;
+
+    @Column({ name: "lt", type: "decimal" })
+    LT: number;
+
+    @Column({ name: "lp", type: "decimal" })
+    LP: number;
 
     @CreateDateColumn({ name: "created_at" })
     createdAt: Date;

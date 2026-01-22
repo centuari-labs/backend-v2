@@ -15,13 +15,13 @@ import {
     OrderStatus,
     OrderType,
 } from "./constants/order.constants";
-import { order_history_reasons } from "./constants/order-history.constants";
 import type { CreateBorrowLimitOrderDto } from "./dto/create-borrow-limit-order.dto";
 import type { CreateBorrowMarketOrderDto } from "./dto/create-borrow-market-order.dto";
 import type { CreateLendLimitOrderDto } from "./dto/create-lend-limit-order.dto";
 import type { CreateLendMarketOrderDto } from "./dto/create-lend-market-order.dto";
 import { Order } from "./entities/order.entity";
-import { OrderHistory } from "./entities/order-history.entity";
+import { Account } from "./entities/account.entity";
+import { Token } from "../tokens/entities/token.entity";
 
 @Injectable()
 export class OrdersService {
@@ -30,43 +30,63 @@ export class OrdersService {
     constructor(
         @InjectRepository(Order)
         private readonly orderRepository: Repository<Order>,
-        @InjectRepository(OrderHistory)
-        private readonly orderHistoryRepository: Repository<OrderHistory>,
+        @InjectRepository(Account)
+        private readonly accountRepository: Repository<Account>,
+        @InjectRepository(Token)
+        private readonly tokenRepository: Repository<Token>,
         private readonly tokensService: TokensService,
         private readonly natsService: NatsService,
     ) {}
 
+    private async getOrCreateAccount(walletAddress: string, privyUserId: string): Promise<string> {
+        let account = await this.accountRepository.findOne({
+            where: { userWallet: walletAddress },
+        });
+
+        if (!account) {
+            this.logger.log(`Creating new account for wallet ${walletAddress} (Privy: ${privyUserId})`);
+            account = this.accountRepository.create({
+                userWallet: walletAddress,
+                privyUserId: privyUserId,
+            });
+            account = await this.accountRepository.save(account);
+        }
+        
+        return account.id;
+    }
+
+    private async getAssetId(tokenAddress: string): Promise<string> {
+        const token = await this.tokenRepository.findOne({
+            where: { tokenAddress },
+        });
+        if (!token) {
+            throw new NotFoundException(`Asset for token ${tokenAddress} not found`);
+        }
+        return token.id;
+    }
+
     async createLendMarketOrder(
         dto: CreateLendMarketOrderDto,
         walletAddress: string,
+        privyUserId: string,
     ): Promise<Order> {
         // Validate loan token exists
         await this.tokensService.validateToken(dto.loanToken);
+        const accountId = await this.getOrCreateAccount(walletAddress, privyUserId);
+        const assetId = await this.getAssetId(dto.loanToken);
 
         const order = this.orderRepository.create({
-            walletAddress,
+            accountId,
+            assetId,
             side: OrderSide.Lend,
             type: OrderType.Market,
-            loanToken: dto.loanToken,
-            originalAmount: dto.amount,
-            remainingAmount: dto.amount,
-            settlementFeeAmount: "0",
+            quantity: dto.amount,
+            settlementFee: "0",
             status: OrderStatus.Open,
-            maturities: dto.maturities,
-            timestamp: Date.now(),
-            rate: null, // Market order has no rate initially
+            rate: 0,
         });
 
         const savedOrder = await this.orderRepository.save(order);
-
-        await this.createOrderHistoryEntry(
-            savedOrder.orderId,
-            null,
-            OrderStatus.Open,
-            null,
-            savedOrder.remainingAmount,
-            order_history_reasons.order_created,
-        );
 
         await this.publishOrderToNats(NATS_SUBJECTS.LEND_MARKET, savedOrder);
 
@@ -76,34 +96,25 @@ export class OrdersService {
     async createLendLimitOrder(
         dto: CreateLendLimitOrderDto,
         walletAddress: string,
+        privyUserId: string,
     ): Promise<Order> {
         // Validate loan token exists
         await this.tokensService.validateToken(dto.loanToken);
+        const accountId = await this.getOrCreateAccount(walletAddress, privyUserId);
+        const assetId = await this.getAssetId(dto.loanToken);
 
         const order = this.orderRepository.create({
-            walletAddress,
+            accountId,
+            assetId,
             side: OrderSide.Lend,
             type: OrderType.Limit,
-            loanToken: dto.loanToken,
-            originalAmount: dto.amount,
-            remainingAmount: dto.amount,
-            settlementFeeAmount: "0",
+            quantity: dto.amount,
+            settlementFee: "0",
             rate: dto.rate,
             status: OrderStatus.Open,
-            maturities: dto.maturities,
-            timestamp: Date.now(),
         });
 
         const savedOrder = await this.orderRepository.save(order);
-
-        await this.createOrderHistoryEntry(
-            savedOrder.orderId,
-            null,
-            OrderStatus.Open,
-            null,
-            savedOrder.remainingAmount,
-            order_history_reasons.order_created,
-        );
 
         await this.publishOrderToNats(NATS_SUBJECTS.LEND_LIMIT, savedOrder);
 
@@ -113,34 +124,25 @@ export class OrdersService {
     async createBorrowMarketOrder(
         dto: CreateBorrowMarketOrderDto,
         walletAddress: string,
+        privyUserId: string,
     ): Promise<Order> {
         // Validate loan token exists
         await this.tokensService.validateToken(dto.loanToken);
+        const accountId = await this.getOrCreateAccount(walletAddress, privyUserId);
+        const assetId = await this.getAssetId(dto.loanToken);
 
         const order = this.orderRepository.create({
-            walletAddress,
+            accountId,
+            assetId,
             side: OrderSide.Borrow,
             type: OrderType.Market,
-            loanToken: dto.loanToken,
-            originalAmount: dto.amount,
-            remainingAmount: dto.amount,
-            settlementFeeAmount: "0",
+            quantity: dto.amount,
+            settlementFee: "0",
             status: OrderStatus.Open,
-            maturities: dto.maturities,
-            timestamp: Date.now(),
-            rate: null,
+            rate: 0,
         });
 
         const savedOrder = await this.orderRepository.save(order);
-
-        await this.createOrderHistoryEntry(
-            savedOrder.orderId,
-            null,
-            OrderStatus.Open,
-            null,
-            savedOrder.remainingAmount,
-            order_history_reasons.order_created,
-        );
 
         await this.publishOrderToNats(NATS_SUBJECTS.BORROW_MARKET, savedOrder);
 
@@ -150,34 +152,25 @@ export class OrdersService {
     async createBorrowLimitOrder(
         dto: CreateBorrowLimitOrderDto,
         walletAddress: string,
+        privyUserId: string,
     ): Promise<Order> {
         // Validate loan token exists
         await this.tokensService.validateToken(dto.loanToken);
+        const accountId = await this.getOrCreateAccount(walletAddress, privyUserId);
+        const assetId = await this.getAssetId(dto.loanToken);
 
         const order = this.orderRepository.create({
-            walletAddress,
+            accountId,
+            assetId,
             side: OrderSide.Borrow,
             type: OrderType.Limit,
-            loanToken: dto.loanToken,
-            originalAmount: dto.amount,
-            remainingAmount: dto.amount,
-            settlementFeeAmount: "0",
+            quantity: dto.amount,
+            settlementFee: "0",
             rate: dto.rate,
             status: OrderStatus.Open,
-            maturities: dto.maturities,
-            timestamp: Date.now(),
         });
 
         const savedOrder = await this.orderRepository.save(order);
-
-        await this.createOrderHistoryEntry(
-            savedOrder.orderId,
-            null,
-            OrderStatus.Open,
-            null,
-            savedOrder.remainingAmount,
-            order_history_reasons.order_created,
-        );
 
         await this.publishOrderToNats(NATS_SUBJECTS.BORROW_LIMIT, savedOrder);
 
@@ -187,76 +180,51 @@ export class OrdersService {
     async cancelOrder(orderId: string, walletAddress: string): Promise<Order> {
         // Find the order
         const order = await this.orderRepository.findOne({
-            where: { orderId: orderId },
+            where: { id: orderId },
         });
 
         if (!order) {
             throw new NotFoundException(`Order with ID ${orderId} not found`);
         }
+        
+        // For cancellation, we expect the account to exist because the order exists.
+        // We just need to verify ownership.
+        const account = await this.accountRepository.findOne({
+             where: { userWallet: walletAddress }
+        });
+        
+        if (!account) {
+             throw new ForbiddenException("Account not found for this wallet");
+        }
+
+        const accountId = account.id;
 
         // Validate ownership
-        if (order.walletAddress !== walletAddress) {
+        if (order.accountId !== accountId) {
             throw new ForbiddenException("You do not own this order");
         }
 
         // Validate status - can only cancel open or partial orders
         const cancellableStatuses = [
             OrderStatus.Open,
-            OrderStatus.Partial,
+            OrderStatus.PartiallyFilled,
         ] as OrderStatus[];
+
         if (!cancellableStatuses.includes(order.status)) {
             throw new BadRequestException(
                 "Order can only be cancelled when status is open or partial",
             );
         }
 
-        const previousStatus = order.status;
-        const previousRemaining = order.remainingAmount;
-
         // Update order
         order.status = OrderStatus.Cancelled;
-        order.cancelledAt = new Date();
 
         const updatedOrder = await this.orderRepository.save(order);
-
-        // Create history entry
-        await this.createOrderHistoryEntry(
-            orderId,
-            previousStatus,
-            OrderStatus.Cancelled,
-            previousRemaining,
-            order.remainingAmount,
-            order_history_reasons.order_cancelled_by_user,
-        );
 
         // Publish cancellation event to NATS
         await this.publishCancelOrderToNats(orderId, walletAddress);
 
         return updatedOrder;
-    }
-
-
-
-    private async createOrderHistoryEntry(
-        orderId: string,
-        previousStatus: string | null,
-        newStatus: string,
-        previousRemainingAmount: string | null,
-        newRemainingAmount: string,
-        changeReason: string,
-        transactionHash?: string,
-    ): Promise<void> {
-        const history = this.orderHistoryRepository.create({
-            orderId,
-            previousStatus: previousStatus as any,
-            newStatus: newStatus as any,
-            previousRemainingAmount,
-            newRemainingAmount,
-            changeReason,
-            transactionHash: transactionHash || null,
-        });
-
-        await this.orderHistoryRepository.save(history);
     }
 
     private async publishOrderToNats(
@@ -269,10 +237,10 @@ export class OrdersService {
                 timestamp: new Date().toISOString(),
                 data: order,
             });
-            this.logger.debug(`Published order ${order.orderId} to ${subject}`);
+            this.logger.debug(`Published order ${order.id} to ${subject}`);
         } catch (error) {
             this.logger.error(
-                `Failed to publish order ${order.orderId} to NATS: ${error.message}`,
+                `Failed to publish order ${order.id} to NATS: ${error.message}`,
             );
         }
     }

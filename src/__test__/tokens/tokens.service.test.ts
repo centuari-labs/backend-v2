@@ -10,13 +10,15 @@ describe('TokensService', () => {
     let tokenRepository: jest.Mocked<Repository<Token>>;
 
     const mockToken: Token = {
-        id: 1,
-        address: '0xToken1234567890abcdef1234567890abcdef12',
+        id: 'uuid-token-001',
+        tokenAddress: '0xToken1234567890abcdef1234567890abcdef12',
         symbol: 'USDC',
         name: 'USD Coin',
-        decimals: 6,
         imageUrl: 'https://example.com/usdc.png',
-        isActive: true,
+        isLoanToken: true,
+        LLTV: 0.86,
+        LT: 0.86,
+        LP: 0.99,
         createdAt: new Date(),
         updatedAt: new Date(),
     };
@@ -50,11 +52,11 @@ describe('TokensService', () => {
         it('should return token for valid active address', async () => {
             tokenRepository.findOne.mockResolvedValue(mockToken);
 
-            const result = await service.validateToken(mockToken.address);
+            const result = await service.validateToken(mockToken.tokenAddress);
 
             expect(result).toEqual(mockToken);
             expect(tokenRepository.findOne).toHaveBeenCalledWith({
-                where: { address: expect.anything(), isActive: true },
+                where: { tokenAddress: expect.anything() },
             });
         });
 
@@ -70,7 +72,7 @@ describe('TokensService', () => {
             tokenRepository.findOne.mockResolvedValue(null); // Inactive tokens are filtered out by query
 
             await expect(
-                service.validateToken(mockToken.address),
+                service.validateToken(mockToken.tokenAddress),
             ).rejects.toThrow(BadRequestException);
         });
 
@@ -86,11 +88,11 @@ describe('TokensService', () => {
         it('should perform case-insensitive address lookup', async () => {
             tokenRepository.findOne.mockResolvedValue(mockToken);
 
-            await service.validateToken(mockToken.address.toUpperCase());
+            await service.validateToken(mockToken.tokenAddress.toUpperCase());
 
             expect(tokenRepository.findOne).toHaveBeenCalledWith({
                 where: expect.objectContaining({
-                    isActive: true,
+                    tokenAddress: expect.anything(),
                 }),
             });
         });
@@ -102,11 +104,10 @@ describe('TokensService', () => {
                 mockToken,
                 {
                     ...mockToken,
-                    id: 2,
-                    address: '0xToken2234567890abcdef1234567890abcdef12',
+                    id: 'uuid-token-002',
+                    tokenAddress: '0xToken2234567890abcdef1234567890abcdef12',
                     symbol: 'ETH',
                     name: 'Ethereum',
-                    decimals: 18,
                 },
             ];
 
@@ -116,9 +117,7 @@ describe('TokensService', () => {
 
             expect(result).toEqual(activeTokens);
             expect(result).toHaveLength(2);
-            expect(tokenRepository.find).toHaveBeenCalledWith({
-                where: { isActive: true },
-            });
+            expect(tokenRepository.find).toHaveBeenCalledWith();
         });
 
         it('should return empty array when no active tokens exist', async () => {
@@ -130,25 +129,19 @@ describe('TokensService', () => {
             expect(result).toHaveLength(0);
         });
 
-        it('should not return inactive tokens', async () => {
-            tokenRepository.find.mockResolvedValue([mockToken]);
 
-            const result = await service.getActiveTokens();
-
-            expect(result.every(token => token.isActive)).toBe(true);
-        });
     });
 
     describe('isTokenSupported', () => {
         it('should return true for valid active token', async () => {
             tokenRepository.count.mockResolvedValue(1);
 
-            const result = await service.isTokenSupported(mockToken.address);
+            const result = await service.isTokenSupported(mockToken.tokenAddress);
 
             expect(result).toBe(true);
             expect(tokenRepository.count).toHaveBeenCalledWith({
                 where: expect.objectContaining({
-                    isActive: true,
+                    tokenAddress: expect.anything(),
                 }),
             });
         });
@@ -163,13 +156,7 @@ describe('TokensService', () => {
             expect(result).toBe(false);
         });
 
-        it('should return false for inactive token', async () => {
-            tokenRepository.count.mockResolvedValue(0);
 
-            const result = await service.isTokenSupported(mockToken.address);
-
-            expect(result).toBe(false);
-        });
 
         it('should not throw for invalid token (returns boolean)', async () => {
             tokenRepository.count.mockResolvedValue(0);
@@ -184,26 +171,28 @@ describe('TokensService', () => {
         it('should return complete token data with all fields', async () => {
             tokenRepository.findOne.mockResolvedValue(mockToken);
 
-            const result = await service.validateToken(mockToken.address);
+            const result = await service.validateToken(mockToken.tokenAddress);
 
             expect(result).toHaveProperty('id');
-            expect(result).toHaveProperty('address');
+            expect(result).toHaveProperty('tokenAddress');
             expect(result).toHaveProperty('symbol');
             expect(result).toHaveProperty('name');
-            expect(result).toHaveProperty('decimals');
             expect(result).toHaveProperty('imageUrl');
-            expect(result).toHaveProperty('isActive');
+            expect(result).toHaveProperty('isLoanToken');
+            expect(result).toHaveProperty('LLTV');
+            expect(result).toHaveProperty('LT');
+            expect(result).toHaveProperty('LP');
             expect(result).toHaveProperty('createdAt');
             expect(result).toHaveProperty('updatedAt');
         });
 
-        it('should handle token with null imageUrl', async () => {
-            const tokenWithoutImage = { ...mockToken, imageUrl: null };
+        it('should handle token with empty imageUrl', async () => {
+            const tokenWithoutImage = { ...mockToken, imageUrl: '' };
             tokenRepository.findOne.mockResolvedValue(tokenWithoutImage);
 
-            const result = await service.validateToken(mockToken.address);
+            const result = await service.validateToken(mockToken.tokenAddress);
 
-            expect(result.imageUrl).toBeNull();
+            expect(result.imageUrl).toBe('');
         });
     });
 });

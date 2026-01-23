@@ -1,0 +1,28 @@
+{
+    "statusCode": 201,
+    "data": {
+        "statusCode": 201,
+        "data": {
+            "orderId": "b66a2641-3339-4a48-805c-6da248f33dee",
+            "walletAddress": "0x44a95B161A038de26cB16A45CC2580685176D966",
+            "loanToken": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+            "maturities": [
+                1720000000
+            ],
+            "timestamp": 1768942652795,
+            "side": "lend",
+            "type": "limit",
+            "status": "open",
+            "originalAmount": "100",
+            "remainingAmount": "100",
+            "settlementFeeAmount": "0",
+            "rate": 550,
+            "transactionHash": null,
+            "blockNumber": null,
+            "createdAt": "2026-01-20T20:57:32.795Z",
+            "updatedAt": "2026-01-20T20:57:32.795Z",
+            "filledAt": null,
+            "cancelledAt": null
+        }
+    }
+}

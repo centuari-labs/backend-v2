@@ -16,7 +16,7 @@ export class TokensService {
      */
     async validateToken(address: string): Promise<Token> {
         const token = await this.tokenRepository.findOne({
-            where: { address: ILike(address), isActive: true },
+            where: { tokenAddress: ILike(address) },
         });
 
         if (!token) {
@@ -30,7 +30,7 @@ export class TokensService {
      * Get all active tokens
      */
     async getActiveTokens(): Promise<Token[]> {
-        return this.tokenRepository.find({ where: { isActive: true } });
+        return this.tokenRepository.find();
     }
 
     /**
@@ -38,7 +38,7 @@ export class TokensService {
      */
     async isTokenSupported(address: string): Promise<boolean> {
         const count = await this.tokenRepository.count({
-            where: { address: ILike(address), isActive: true },
+            where: { tokenAddress: ILike(address) },
         });
         return count > 0;
     }

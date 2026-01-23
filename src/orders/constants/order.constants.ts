@@ -1,18 +1,18 @@
 export enum OrderSide {
-    Lend = "lend",
-    Borrow = "borrow",
+    Lend = "LEND",
+    Borrow = "BORROW",
 }
 
 export enum OrderType {
-    Market = "market",
-    Limit = "limit",
+    Market = "MARKET",
+    Limit = "LIMIT",
 }
 
 export enum OrderStatus {
-    Open = "open",
-    Filled = "filled",
-    Cancelled = "cancelled",
-    Partial = "partial", // Keeping partial just in case, though not explicitly in user request default schema, it's common. User default was Open.
+    Open = "OPEN",
+    Filled = "FILLED",
+    Cancelled = "CANCELLED",
+    PartiallyFilled = "PARTIALLY_FILLED",
 }
 
 export const order_group_status = {

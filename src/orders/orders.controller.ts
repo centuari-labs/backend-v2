@@ -9,13 +9,15 @@ import {
     Post,
     UseGuards,
 } from "@nestjs/common";
-import { Wallet } from "../common/decorators/wallet.decorator";
+import { Wallet, CurrentUser } from "../common/decorators/wallet.decorator";
 import { AuthGuard } from "../common/guards/auth.guard";
 import { CreateBorrowLimitOrderDto } from "./dto/create-borrow-limit-order.dto";
 import { CreateBorrowMarketOrderDto } from "./dto/create-borrow-market-order.dto";
 import { CreateLendLimitOrderDto } from "./dto/create-lend-limit-order.dto";
 import { CreateLendMarketOrderDto } from "./dto/create-lend-market-order.dto";
 import { OrdersService } from "./orders.service";
+import { OrderResponse } from "./dto/order-response.dto";
+import { Order } from "./entities/order.entity";
 
 @Controller("orders")
 @UseGuards(AuthGuard)
@@ -27,8 +29,10 @@ export class OrdersController {
     async createLendMarketOrder(
         @Body() dto: CreateLendMarketOrderDto,
         @Wallet() walletAddress: string,
-    ) {
-        return this.ordersService.createLendMarketOrder(dto, walletAddress);
+        @CurrentUser() user: { userId: string },
+    ): Promise<OrderResponse> {
+        const order = await this.ordersService.createLendMarketOrder(dto, walletAddress, user.userId);
+        return this.mapToResponse(order, dto, walletAddress);
     }
 
     @Post("lend/limit")
@@ -36,8 +40,10 @@ export class OrdersController {
     async createLendLimitOrder(
         @Body() dto: CreateLendLimitOrderDto,
         @Wallet() walletAddress: string,
-    ) {
-        return this.ordersService.createLendLimitOrder(dto, walletAddress);
+        @CurrentUser() user: { userId: string },
+    ): Promise<OrderResponse> {
+        const order = await this.ordersService.createLendLimitOrder(dto, walletAddress, user.userId);
+        return this.mapToResponse(order, dto, walletAddress);
     }
 
     @Post("borrow/market")
@@ -45,8 +51,10 @@ export class OrdersController {
     async createBorrowMarketOrder(
         @Body() dto: CreateBorrowMarketOrderDto,
         @Wallet() walletAddress: string,
-    ) {
-        return this.ordersService.createBorrowMarketOrder(dto, walletAddress);
+        @CurrentUser() user: { userId: string },
+    ): Promise<OrderResponse> {
+        const order = await this.ordersService.createBorrowMarketOrder(dto, walletAddress, user.userId);
+        return this.mapToResponse(order, dto, walletAddress);
     }
 
     @Post("borrow/limit")
@@ -54,8 +62,10 @@ export class OrdersController {
     async createBorrowLimitOrder(
         @Body() dto: CreateBorrowLimitOrderDto,
         @Wallet() walletAddress: string,
-    ) {
-        return this.ordersService.createBorrowLimitOrder(dto, walletAddress);
+        @CurrentUser() user: { userId: string },
+    ): Promise<OrderResponse> {
+        const order = await this.ordersService.createBorrowLimitOrder(dto, walletAddress, user.userId);
+        return this.mapToResponse(order, dto, walletAddress);
     }
 
     @Patch(":id/cancel")
@@ -64,5 +74,35 @@ export class OrdersController {
         @Wallet() walletAddress: string,
     ) {
         return this.ordersService.cancelOrder(id, walletAddress);
+    }
+
+    private mapToResponse(
+        order: Order,
+        dto: { loanToken: string; maturities?: number[] },
+        walletAddress: string,
+    ): OrderResponse {
+        return {
+            statusCode: HttpStatus.CREATED,
+            data: {
+                orderId: order.id,
+                walletAddress: walletAddress,
+                loanToken: dto.loanToken,
+                maturities: dto.maturities ?? [],
+                timestamp: new Date(order.createdAt).getTime(),
+                side: order.side.toLowerCase(),
+                type: order.type.toLowerCase(),
+                status: order.status.toLowerCase(),
+                originalAmount: order.quantity,
+                remainingAmount: order.quantity,
+                settlementFeeAmount: order.settlementFee,
+                rate: Number(order.rate),
+                transactionHash: null,
+                blockNumber: null,
+                createdAt: order.createdAt,
+                updatedAt: order.updatedAt,
+                filledAt: null,
+                cancelledAt: null,
+            },
+        };
     }
 }

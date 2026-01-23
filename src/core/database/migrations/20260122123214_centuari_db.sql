@@ -25,7 +25,6 @@ CREATE TABLE IF NOT EXISTS assets (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name TEXT NOT NULL,
     symbol TEXT NOT NULL,
-    image_url TEXT NOT NULL,
     token_address TEXT NOT NULL,
     is_loan_token BOOLEAN NOT NULL,
     lltv NUMERIC NOT NULL,
@@ -33,7 +32,7 @@ CREATE TABLE IF NOT EXISTS assets (
     lp NUMERIC NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    chain_id UUID
+    chain_id NUMERIC
 );
 
 -- Deposit wallets table

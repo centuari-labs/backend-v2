@@ -35,14 +35,6 @@ CREATE TABLE IF NOT EXISTS assets (
     chain_id NUMERIC
 );
 
--- Deposit wallets table
-CREATE TABLE IF NOT EXISTS deposit_wallets (
-    id SERIAL PRIMARY KEY,
-    wallet_address VARCHAR NOT NULL,
-    paired_wallet_address VARCHAR NOT NULL,
-    paired_wallet_primary_key VARCHAR NOT NULL
-);
-
 -- Settlement batches table (UUID primary key)
 CREATE TABLE IF NOT EXISTS settlement_batches (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -190,7 +182,6 @@ DROP TABLE IF EXISTS order_markets;
 DROP TABLE IF EXISTS orders;
 DROP TABLE IF EXISTS markets;
 DROP TABLE IF EXISTS settlement_batches;
-DROP TABLE IF EXISTS deposit_wallets;
 DROP TABLE IF EXISTS assets;
 DROP TABLE IF EXISTS accounts;
 

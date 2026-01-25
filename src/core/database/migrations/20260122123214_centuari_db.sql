@@ -27,12 +27,24 @@ CREATE TABLE IF NOT EXISTS assets (
     symbol TEXT NOT NULL,
     token_address TEXT NOT NULL,
     is_loan_token BOOLEAN NOT NULL,
-    lltv NUMERIC NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    chain_id NUMERIC
+);
+
+-- Risk table (depends on assets)
+CREATE TABLE IF NOT EXISTS risk (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    collateral_token_id UUID NOT NULL,
+    loan_token_id UUID NOT NULL,
+    ltv NUMERIC NOT NULL,
     lt NUMERIC NOT NULL,
     lp NUMERIC NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    chain_id NUMERIC
+    CONSTRAINT fk_collateral_token FOREIGN KEY (collateral_token_id) REFERENCES assets(id) ON DELETE CASCADE,
+    CONSTRAINT fk_loan_token FOREIGN KEY (loan_token_id) REFERENCES assets(id) ON DELETE CASCADE,
+    CONSTRAINT unique_collateral_loan_pair UNIQUE (collateral_token_id, loan_token_id)
 );
 
 -- Settlement batches table (UUID primary key)
@@ -182,6 +194,7 @@ DROP TABLE IF EXISTS order_markets;
 DROP TABLE IF EXISTS orders;
 DROP TABLE IF EXISTS markets;
 DROP TABLE IF EXISTS settlement_batches;
+DROP TABLE IF EXISTS risk;
 DROP TABLE IF EXISTS assets;
 DROP TABLE IF EXISTS accounts;
 

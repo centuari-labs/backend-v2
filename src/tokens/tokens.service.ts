@@ -8,7 +8,7 @@ export class TokensService {
     constructor(
         @InjectRepository(Token)
         private readonly tokenRepository: Repository<Token>,
-    ) {}
+    ) { }
 
     /**
      * Validates that a token address exists and is active in the database

@@ -7,7 +7,7 @@
 -- Step 1: Create ENUM types
 CREATE TYPE order_side AS ENUM ('LEND', 'BORROW');
 CREATE TYPE order_type AS ENUM ('MARKET', 'LIMIT');
-CREATE TYPE order_status AS ENUM ('OPEN', 'FILLED', 'CANCELLED', 'PARTIAL_FILLED');
+CREATE TYPE order_status AS ENUM ('OPEN', 'FILLED', 'CANCELLED', 'PARTIALLY_FILLED');
 CREATE TYPE settlement_batch_status AS ENUM ('PENDING', 'COMPLETED', 'FAILED');
 
 -- Step 2: Create independent tables (no foreign key dependencies)

@@ -141,6 +141,7 @@ CREATE TABLE IF NOT EXISTS borrow_positions (
     market_id UUID NOT NULL,
     shares NUMERIC NOT NULL,
     original_shares NUMERIC NOT NULL,
+    amount NUMERIC NOT NULL,
     original_debt NUMERIC NOT NULL,
     debt NUMERIC NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),

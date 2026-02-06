@@ -8,6 +8,7 @@ import {
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
 import { NatsService } from "../core/nats/nats.service";
+import { PriceService } from "../price/price.service";
 import { TokensService } from "../tokens/tokens.service";
 import { NATS_SUBJECTS } from "./constants/nats-subjects.constants";
 import {
@@ -34,9 +35,18 @@ export class OrdersService {
         private readonly accountRepository: Repository<Account>,
         @InjectRepository(Token)
         private readonly tokenRepository: Repository<Token>,
+        private readonly priceService: PriceService,
         private readonly tokensService: TokensService,
         private readonly natsService: NatsService,
     ) {}
+
+    /**
+     * Get the current USD price for a token by address.
+     * Uses the in-memory price cache (populated by interval worker).
+     */
+    async getTokenPriceInUsd(tokenAddress: string): Promise<number | null> {
+        return this.priceService.getPrice(tokenAddress);
+    }
 
     private async getOrCreateAccount(walletAddress: string, privyUserId: string): Promise<string> {
         let account = await this.accountRepository.findOne({

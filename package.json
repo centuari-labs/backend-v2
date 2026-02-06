@@ -16,6 +16,7 @@
         "test:cov": "jest --coverage",
         "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
         "test:e2e": "jest --config ./test/jest-e2e.json",
+        "test:integration:price": "node -r dotenv/config node_modules/jest/bin/jest.js src/__test__/price/providers/coingecko-tokens.integration.test.ts",
         "lint": "biome check --apply .",
         "format": "biome format --write .",
         "db": "ts-node src/core/database/scripts/db.ts"
@@ -26,6 +27,7 @@
         "@nestjs/jwt": "^11.0.1",
         "@nestjs/passport": "^11.0.5",
         "@nestjs/platform-express": "^11.0.1",
+        "@nestjs/schedule": "^6.1.1",
         "@nestjs/typeorm": "^11.0.0",
         "@privy-io/server-auth": "^1.32.5",
         "class-transformer": "^0.5.1",

@@ -1,6 +1,7 @@
 import { Module } from "@nestjs/common";
 import { TypeOrmModule } from "@nestjs/typeorm";
 import { CoreModule } from "../core/core.module";
+import { PriceModule } from "../price/price.module";
 import { TokensModule } from "../tokens/tokens.module";
 import { Order } from "./entities/order.entity";
 import { Account } from "./entities/account.entity";
@@ -12,6 +13,7 @@ import { OrdersService } from "./orders.service";
     imports: [
         TypeOrmModule.forFeature([Order, Account, Token]),
         CoreModule,
+        PriceModule,
         TokensModule,
     ],
     controllers: [OrdersController],

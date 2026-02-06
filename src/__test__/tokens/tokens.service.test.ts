@@ -14,11 +14,9 @@ describe('TokensService', () => {
         tokenAddress: '0xToken1234567890abcdef1234567890abcdef12',
         symbol: 'USDC',
         name: 'USD Coin',
-        imageUrl: 'https://example.com/usdc.png',
         isLoanToken: true,
-        LLTV: 0.86,
-        LT: 0.86,
-        LP: 0.99,
+        chainId: 84532,
+        averageLTV: 0.75,
         createdAt: new Date(),
         updatedAt: new Date(),
     };
@@ -96,10 +94,28 @@ describe('TokensService', () => {
                 }),
             });
         });
+
+        it('should return avg_ltv from database for loan tokens', async () => {
+            const loanTokenWithAvgLtv = { ...mockToken, averageLTV: 0.75 };
+            tokenRepository.findOne.mockResolvedValue(loanTokenWithAvgLtv);
+
+            const result = await service.validateToken(mockToken.tokenAddress);
+
+            expect(result.averageLTV).toBe(0.75);
+        });
+
+        it('should return null avg_ltv when no risk records exist', async () => {
+            const loanTokenWithNullAvgLtv = { ...mockToken, averageLTV: null };
+            tokenRepository.findOne.mockResolvedValue(loanTokenWithNullAvgLtv);
+
+            const result = await service.validateToken(mockToken.tokenAddress);
+
+            expect(result.averageLTV).toBeNull();
+        });
     });
 
     describe('getActiveTokens', () => {
-        it('should return all active tokens', async () => {
+        it('should return all active tokens with avg_ltv from database', async () => {
             const activeTokens: Token[] = [
                 mockToken,
                 {
@@ -108,6 +124,8 @@ describe('TokensService', () => {
                     tokenAddress: '0xToken2234567890abcdef1234567890abcdef12',
                     symbol: 'ETH',
                     name: 'Ethereum',
+                    isLoanToken: false,
+                    averageLTV: null,
                 },
             ];
 
@@ -115,8 +133,9 @@ describe('TokensService', () => {
 
             const result = await service.getActiveTokens();
 
-            expect(result).toEqual(activeTokens);
             expect(result).toHaveLength(2);
+            expect(result[0].averageLTV).toBe(0.75); // Loan token should have avg_ltv from database
+            expect(result[1].averageLTV).toBeNull(); // Non-loan token should have null avg_ltv
             expect(tokenRepository.find).toHaveBeenCalledWith();
         });
 
@@ -128,8 +147,6 @@ describe('TokensService', () => {
             expect(result).toEqual([]);
             expect(result).toHaveLength(0);
         });
-
-
     });
 
     describe('isTokenSupported', () => {
@@ -177,22 +194,20 @@ describe('TokensService', () => {
             expect(result).toHaveProperty('tokenAddress');
             expect(result).toHaveProperty('symbol');
             expect(result).toHaveProperty('name');
-            expect(result).toHaveProperty('imageUrl');
             expect(result).toHaveProperty('isLoanToken');
-            expect(result).toHaveProperty('LLTV');
-            expect(result).toHaveProperty('LT');
-            expect(result).toHaveProperty('LP');
+            expect(result).toHaveProperty('chainId');
             expect(result).toHaveProperty('createdAt');
             expect(result).toHaveProperty('updatedAt');
+            expect(result).toHaveProperty('averageLTV');
         });
 
-        it('should handle token with empty imageUrl', async () => {
-            const tokenWithoutImage = { ...mockToken, imageUrl: '' };
-            tokenRepository.findOne.mockResolvedValue(tokenWithoutImage);
+        it('should handle token with null chainId', async () => {
+            const tokenWithNullChainId = { ...mockToken, chainId: null };
+            tokenRepository.findOne.mockResolvedValue(tokenWithNullChainId);
 
             const result = await service.validateToken(mockToken.tokenAddress);
 
-            expect(result.imageUrl).toBe('');
+            expect(result.chainId).toBeNull();
         });
     });
 });

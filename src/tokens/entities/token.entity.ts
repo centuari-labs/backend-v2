@@ -15,20 +15,14 @@ export class Token {
     @Column({ type: "text" })
     name: string;
 
-    @Column({ name: "image_url", type: "text" })
-    imageUrl: string;
-
     @Column({ name: "is_loan_token", type: "boolean" })
     isLoanToken: boolean;
 
-    @Column({ name: "lltv", type: "decimal" })
-    LLTV: number;
+    @Column({ name: "chain_id", type: "numeric", nullable: true })
+    chainId: number | null;
 
-    @Column({ name: "lt", type: "decimal" })
-    LT: number;
-
-    @Column({ name: "lp", type: "decimal" })
-    LP: number;
+    @Column({ name: "avg_ltv", type: "numeric", nullable: true })
+    averageLTV: number | null;
 
     @CreateDateColumn({ name: "created_at" })
     createdAt: Date;

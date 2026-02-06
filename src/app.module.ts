@@ -1,6 +1,5 @@
 import { Module } from "@nestjs/common";
 import { TypeOrmModule } from "@nestjs/typeorm";
-import { AppController } from "./app.controller";
 import { AuthModule } from "./auth/auth.module";
 import { CoreModule } from "./core/core.module";
 import { OrdersModule } from "./orders/orders.module";
@@ -20,7 +19,7 @@ import { TokensModule } from "./tokens/tokens.module";
         OrdersModule,
         TokensModule,
     ],
-    controllers: [AppController],
+    controllers: [],
     providers: [],
 })
 export class AppModule {}

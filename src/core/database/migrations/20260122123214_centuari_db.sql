@@ -7,7 +7,7 @@
 -- Step 1: Create ENUM types
 CREATE TYPE order_side AS ENUM ('LEND', 'BORROW');
 CREATE TYPE order_type AS ENUM ('MARKET', 'LIMIT');
-CREATE TYPE order_status AS ENUM ('OPEN', 'FILLED', 'CANCELLED', 'PARTIAL');
+CREATE TYPE order_status AS ENUM ('OPEN', 'FILLED', 'CANCELLED', 'PARTIALLY_FILLED');
 CREATE TYPE settlement_batch_status AS ENUM ('PENDING', 'COMPLETED', 'FAILED');
 
 -- Step 2: Create independent tables (no foreign key dependencies)
@@ -25,23 +25,26 @@ CREATE TABLE IF NOT EXISTS assets (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name TEXT NOT NULL,
     symbol TEXT NOT NULL,
-    image_url TEXT NOT NULL,
     token_address TEXT NOT NULL,
     is_loan_token BOOLEAN NOT NULL,
-    lltv NUMERIC NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    chain_id NUMERIC
+);
+
+-- Risk table (depends on assets)
+CREATE TABLE IF NOT EXISTS risk (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    collateral_token_id UUID NOT NULL,
+    loan_token_id UUID NOT NULL,
+    ltv NUMERIC NOT NULL,
     lt NUMERIC NOT NULL,
     lp NUMERIC NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    chain_id UUID
-);
-
--- Deposit wallets table
-CREATE TABLE IF NOT EXISTS deposit_wallets (
-    id SERIAL PRIMARY KEY,
-    wallet_address VARCHAR NOT NULL,
-    paired_wallet_address VARCHAR NOT NULL,
-    paired_wallet_primary_key VARCHAR NOT NULL
+    CONSTRAINT fk_collateral_token FOREIGN KEY (collateral_token_id) REFERENCES assets(id) ON DELETE CASCADE,
+    CONSTRAINT fk_loan_token FOREIGN KEY (loan_token_id) REFERENCES assets(id) ON DELETE CASCADE,
+    CONSTRAINT unique_collateral_loan_pair UNIQUE (collateral_token_id, loan_token_id)
 );
 
 -- Settlement batches table (UUID primary key)
@@ -138,6 +141,7 @@ CREATE TABLE IF NOT EXISTS borrow_positions (
     market_id UUID NOT NULL,
     shares NUMERIC NOT NULL,
     original_shares NUMERIC NOT NULL,
+    amount NUMERIC NOT NULL,
     original_debt NUMERIC NOT NULL,
     debt NUMERIC NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
@@ -191,7 +195,7 @@ DROP TABLE IF EXISTS order_markets;
 DROP TABLE IF EXISTS orders;
 DROP TABLE IF EXISTS markets;
 DROP TABLE IF EXISTS settlement_batches;
-DROP TABLE IF EXISTS deposit_wallets;
+DROP TABLE IF EXISTS risk;
 DROP TABLE IF EXISTS assets;
 DROP TABLE IF EXISTS accounts;
 

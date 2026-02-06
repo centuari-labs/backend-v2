@@ -24,6 +24,9 @@ export class Token {
     @Column({ name: "avg_ltv", type: "numeric", nullable: true })
     averageLTV: number | null;
 
+    @Column({ name: "coingecko_id", type: "text", nullable: true })
+    coingeckoId: string | null;
+
     @CreateDateColumn({ name: "created_at" })
     createdAt: Date;
 

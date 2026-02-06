@@ -30,7 +30,8 @@ export class TokensService {
      * Get all active tokens
      */
     async getActiveTokens(): Promise<Token[]> {
-        return this.tokenRepository.find();
+        const tokens = await this.tokenRepository.find();
+        return tokens;
     }
 
     /**

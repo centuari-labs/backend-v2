@@ -6,6 +6,7 @@ import { OrdersService } from '../../orders/orders.service';
 import { Order } from '../../orders/entities/order.entity';
 import { Account } from '../../orders/entities/account.entity';
 import { Token } from '../../tokens/entities/token.entity';
+import { PriceService } from '../../price/price.service';
 import { TokensService } from '../../tokens/tokens.service';
 import { NatsService } from '../../core/nats/nats.service';
 import { OrderSide, OrderType, OrderStatus } from '../../orders/constants/order.constants';
@@ -69,6 +70,10 @@ describe('OrdersService', () => {
             publish: jest.fn(),
         };
 
+        const mockPriceService = {
+            getPrice: jest.fn(),
+        };
+
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 OrdersService,
@@ -83,6 +88,10 @@ describe('OrdersService', () => {
                 {
                     provide: getRepositoryToken(Token),
                     useValue: mockTokenRepository,
+                },
+                {
+                    provide: PriceService,
+                    useValue: mockPriceService,
                 },
                 {
                     provide: TokensService,

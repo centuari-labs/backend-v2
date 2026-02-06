@@ -6,6 +6,7 @@ import { CoreModule } from "./core/core.module";
 import { OrdersModule } from "./orders/orders.module";
 import { PriceModule } from "./price/price.module";
 import { TokensModule } from "./tokens/tokens.module";
+import { MarketModule } from "./market/market.module";
 
 @Module({
     imports: [
@@ -22,6 +23,7 @@ import { TokensModule } from "./tokens/tokens.module";
         OrdersModule,
         PriceModule,
         TokensModule,
+        MarketModule,
     ],
     controllers: [],
     providers: [],

@@ -98,5 +98,35 @@ describe('MarketService', () => {
             expect(result.markets[0].asset.symbol).toBe('BTC');
             expect(result.markets[0].borrow_rate).toBe(0.05);
         });
+
+        it('should return fallback USDC data when no tokens are found', async () => {
+            const mockTokenRepository = module.get(getRepositoryToken(Token));
+            const mockOrderRepository = module.get(getRepositoryToken(Order));
+
+            mockTokenRepository.find.mockResolvedValue([]);
+            priceProvider.getPrices.mockResolvedValue(new Map());
+            mockOrderRepository.find.mockResolvedValue([]);
+
+            const mockQueryBuilder = {
+                select: jest.fn().mockReturnThis(),
+                addSelect: jest.fn().mockReturnThis(),
+                where: jest.fn().mockReturnThis(),
+                groupBy: jest.fn().mockReturnThis(),
+                addGroupBy: jest.fn().mockReturnThis(),
+                getRawMany: jest.fn().mockResolvedValue([]),
+            };
+            mockOrderRepository.createQueryBuilder.mockReturnValue(mockQueryBuilder as any);
+
+            const result = await service.getMarketSnapshot();
+
+            expect(result.total_deposit).toBe('0.00');
+            expect(result.active_loans).toBe('0.00');
+            expect(result.markets).toHaveLength(1);
+            expect(result.markets[0].asset.symbol).toBe('USDC');
+            expect(result.markets[0].asset.name).toBe('USD Coin');
+            expect(result.markets[0].borrow_rate).toBe(0);
+            expect(result.markets[0].lend_rate).toBe(550);
+            expect(result.markets[0].collateral_factor).toBe(0);
+        });
     });
 });

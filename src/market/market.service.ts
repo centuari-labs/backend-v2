@@ -19,10 +19,6 @@ export class MarketService {
         private readonly priceProvider: PriceProvider,
     ) { }
 
-
-
-
-
     async getMarketSnapshot(): Promise<MarketResponseDto> {
         const assets = await this.tokenRepository.find();
 
@@ -74,7 +70,7 @@ export class MarketService {
             }
         }
 
-        const markets = assets.map(asset => {
+        let markets = assets.map(asset => {
             const rates = rateMap.get(asset.id) || { borrow: 0, lend: 0 };
             return {
                 asset: {

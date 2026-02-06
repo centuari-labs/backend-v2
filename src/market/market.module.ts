@@ -7,6 +7,8 @@ import { TokensModule } from '../tokens/tokens.module';
 import { Order } from '../orders/entities/order.entity';
 import { CoreModule } from '../core/core.module';
 import { Token } from '../tokens/entities/token.entity';
+import { PRICE_PROVIDER } from './price-provider.interface';
+import { InternalPriceProvider } from './internal-price.provider';
 
 @Module({
     imports: [
@@ -15,10 +17,13 @@ import { Token } from '../tokens/entities/token.entity';
         CoreModule,
     ],
     controllers: [MarketController],
-    providers: [MarketService],
-    exports: [MarketService],
+    providers: [
+        MarketService,
+        {
+            provide: PRICE_PROVIDER,
+            useClass: InternalPriceProvider,
+        },
+    ],
+    exports: [MarketService, PRICE_PROVIDER],
 })
 export class MarketModule { }
-
-
-

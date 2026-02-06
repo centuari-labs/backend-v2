@@ -11,16 +11,20 @@ export class GetMarketsQueryDto {
     assetId?: string;
 }
 
-export class MarketResponseDto {
-    id: string;
-    assetId: string;
-    createdAt: Date;
-    asset?: {
-        id: string;
-        symbol: string;
+export class MarketItemDto {
+    asset: {
         name: string;
-        tokenAddress: string;
+        symbol: string;
     };
+    borrow_rate: number;
+    lend_rate: number;
+    collateral_factor: number;
+}
+
+export class MarketResponseDto {
+    total_deposit: string;
+    active_loans: string;
+    markets: MarketItemDto[];
 }
 
 export class BorrowRateDto {

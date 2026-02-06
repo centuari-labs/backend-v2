@@ -14,7 +14,7 @@ import { TokensModule } from "./tokens/tokens.module";
             type: "postgres",
             url: process.env.DATABASE_URL,
             autoLoadEntities: true,
-            synchronize: false, // Don't auto-sync in production - use migrations
+            synchronize: false,
             logging: process.env.NODE_ENV === "development",
         }),
         AuthModule,
@@ -26,4 +26,4 @@ import { TokensModule } from "./tokens/tokens.module";
     controllers: [],
     providers: [],
 })
-export class AppModule {}
+export class AppModule { }

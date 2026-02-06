@@ -4,12 +4,12 @@ import { Repository } from 'typeorm';
 import { MarketService } from '../../market/market.service';
 import { Order } from '../../orders/entities/order.entity';
 import { Token } from '../../tokens/entities/token.entity';
-import { PRICE_PROVIDER } from '../../market/price-provider.interface';
+import { PriceService } from '../../price/price.service';
 
 describe('MarketService', () => {
     let service: MarketService;
     let module: TestingModule;
-    let priceProvider: any;
+    let priceService: any;
 
     beforeEach(async () => {
         const mockOrderRepository = {
@@ -21,8 +21,8 @@ describe('MarketService', () => {
             find: jest.fn(),
         };
 
-        const mockPriceProvider = {
-            getPrices: jest.fn(),
+        const mockPriceService = {
+            getPrice: jest.fn(),
         };
 
         module = await Test.createTestingModule({
@@ -37,14 +37,14 @@ describe('MarketService', () => {
                     useValue: mockTokenRepository,
                 },
                 {
-                    provide: PRICE_PROVIDER,
-                    useValue: mockPriceProvider,
+                    provide: PriceService,
+                    useValue: mockPriceService,
                 },
             ],
         }).compile();
 
         service = module.get<MarketService>(MarketService);
-        priceProvider = module.get(PRICE_PROVIDER);
+        priceService = module.get(PriceService);
     });
 
     afterEach(() => {
@@ -54,8 +54,8 @@ describe('MarketService', () => {
     describe('getMarketSnapshot', () => {
         it('should return aggregated market data', async () => {
             const mockTokens = [
-                { id: '1', name: 'Bitcoin', symbol: 'BTC', averageLTV: 0.75 },
-                { id: '2', name: 'Ethereum', symbol: 'ETH', averageLTV: 0.80 },
+                { id: '1', name: 'Bitcoin', symbol: 'BTC', tokenAddress: '0x1', averageLTV: 0.75 },
+                { id: '2', name: 'Ethereum', symbol: 'ETH', tokenAddress: '0x2', averageLTV: 0.80 },
             ];
 
             const mockRawRates = [
@@ -67,11 +67,6 @@ describe('MarketService', () => {
                 { assetId: '1', quantity: '1', side: 'LEND', status: 'OPEN' }, // 1 BTC = 65000 USD
                 { assetId: '2', quantity: '2', side: 'BORROW', status: 'OPEN' }, // 2 ETH = 7000 USD
             ];
-
-            const mockPrices = new Map<string, number | null>([
-                ['BTC', 65000],
-                ['ETH', 3500],
-            ]);
 
             const mockQueryBuilder = {
                 select: jest.fn().mockReturnThis(),
@@ -88,7 +83,11 @@ describe('MarketService', () => {
             mockTokenRepository.find.mockResolvedValue(mockTokens as any);
             mockOrderRepository.createQueryBuilder.mockReturnValue(mockQueryBuilder as any);
             mockOrderRepository.find.mockResolvedValue(mockOrders as any);
-            priceProvider.getPrices.mockResolvedValue(mockPrices);
+
+            priceService.getPrice.mockImplementation((address: string) => {
+                const prices: Record<string, number> = { '0x1': 65000, '0x2': 3500 };
+                return Promise.resolve(prices[address] || null);
+            });
 
             const result = await service.getMarketSnapshot();
 
@@ -104,7 +103,6 @@ describe('MarketService', () => {
             const mockOrderRepository = module.get(getRepositoryToken(Order));
 
             mockTokenRepository.find.mockResolvedValue([]);
-            priceProvider.getPrices.mockResolvedValue(new Map());
             mockOrderRepository.find.mockResolvedValue([]);
 
             const mockQueryBuilder = {
@@ -121,12 +119,7 @@ describe('MarketService', () => {
 
             expect(result.total_deposit).toBe('0.00');
             expect(result.active_loans).toBe('0.00');
-            expect(result.markets).toHaveLength(1);
-            expect(result.markets[0].asset.symbol).toBe('USDC');
-            expect(result.markets[0].asset.name).toBe('USD Coin');
-            expect(result.markets[0].borrow_rate).toBe(0);
-            expect(result.markets[0].lend_rate).toBe(550);
-            expect(result.markets[0].collateral_factor).toBe(0);
+            expect(result.markets).toHaveLength(0);
         });
     });
 });

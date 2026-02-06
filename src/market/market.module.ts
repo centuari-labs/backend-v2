@@ -7,23 +7,20 @@ import { TokensModule } from '../tokens/tokens.module';
 import { Order } from '../orders/entities/order.entity';
 import { CoreModule } from '../core/core.module';
 import { Token } from '../tokens/entities/token.entity';
-import { PRICE_PROVIDER } from './price-provider.interface';
-import { InternalPriceProvider } from './internal-price.provider';
+import { PriceModule } from '../price/price.module';
 
 @Module({
     imports: [
         TypeOrmModule.forFeature([Market, Order, Token]),
         TokensModule,
         CoreModule,
+        PriceModule,
     ],
     controllers: [MarketController],
     providers: [
         MarketService,
-        {
-            provide: PRICE_PROVIDER,
-            useClass: InternalPriceProvider,
-        },
     ],
-    exports: [MarketService, PRICE_PROVIDER],
+    exports: [MarketService],
 })
 export class MarketModule { }
+

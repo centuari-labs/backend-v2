@@ -1,12 +1,11 @@
-import { Injectable, Inject } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { MarketResponseDto } from './dto/market.dto';
 import { Order } from '../orders/entities/order.entity';
 import { OrderSide, OrderStatus } from '../orders/constants/order.constants';
 import { Token } from '../tokens/entities/token.entity';
-import { PRICE_PROVIDER } from './price-provider.interface';
-import type { PriceProvider } from './price-provider.interface';
+import { PriceService } from '../price/price.service';
 
 @Injectable()
 export class MarketService {
@@ -15,8 +14,7 @@ export class MarketService {
         private readonly orderRepository: Repository<Order>,
         @InjectRepository(Token)
         private readonly tokenRepository: Repository<Token>,
-        @Inject(PRICE_PROVIDER)
-        private readonly priceProvider: PriceProvider,
+        private readonly priceService: PriceService,
     ) { }
 
     async getMarketSnapshot(): Promise<MarketResponseDto> {
@@ -42,9 +40,15 @@ export class MarketService {
             if (rate.side === OrderSide.Lend) entry.lend = Number.parseFloat(rate.maxRate);
         }
 
-        // Batch fetch prices
-        const symbols = assets.map(a => a.symbol);
-        const priceMap = await this.priceProvider.getPrices(symbols);
+        const priceMap = new Map<string, number>();
+        await Promise.all(
+            assets.map(async (asset) => {
+                const price = await this.priceService.getPrice(asset.tokenAddress);
+                if (price !== null) {
+                    priceMap.set(asset.tokenAddress.toLowerCase(), price);
+                }
+            })
+        );
 
         let totalDepositUSD = 0;
         let activeLoansUSD = 0;
@@ -57,10 +61,9 @@ export class MarketService {
             const asset = assets.find(a => a.id === order.assetId);
             if (!asset) continue;
 
-            const price = priceMap.get(asset.symbol.toUpperCase());
+            const price = priceMap.get(asset.tokenAddress.toLowerCase());
 
-            // Explicitly handle missing price: do not use fallback, just skip or treat as 0
-            if (price !== null && price !== undefined) {
+            if (price !== undefined) {
                 const valueUSD = Number.parseFloat(order.quantity) * price;
                 if (order.side === OrderSide.Lend) {
                     totalDepositUSD += valueUSD;

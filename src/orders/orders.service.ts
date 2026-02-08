@@ -23,6 +23,7 @@ import type { CreateLendMarketOrderDto } from "./dto/create-lend-market-order.dt
 import { Order } from "./entities/order.entity";
 import { Account } from "./entities/account.entity";
 import { Token } from "../tokens/entities/token.entity";
+import { OrderRepository } from "./repositories/order.repository";
 
 @Injectable()
 export class OrdersService {
@@ -30,7 +31,7 @@ export class OrdersService {
 
     constructor(
         @InjectRepository(Order)
-        private readonly orderRepository: Repository<Order>,
+        private readonly orderRepository: OrderRepository,
         @InjectRepository(Account)
         private readonly accountRepository: Repository<Account>,
         @InjectRepository(Token)
@@ -38,7 +39,7 @@ export class OrdersService {
         private readonly priceService: PriceService,
         private readonly tokensService: TokensService,
         private readonly natsService: NatsService,
-    ) {}
+    ) { }
 
     /**
      * Get the current USD price for a token by address.
@@ -61,7 +62,7 @@ export class OrdersService {
             });
             account = await this.accountRepository.save(account);
         }
-        
+
         return account.id;
     }
 
@@ -189,47 +190,40 @@ export class OrdersService {
 
     async cancelOrder(orderId: string, walletAddress: string): Promise<Order> {
         // Find the order
-        const order = await this.orderRepository.findOne({
-            where: { id: orderId },
-        });
+        const orders = await this.orderRepository.getOpenOrders(orderId);
 
-        if (!order) {
+        if (!orders.length) {
             throw new NotFoundException(`Order with ID ${orderId} not found`);
         }
-        
-        // For cancellation, we expect the account to exist because the order exists.
-        // We just need to verify ownership.
+
         const account = await this.accountRepository.findOne({
-             where: { userWallet: walletAddress }
+            where: { userWallet: walletAddress }
         });
-        
+
         if (!account) {
-             throw new ForbiddenException("Account not found for this wallet");
+            throw new ForbiddenException("Account not found for this wallet");
         }
 
         const accountId = account.id;
 
-        // Validate ownership
-        if (order.accountId !== accountId) {
+        if (orders[0].accountId !== accountId) {
             throw new ForbiddenException("You do not own this order");
         }
 
-        // Validate status - can only cancel open or partial orders
         const cancellableStatuses = [
             OrderStatus.Open,
             OrderStatus.PartiallyFilled,
         ] as OrderStatus[];
 
-        if (!cancellableStatuses.includes(order.status)) {
+        if (!cancellableStatuses.includes(orders[0].status)) {
             throw new BadRequestException(
                 "Order can only be cancelled when status is open or partial",
             );
         }
 
-        // Update order
-        order.status = OrderStatus.Cancelled;
+        orders[0].status = OrderStatus.Cancelled;
 
-        const updatedOrder = await this.orderRepository.save(order);
+        const updatedOrder = await this.orderRepository.save(orders[0]);
 
         // Publish cancellation event to NATS
         await this.publishCancelOrderToNats(orderId, walletAddress);

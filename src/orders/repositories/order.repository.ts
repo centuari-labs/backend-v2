@@ -28,4 +28,13 @@ export class OrderRepository extends Repository<Order> {
         }
         return rateMap;
     }
+
+    async getOpenOrders(assetId?: string): Promise<Order[]> {
+        return this.find({
+            where: {
+                status: OrderStatus.Open,
+                assetId,
+            },
+        });
+    }
 }

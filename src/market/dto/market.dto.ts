@@ -1,9 +1,4 @@
-import { IsUUID, IsOptional, IsDateString } from 'class-validator';
-
-export class CreateMarketDto {
-    @IsUUID()
-    assetId: string;
-}
+import { IsUUID, IsOptional } from 'class-validator';
 
 export class GetMarketsQueryDto {
     @IsOptional()

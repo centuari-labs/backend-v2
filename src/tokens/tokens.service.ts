@@ -2,12 +2,13 @@ import { Injectable, BadRequestException } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { ILike, Repository } from "typeorm";
 import { Token } from "./entities/token.entity";
+import { TokensRepository } from "./repositories/tokens.repository";
 
 @Injectable()
 export class TokensService {
     constructor(
         @InjectRepository(Token)
-        private readonly tokenRepository: Repository<Token>,
+        private readonly tokenRepository: TokensRepository,
     ) { }
 
     /**
@@ -15,9 +16,7 @@ export class TokensService {
      * @throws BadRequestException if token is not supported
      */
     async validateToken(address: string): Promise<Token> {
-        const token = await this.tokenRepository.findOne({
-            where: { tokenAddress: ILike(address) },
-        });
+        const token = await this.tokenRepository.validateToken(address);
 
         if (!token) {
             throw new BadRequestException(`Token ${address} is not supported`);
@@ -30,17 +29,7 @@ export class TokensService {
      * Get all active tokens
      */
     async getActiveTokens(): Promise<Token[]> {
-        const tokens = await this.tokenRepository.find();
+        const tokens = await this.tokenRepository.getActiveTokens();
         return tokens;
-    }
-
-    /**
-     * Check if a token is supported without throwing
-     */
-    async isTokenSupported(address: string): Promise<boolean> {
-        const count = await this.tokenRepository.count({
-            where: { tokenAddress: ILike(address) },
-        });
-        return count > 0;
     }
 }

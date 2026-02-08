@@ -9,8 +9,8 @@ export class OrderRepository extends Repository<Order> {
         super(Order, dataSource.createEntityManager());
     }
 
-    async getBestRates(): Promise<Array<{ assetId: string, highestBid: string, lowestAsk: string }>> {
-        return this.createQueryBuilder('order')
+    async getBestRates(): Promise<Map<string, { borrow: number; lend: number }>> {
+        const rawResults = await this.createQueryBuilder('order')
             .select('order.assetId', 'assetId')
             .addSelect('MAX(CASE WHEN order.side = :borrowSide THEN order.rate ELSE 0 END)', 'highestBid')
             .addSelect('MIN(NULLIF(CASE WHEN order.side = :lendSide THEN order.rate ELSE NULL END, 0))', 'lowestAsk')
@@ -18,5 +18,14 @@ export class OrderRepository extends Repository<Order> {
             .setParameters({ borrowSide: OrderSide.Borrow, lendSide: OrderSide.Lend })
             .groupBy('order.assetId')
             .getRawMany();
+
+        const rateMap = new Map<string, { borrow: number; lend: number }>();
+        for (const rate of rawResults) {
+            rateMap.set(rate.assetId, {
+                lend: rate.highestBid ? Number.parseFloat(rate.highestBid) : 0,
+                borrow: rate.lowestAsk ? Number.parseFloat(rate.lowestAsk) : 0
+            });
+        }
+        return rateMap;
     }
 }

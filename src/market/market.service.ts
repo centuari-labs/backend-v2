@@ -20,15 +20,7 @@ export class MarketService {
     async getMarketSnapshot(): Promise<MarketResponseDto> {
         const assets = await this.tokenRepository.find();
 
-        const bestRate = await this.orderRepository.getBestRates();
-
-        const rateMap = new Map<string, { borrow: number; lend: number }>();
-        for (const rate of bestRate) {
-            rateMap.set(rate.assetId, {
-                lend: rate.highestBid ? Number.parseFloat(rate.highestBid) : 0,
-                borrow: rate.lowestAsk ? Number.parseFloat(rate.lowestAsk) : 0
-            });
-        }
+        const rateMap = await this.orderRepository.getBestRates();
 
         const priceMap = new Map<string, number>();
         await Promise.all(

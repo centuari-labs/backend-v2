@@ -41,31 +41,23 @@ describe('MarketService', () => {
     });
 
     it('should correctly map highest borrow rate to lend_rate and lowest lend rate to borrow_rate', async () => {
-        const mockRawRates = [
-            // Asset 1: Has both borrow and lend orders
-            { assetId: 'asset1', highestBid: '0.05', lowestAsk: '0.08' },
-            // Asset 2: Only has borrow orders (bids) -> lend_rate exists, borrow_rate should be 0/null
-            { assetId: 'asset2', highestBid: '0.04', lowestAsk: null },
-        ];
+        const mockRateMap = new Map<string, { borrow: number; lend: number }>();
+        mockRateMap.set('asset1', { lend: 0.05, borrow: 0.08 });
+        mockRateMap.set('asset2', { lend: 0.04, borrow: 0 });
 
-        orderRepositoryMock.getBestRates.mockResolvedValue(mockRawRates);
+        orderRepositoryMock.getBestRates.mockResolvedValue(mockRateMap);
 
         const result = await service.getMarketSnapshot();
 
         const btcMarket = result.markets.find(m => m.asset.symbol === 'BTC');
         const ethMarket = result.markets.find(m => m.asset.symbol === 'ETH');
 
-        // lend_rate = highest bid (highest borrow order rate)
-        // borrow_rate = lowest ask (lowest lend order rate)
-
         expect(btcMarket).toBeDefined();
-        // Asset 1
-        expect(btcMarket?.lend_rate).toBe(0.05); // highestBid
-        expect(btcMarket?.borrow_rate).toBe(0.08); // lowestAsk
+        expect(btcMarket?.lend_rate).toBe(0.05);
+        expect(btcMarket?.borrow_rate).toBe(0.08);
 
         expect(ethMarket).toBeDefined();
-        // Asset 2
-        expect(ethMarket?.lend_rate).toBe(0.04); // highestBid
-        expect(ethMarket?.borrow_rate).toBe(0); // lowestAsk is null, should default to 0
+        expect(ethMarket?.lend_rate).toBe(0.04);
+        expect(ethMarket?.borrow_rate).toBe(0);
     });
 });

@@ -3,9 +3,11 @@ import { AppModule } from "./app.module";
 import { AllExceptionsFilter } from "./common/filters/http-exception.filter";
 import { ResponseInterceptor } from "./common/interceptors/response.interceptor";
 import { runMigrations } from "./core/database/scripts/run-migration";
+import { runSeeds } from "./core/database/scripts/run-seed";
 
 async function bootstrap() {
     await runMigrations();
+    await runSeeds();
 
     const app = await NestFactory.create(AppModule);
 

@@ -8,6 +8,7 @@
     "scripts": {
         "build": "nest build",
         "migrate": "ts-node src/core/database/scripts/run-migration.ts",
+        "seed": "ts-node src/core/database/scripts/run-seed.ts",
         "start": "nest start",
         "start:dev": "nest start --watch",
         "start:debug": "nest start --debug --watch",

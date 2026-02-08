@@ -21,8 +21,6 @@ import type { CreateBorrowMarketOrderDto } from "./dto/create-borrow-market-orde
 import type { CreateLendLimitOrderDto } from "./dto/create-lend-limit-order.dto";
 import type { CreateLendMarketOrderDto } from "./dto/create-lend-market-order.dto";
 import { Order } from "./entities/order.entity";
-import { Account } from "./entities/account.entity";
-import { Token } from "../tokens/entities/token.entity";
 import { OrderRepository } from "./repositories/order.repository";
 
 @Injectable()
@@ -30,12 +28,7 @@ export class OrdersService {
     private readonly logger = new Logger(OrdersService.name);
 
     constructor(
-        @InjectRepository(Order)
         private readonly orderRepository: OrderRepository,
-        @InjectRepository(Account)
-        private readonly accountRepository: Repository<Account>,
-        @InjectRepository(Token)
-        private readonly tokenRepository: Repository<Token>,
         private readonly priceService: PriceService,
         private readonly tokensService: TokensService,
         private readonly natsService: NatsService,
@@ -49,39 +42,17 @@ export class OrdersService {
         return this.priceService.getPrice(tokenAddress);
     }
 
-    /**
-     * Get the current USD price for a token by address.
-     * Uses the in-memory price cache (populated by interval worker).
-     */
-    async getTokenPriceInUsd(tokenAddress: string): Promise<number | null> {
-        return this.priceService.getPrice(tokenAddress);
-    }
-
-    private async getOrCreateAccount(walletAddress: string, privyUserId: string): Promise<string> {
-        let account = await this.accountRepository.findOne({
-            where: { userWallet: walletAddress },
-        });
-
-        if (!account) {
-            this.logger.log(`Creating new account for wallet ${walletAddress} (Privy: ${privyUserId})`);
-            account = this.accountRepository.create({
-                userWallet: walletAddress,
-                privyUserId: privyUserId,
-            });
-            account = await this.accountRepository.save(account);
-        }
-
+    async getOrCreateAccount(walletAddress: string, privyUserId: string): Promise<string> {
+        const account = await this.orderRepository.getOrCreateAccount(walletAddress, privyUserId);
         return account.id;
     }
 
-    private async getAssetId(tokenAddress: string): Promise<string> {
-        const token = await this.tokenRepository.findOne({
-            where: { tokenAddress },
-        });
-        if (!token) {
+    async getAssetId(tokenAddress: string): Promise<string> {
+        const assetId = await this.orderRepository.getAssetId(tokenAddress);
+        if (!assetId) {
             throw new NotFoundException(`Asset for token ${tokenAddress} not found`);
         }
-        return token.id;
+        return assetId.id;
     }
 
     async createLendMarketOrder(
@@ -204,9 +175,7 @@ export class OrdersService {
             throw new NotFoundException(`Order with ID ${orderId} not found`);
         }
 
-        const account = await this.accountRepository.findOne({
-            where: { userWallet: walletAddress }
-        });
+        const account = await this.orderRepository.findAccountByWallet(walletAddress);
 
         if (!account) {
             throw new ForbiddenException("Account not found for this wallet");

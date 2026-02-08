@@ -2,7 +2,6 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { MarketResponseDto } from './dto/market.dto';
-import { OrderSide, OrderStatus } from '../orders/constants/order.constants';
 import { Token } from '../tokens/entities/token.entity';
 import { PriceService } from '../price/price.service';
 

@@ -6,6 +6,7 @@ import { CoreModule } from "./core/core.module";
 import { OrdersModule } from "./orders/orders.module";
 import { PriceModule } from "./price/price.module";
 import { TokensModule } from "./tokens/tokens.module";
+import { MarketModule } from "./market/market.module";
 
 @Module({
     imports: [
@@ -14,7 +15,7 @@ import { TokensModule } from "./tokens/tokens.module";
             type: "postgres",
             url: process.env.DATABASE_URL,
             autoLoadEntities: true,
-            synchronize: false, // Don't auto-sync in production - use migrations
+            synchronize: false,
             logging: process.env.NODE_ENV === "development",
         }),
         AuthModule,
@@ -22,8 +23,9 @@ import { TokensModule } from "./tokens/tokens.module";
         OrdersModule,
         PriceModule,
         TokensModule,
+        MarketModule,
     ],
     controllers: [],
     providers: [],
 })
-export class AppModule {}
+export class AppModule { }

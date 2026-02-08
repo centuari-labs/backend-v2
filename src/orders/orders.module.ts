@@ -8,6 +8,7 @@ import { Account } from "./entities/account.entity";
 import { Token } from "../tokens/entities/token.entity";
 import { OrdersController } from "./orders.controller";
 import { OrdersService } from "./orders.service";
+import { OrderRepository } from "./repositories/order.repository";
 
 @Module({
     imports: [
@@ -17,7 +18,7 @@ import { OrdersService } from "./orders.service";
         TokensModule,
     ],
     controllers: [OrdersController],
-    providers: [OrdersService],
-    exports: [OrdersService],
+    providers: [OrdersService, OrderRepository],
+    exports: [OrdersService, OrderRepository],
 })
-export class OrdersModule {}
+export class OrdersModule { }

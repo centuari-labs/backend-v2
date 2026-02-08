@@ -49,6 +49,14 @@ export class OrdersService {
         return this.priceService.getPrice(tokenAddress);
     }
 
+    /**
+     * Get the current USD price for a token by address.
+     * Uses the in-memory price cache (populated by interval worker).
+     */
+    async getTokenPriceInUsd(tokenAddress: string): Promise<number | null> {
+        return this.priceService.getPrice(tokenAddress);
+    }
+
     private async getOrCreateAccount(walletAddress: string, privyUserId: string): Promise<string> {
         let account = await this.accountRepository.findOne({
             where: { userWallet: walletAddress },

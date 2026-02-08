@@ -2,16 +2,16 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { MarketResponseDto } from './dto/market.dto';
-import { Order } from '../orders/entities/order.entity';
 import { OrderSide, OrderStatus } from '../orders/constants/order.constants';
 import { Token } from '../tokens/entities/token.entity';
 import { PriceService } from '../price/price.service';
 
+import { OrderRepository } from '../orders/repositories/order.repository';
+
 @Injectable()
 export class MarketService {
     constructor(
-        @InjectRepository(Order)
-        private readonly orderRepository: Repository<Order>,
+        private readonly orderRepository: OrderRepository,
         @InjectRepository(Token)
         private readonly tokenRepository: Repository<Token>,
         private readonly priceService: PriceService,
@@ -20,24 +20,14 @@ export class MarketService {
     async getMarketSnapshot(): Promise<MarketResponseDto> {
         const assets = await this.tokenRepository.find();
 
-        const topRates = await this.orderRepository
-            .createQueryBuilder('order')
-            .select('order.assetId', 'assetId')
-            .addSelect('order.side', 'side')
-            .addSelect('MAX(order.rate)', 'maxRate')
-            .where('order.status = :status', { status: OrderStatus.Open })
-            .groupBy('order.assetId')
-            .addGroupBy('order.side')
-            .getRawMany();
+        const bestRate = await this.orderRepository.getBestRates();
 
         const rateMap = new Map<string, { borrow: number; lend: number }>();
-        for (const rate of topRates) {
-            if (!rateMap.has(rate.assetId)) {
-                rateMap.set(rate.assetId, { borrow: 0, lend: 0 });
-            }
-            const entry = rateMap.get(rate.assetId)!;
-            if (rate.side === OrderSide.Borrow) entry.borrow = Number.parseFloat(rate.maxRate);
-            if (rate.side === OrderSide.Lend) entry.lend = Number.parseFloat(rate.maxRate);
+        for (const rate of bestRate) {
+            rateMap.set(rate.assetId, {
+                lend: rate.highestBid ? Number.parseFloat(rate.highestBid) : 0,
+                borrow: rate.lowestAsk ? Number.parseFloat(rate.lowestAsk) : 0
+            });
         }
 
         const priceMap = new Map<string, number>();

@@ -28,8 +28,6 @@ export class PrivyGuard implements CanActivate {
             user.appId,
         );
 
-        console.log("Privy user payload:", payload);
-
         req.user = user; // inject user ke request
         return true;
     }

@@ -1,0 +1,42 @@
+# Dependencies
+node_modules
+.pnpm-store
+
+# Build output (will be built inside Docker)
+dist
+build
+
+# Git
+.git
+.gitignore
+
+# Tests
+coverage
+*.test.ts
+src/__test__
+test
+
+# IDE and OS
+.vscode
+.idea
+.DS_Store
+
+# Environment files (pass secrets at runtime)
+.env
+.env.*
+!.env.example
+
+# Logs and temp files
+*.log
+.temp
+.tmp
+
+# Documentation (not needed at runtime)
+*.md
+!README.md
+
+# Misc
+example-request.md
+TEST.md
+test.json
+biome.json

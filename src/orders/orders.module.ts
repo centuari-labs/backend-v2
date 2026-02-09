@@ -9,6 +9,7 @@ import { Token } from "../tokens/entities/token.entity";
 import { OrdersController } from "./orders.controller";
 import { OrdersService } from "./orders.service";
 import { OrderRepository } from "./repositories/order.repository";
+import { OrdersWorker } from "./orders.worker";
 
 @Module({
     imports: [
@@ -18,7 +19,7 @@ import { OrderRepository } from "./repositories/order.repository";
         TokensModule,
     ],
     controllers: [OrdersController],
-    providers: [OrdersService, OrderRepository],
+    providers: [OrdersService, OrderRepository, OrdersWorker],
     exports: [OrdersService, OrderRepository],
 })
 export class OrdersModule { }

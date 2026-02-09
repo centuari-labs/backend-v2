@@ -49,6 +49,9 @@ export class Order {
     @Column({ name: "settlement_fee", type: "numeric" })
     settlementFee: string;
 
+    @Column({ name: "filled_settlement_fee", type: "numeric", nullable: true })
+    filledSettlementFee: string | null;
+
     @Column({
         name: "status",
         type: "enum",

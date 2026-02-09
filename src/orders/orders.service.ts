@@ -34,6 +34,7 @@ export class OrdersService {
         private readonly natsService: NatsService,
     ) { }
 
+    //@todo : need to make sure to convert to token decimals
     /**
      * Get the current USD price for a token by address.
      * Uses the in-memory price cache (populated by interval worker).

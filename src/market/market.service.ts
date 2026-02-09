@@ -65,6 +65,7 @@ export class MarketService {
                 asset: {
                     name: asset.name,
                     symbol: asset.symbol,
+                    decimals: asset.decimals ?? null,
                 },
                 borrow_rate: rates.borrow,
                 lend_rate: rates.lend,

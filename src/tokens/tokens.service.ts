@@ -1,6 +1,5 @@
 import { Injectable, BadRequestException } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { ILike, Repository } from "typeorm";
 import { Token } from "./entities/token.entity";
 import { TokensRepository } from "./repositories/tokens.repository";
 

@@ -27,6 +27,9 @@ export class Token {
     @Column({ name: "coingecko_id", type: "text", nullable: true })
     coingeckoId: string | null;
 
+    @Column({ type: "int", nullable: true })
+    decimals: number | null;
+
     @CreateDateColumn({ name: "created_at" })
     createdAt: Date;
 

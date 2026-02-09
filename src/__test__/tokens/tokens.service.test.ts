@@ -13,6 +13,7 @@ describe('TokensService', () => {
         id: 'uuid-token-001',
         tokenAddress: '0xToken1234567890abcdef1234567890abcdef12',
         symbol: 'USDC',
+        decimals: 8,
         name: 'USD Coin',
         isLoanToken: true,
         chainId: 84532,
@@ -149,41 +150,6 @@ describe('TokensService', () => {
             expect(result).toHaveLength(0);
         });
     });
-
-    // describe('isTokenSupported', () => {
-    //     it('should return true for valid active token', async () => {
-    //         tokenRepository.count.mockResolvedValue(1);
-
-    //         const result = await service.isTokenSupported(mockToken.tokenAddress);
-
-    //         expect(result).toBe(true);
-    //         expect(tokenRepository.count).toHaveBeenCalledWith({
-    //             where: expect.objectContaining({
-    //                 tokenAddress: expect.anything(),
-    //             }),
-    //         });
-    //     });
-
-    //     it('should return false for unknown token', async () => {
-    //         tokenRepository.count.mockResolvedValue(0);
-
-    //         const result = await service.isTokenSupported(
-    //             '0xUnknownToken12345678901234567890123456',
-    //         );
-
-    //         expect(result).toBe(false);
-    //     });
-
-
-
-    //     it('should not throw for invalid token (returns boolean)', async () => {
-    //         tokenRepository.count.mockResolvedValue(0);
-
-    //         await expect(
-    //             service.isTokenSupported('invalid-address'),
-    //         ).resolves.toBe(false);
-    //     });
-    // });
 
     describe('token data integrity', () => {
         it('should return complete token data with all fields', async () => {

@@ -70,7 +70,6 @@ export class PrivyService {
                 issuer: issuer,
                 audience: audience,
             });
-            console.log(payload);
 
             // const user = await this.privy.getUser(userId);
             // return user;

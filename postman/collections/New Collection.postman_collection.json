@@ -1,0 +1,233 @@
+{
+  "info": {
+    "_postman_id": "3a1350ba-1f22-47a4-9197-ba5595a6df22",
+    "name": "Transaction",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Market endpoint",
+      "id": "143d8eaf-c3cb-4191-b7fb-51ee59752d2c",
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6IjJsR0pIc2VidkJPeHkxNWRUY2hkaTV2OU5xM2NvRVBsYlFDelFDbDlSeDAifQ.eyJzaWQiOiJjbWttdWR0cGswMzMzanUwYzA1cWZ1d2V2IiwiaXNzIjoicHJpdnkuaW8iLCJpYXQiOjE3NzAzNzUzMDIsImF1ZCI6ImNtZm1tb213dzAxNmZqbDBiZWU5aTJkczQiLCJzdWIiOiJkaWQ6cHJpdnk6Y21rM3ltN2gwMDI0Y2w4MGNuNXJzNjg0OSIsImV4cCI6MTc3MDM3ODkwMn0.zM8ObRnL9C6hNN4cLy-4Gwv7lrCeRBgyk126JjEvY7KOpSw5lYmLmRyd9Dy6b14iLkR8RsOvFCi4SURzd8eV1A",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "GET",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{ \n    \n}"
+        },
+        "url": {
+          "raw": "{{localhost}}market",
+          "host": [
+            "{{localhost}}market"
+          ],
+          "query": [
+            {
+              "key": "createdAt",
+              "value": "2024-01-10",
+              "description": "(Optional) filter for transactions created on or after date (YYYY-MM-DD)",
+              "uuid": "4963b6c7-7206-4ba1-99cf-ebc52da83c5b",
+              "disabled": true
+            },
+            {
+              "key": "toAccountID",
+              "value": "19",
+              "description": "(Optional) filter for the account that initiated the transaction",
+              "uuid": "8a17f523-bf37-402e-a031-cecf209c41e5",
+              "disabled": true
+            },
+            {
+              "key": "fromAccountID",
+              "value": "17",
+              "description": "(Optional) filter for the account that received the transaction",
+              "uuid": "37613ff4-1f60-4ddb-a3e3-2e890c5fc621",
+              "disabled": true
+            }
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Lend limit order",
+      "id": "ce244a08-5df7-4c26-8fc8-f6151115ff18",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text",
+            "uuid": "59d6b2e8-b2c4-4d3c-894d-15c42bde0a3c"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6IjJsR0pIc2VidkJPeHkxNWRUY2hkaTV2OU5xM2NvRVBsYlFDelFDbDlSeDAifQ.eyJzaWQiOiJjbWttdWR0cGswMzMzanUwYzA1cWZ1d2V2IiwiaXNzIjoicHJpdnkuaW8iLCJpYXQiOjE3NzA1NTg2MTgsImF1ZCI6ImNtZm1tb213dzAxNmZqbDBiZWU5aTJkczQiLCJzdWIiOiJkaWQ6cHJpdnk6Y21rM3ltN2gwMDI0Y2w4MGNuNXJzNjg0OSIsImV4cCI6MTc3MDU2MjIxOH0.wJR4R0Wl6fY05G1qlS34FcZjF0dls24i5g0D-zzHxCKeXpRdJYGSJd5Ch8v1_E2GnMBztML_J3HZ_9AxugDqPA",
+            "type": "text",
+            "uuid": "cadb3c73-d3be-4661-ac6c-dcf1feb0c772"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"loanToken\": \"0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf\",\n    \"amount\": \"100\",\n    \"rate\": 550,\n    \"maturities\": [1720000000]\n  }",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{localhost}}orders/lend/limit",
+          "host": [
+            "{{localhost}}orders"
+          ],
+          "path": [
+            "lend",
+            "limit"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Lend market order",
+      "id": "3258b029-605d-4717-8745-de53ae8a170a",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text",
+            "uuid": "7204cf1f-5dda-4cff-82ba-1bcbb2333ebf"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6IjJsR0pIc2VidkJPeHkxNWRUY2hkaTV2OU5xM2NvRVBsYlFDelFDbDlSeDAifQ.eyJzaWQiOiJjbWttdWR0cGswMzMzanUwYzA1cWZ1d2V2IiwiaXNzIjoicHJpdnkuaW8iLCJpYXQiOjE3NzA1NTg2MTgsImF1ZCI6ImNtZm1tb213dzAxNmZqbDBiZWU5aTJkczQiLCJzdWIiOiJkaWQ6cHJpdnk6Y21rM3ltN2gwMDI0Y2w4MGNuNXJzNjg0OSIsImV4cCI6MTc3MDU2MjIxOH0.wJR4R0Wl6fY05G1qlS34FcZjF0dls24i5g0D-zzHxCKeXpRdJYGSJd5Ch8v1_E2GnMBztML_J3HZ_9AxugDqPA",
+            "type": "text",
+            "uuid": "5d5fea6d-615e-41d9-9c1f-b107c77f19f9"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"loanToken\": \"0x036CbD53842c5426634e7929541eC2318f3dCF7e\",\n    \"amount\": \"100\"\n  }",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{localhost}}orders/lend/market",
+          "host": [
+            "{{localhost}}orders"
+          ],
+          "path": [
+            "lend",
+            "market"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Borrow limit order",
+      "id": "1683ccbe-bb6e-4a89-adba-a30f07dd3e7e",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text",
+            "uuid": "1abe90d3-059c-4215-982d-c36e4682d0fe"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6IjJsR0pIc2VidkJPeHkxNWRUY2hkaTV2OU5xM2NvRVBsYlFDelFDbDlSeDAifQ.eyJzaWQiOiJjbWttdWR0cGswMzMzanUwYzA1cWZ1d2V2IiwiaXNzIjoicHJpdnkuaW8iLCJpYXQiOjE3NzA1NTg2MTgsImF1ZCI6ImNtZm1tb213dzAxNmZqbDBiZWU5aTJkczQiLCJzdWIiOiJkaWQ6cHJpdnk6Y21rM3ltN2gwMDI0Y2w4MGNuNXJzNjg0OSIsImV4cCI6MTc3MDU2MjIxOH0.wJR4R0Wl6fY05G1qlS34FcZjF0dls24i5g0D-zzHxCKeXpRdJYGSJd5Ch8v1_E2GnMBztML_J3HZ_9AxugDqPA",
+            "type": "text",
+            "uuid": "aaa33d5e-1c00-4d54-bf36-aa34962e0602"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"loanToken\": \"0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf\",\n  \"amount\": \"10\",\n  \"rate\": 2.5\n}\n",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{localhost}}orders/borrow/limit",
+          "host": [
+            "{{localhost}}orders"
+          ],
+          "path": [
+            "borrow",
+            "limit"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Borrow market order",
+      "id": "dc12cabf-63da-4079-9aea-5206b4f56718",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text",
+            "uuid": "c79925ba-e2aa-4596-85e1-b32bb52ecdea"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6IjJsR0pIc2VidkJPeHkxNWRUY2hkaTV2OU5xM2NvRVBsYlFDelFDbDlSeDAifQ.eyJzaWQiOiJjbWttdWR0cGswMzMzanUwYzA1cWZ1d2V2IiwiaXNzIjoicHJpdnkuaW8iLCJpYXQiOjE3NzA1NTg2MTgsImF1ZCI6ImNtZm1tb213dzAxNmZqbDBiZWU5aTJkczQiLCJzdWIiOiJkaWQ6cHJpdnk6Y21rM3ltN2gwMDI0Y2w4MGNuNXJzNjg0OSIsImV4cCI6MTc3MDU2MjIxOH0.wJR4R0Wl6fY05G1qlS34FcZjF0dls24i5g0D-zzHxCKeXpRdJYGSJd5Ch8v1_E2GnMBztML_J3HZ_9AxugDqPA",
+            "type": "text",
+            "uuid": "9bc69f82-c052-488b-963c-3dab5f2bc5c3"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"loanToken\": \"0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf\",\n    \"amount\": \"10\"\n  }",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{localhost}}orders/borrow/market",
+          "host": [
+            "{{localhost}}orders"
+          ],
+          "path": [
+            "borrow",
+            "market"
+          ]
+        }
+      },
+      "response": []
+    }
+  ],
+  "variable": [
+    {
+      "id": "d1ad4874-4f34-4057-8ee6-eb25be7667a4",
+      "key": "localhost",
+      "value": "",
+      "type": "default"
+    }
+  ]
+}

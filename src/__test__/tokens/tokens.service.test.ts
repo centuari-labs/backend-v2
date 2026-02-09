@@ -17,6 +17,7 @@ describe('TokensService', () => {
         isLoanToken: true,
         chainId: 84532,
         averageLTV: 0.75,
+        coingeckoId: 'usd-coin',
         createdAt: new Date(),
         updatedAt: new Date(),
     };
@@ -146,41 +147,6 @@ describe('TokensService', () => {
 
             expect(result).toEqual([]);
             expect(result).toHaveLength(0);
-        });
-    });
-
-    describe('isTokenSupported', () => {
-        it('should return true for valid active token', async () => {
-            tokenRepository.count.mockResolvedValue(1);
-
-            const result = await service.isTokenSupported(mockToken.tokenAddress);
-
-            expect(result).toBe(true);
-            expect(tokenRepository.count).toHaveBeenCalledWith({
-                where: expect.objectContaining({
-                    tokenAddress: expect.anything(),
-                }),
-            });
-        });
-
-        it('should return false for unknown token', async () => {
-            tokenRepository.count.mockResolvedValue(0);
-
-            const result = await service.isTokenSupported(
-                '0xUnknownToken12345678901234567890123456',
-            );
-
-            expect(result).toBe(false);
-        });
-
-
-
-        it('should not throw for invalid token (returns boolean)', async () => {
-            tokenRepository.count.mockResolvedValue(0);
-
-            await expect(
-                service.isTokenSupported('invalid-address'),
-            ).resolves.toBe(false);
         });
     });
 

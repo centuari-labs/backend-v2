@@ -4,23 +4,26 @@ import { MarketController } from './market.controller';
 import { MarketService } from './market.service';
 import { Market } from './entities/market.entity';
 import { TokensModule } from '../tokens/tokens.module';
-import { Order } from '../orders/entities/order.entity';
-import { Portfolio } from '../analytics/entities/portfolio.entity';
-import { BorrowPosition } from '../analytics/entities/borrow-position.entity';
 import { CoreModule } from '../core/core.module';
 import { Token } from '../tokens/entities/token.entity';
+import { PriceModule } from '../price/price.module';
+import { OrdersModule } from '../orders/orders.module';
+import { MarketRepositories } from './repository/market.repository';
 
 @Module({
     imports: [
-        TypeOrmModule.forFeature([Market, Order, Portfolio, BorrowPosition, Token]),
+        TypeOrmModule.forFeature([Market, Token]),
         TokensModule,
         CoreModule,
+        PriceModule,
+        OrdersModule,
     ],
     controllers: [MarketController],
-    providers: [MarketService],
+    providers: [
+        MarketService,
+        MarketRepositories,
+    ],
     exports: [MarketService],
 })
 export class MarketModule { }
-
-
 

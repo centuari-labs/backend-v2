@@ -1,259 +1,102 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { getRepositoryToken } from '@nestjs/typeorm';
-import { BadRequestException, NotFoundException } from '@nestjs/common';
-import { Repository } from 'typeorm';
 import { MarketService } from '../../market/market.service';
-import { Market } from '../../market/entities/market.entity';
-import { TokensService } from '../../tokens/tokens.service';
-import { CreateMarketDto } from '../../market/dto/market.dto';
-import { Order } from '../../orders/entities/order.entity';
-import { Portfolio } from '../../analytics/entities/portfolio.entity';
-import { BorrowPosition } from '../../analytics/entities/borrow-position.entity';
+import { getRepositoryToken } from '@nestjs/typeorm';
+import { OrderRepository } from '../../orders/repositories/order.repository';
+import { MarketRepositories } from '../../market/repository/market.repository';
 import { Token } from '../../tokens/entities/token.entity';
+import { PriceService } from '../../price/price.service';
 
 describe('MarketService', () => {
     let service: MarketService;
-    let marketRepository: jest.Mocked<Repository<Market>>;
+    let orderRepositoryMock: any;
+    let marketRepositoryMock: any;
+    let tokenRepositoryMock: any;
+    let priceServiceMock: any;
 
-    const mockAssetId = '550e8400-e29b-41d4-a716-446655440001';
-    const mockMarketId = '660e8400-e29b-41d4-a716-446655440001';
-
-    const createMockMarket = (overrides: Partial<Market> = {}): Market => ({
-        id: mockMarketId,
-        assetId: mockAssetId,
-        maturity: new Date('2026-12-31T23:59:59.000Z'),
-        createdAt: new Date(),
-        asset: {
-            id: mockAssetId,
-            symbol: 'USDC',
-            name: 'USD Coin',
-            tokenAddress: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
-            isLoanToken: true,
-            chainId: null,
-            averageLTV: null,
-            createdAt: new Date(),
-            updatedAt: new Date(),
-        },
-        ...overrides,
-    });
+    const mockAssets = [
+        { id: 'asset1', symbol: 'BTC', name: 'Bitcoin', tokenAddress: '0x123', averageLTV: 0.75 },
+        { id: 'asset2', symbol: 'ETH', name: 'Ethereum', tokenAddress: '0x456', averageLTV: 0.80 },
+    ];
 
     beforeEach(async () => {
-        const mockMarketRepository = {
-            create: jest.fn(),
-            save: jest.fn(),
-            findOne: jest.fn(),
-            createQueryBuilder: jest.fn(),
+        orderRepositoryMock = {
+            getBestRates: jest.fn(),
+            find: jest.fn().mockResolvedValue([]),
         };
-
-        const mockTokensService = {
-            validateTokenById: jest.fn(),
+        marketRepositoryMock = {
+            getTotalDepositUsd: jest.fn().mockResolvedValue([]),
+            getLendPositionTotalAmounts: jest.fn().mockResolvedValue([]),
         };
-
-        const mockOrderRepository = {
-            createQueryBuilder: jest.fn(),
-            find: jest.fn(),
+        tokenRepositoryMock = {
+            find: jest.fn().mockResolvedValue(mockAssets),
         };
-
-        const mockPortfolioRepository = {
-            find: jest.fn(),
-        };
-
-        const mockBorrowPositionRepository = {
-            find: jest.fn(),
-        };
-
-        const mockTokenRepository = {
-            find: jest.fn(),
+        priceServiceMock = {
+            getPrice: jest.fn().mockResolvedValue(1000),
         };
 
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 MarketService,
-                {
-                    provide: getRepositoryToken(Market),
-                    useValue: mockMarketRepository,
-                },
-                {
-                    provide: getRepositoryToken(Order),
-                    useValue: mockOrderRepository,
-                },
-                {
-                    provide: getRepositoryToken(Portfolio),
-                    useValue: mockPortfolioRepository,
-                },
-                {
-                    provide: getRepositoryToken(BorrowPosition),
-                    useValue: mockBorrowPositionRepository,
-                },
-                {
-                    provide: getRepositoryToken(Token),
-                    useValue: mockTokenRepository,
-                },
-                {
-                    provide: TokensService,
-                    useValue: mockTokensService,
-                },
+                { provide: OrderRepository, useValue: orderRepositoryMock },
+                { provide: MarketRepositories, useValue: marketRepositoryMock },
+                { provide: getRepositoryToken(Token), useValue: tokenRepositoryMock },
+                { provide: PriceService, useValue: priceServiceMock },
             ],
         }).compile();
 
         service = module.get<MarketService>(MarketService);
-        marketRepository = module.get(getRepositoryToken(Market));
     });
 
-    afterEach(() => {
-        jest.clearAllMocks();
+    it('should correctly map highest borrow rate to lend_rate and lowest lend rate to borrow_rate', async () => {
+        const mockRateMap = new Map<string, { borrow: number; lend: number }>();
+        mockRateMap.set('asset1', { lend: 0.05, borrow: 0.08 });
+        mockRateMap.set('asset2', { lend: 0.04, borrow: 0 });
+
+        orderRepositoryMock.getBestRates.mockResolvedValue(mockRateMap);
+
+        const result = await service.getMarketSnapshot();
+
+        const btcMarket = result.markets.find(m => m.asset.symbol === 'BTC');
+        const ethMarket = result.markets.find(m => m.asset.symbol === 'ETH');
+
+        expect(btcMarket).toBeDefined();
+        expect(btcMarket?.lend_rate).toBe(0.05);
+        expect(btcMarket?.borrow_rate).toBe(0.08);
+
+        expect(ethMarket).toBeDefined();
+        expect(ethMarket?.lend_rate).toBe(0.04);
+        expect(ethMarket?.borrow_rate).toBe(0);
     });
 
-    describe('getMarkets', () => {
-        it('should return all markets with asset details', async () => {
-            const mockMarkets = [
-                createMockMarket(),
-                createMockMarket({
-                    id: '660e8400-e29b-41d4-a716-446655440002',
-                    assetId: '550e8400-e29b-41d4-a716-446655440002',
-                }),
-            ];
+    it('should correctly calculate total_deposit and active_loans in USD', async () => {
+        // Mock getBestRates
+        orderRepositoryMock.getBestRates.mockResolvedValue(new Map());
 
-            const mockQueryBuilder = {
-                leftJoinAndSelect: jest.fn().mockReturnThis(),
-                where: jest.fn().mockReturnThis(),
-                getMany: jest.fn().mockResolvedValue(mockMarkets),
-            };
+        // Mock portfolio deposits: 2 BTC and 10 ETH
+        marketRepositoryMock.getTotalDepositUsd.mockResolvedValue([
+            { asset_id: 'asset1', total_amount: '2' },
+            { asset_id: 'asset2', total_amount: '10' },
+        ]);
 
-            marketRepository.createQueryBuilder.mockReturnValue(mockQueryBuilder as any);
+        // Mock lend positions: 1 BTC and 5 ETH
+        marketRepositoryMock.getLendPositionTotalAmounts.mockResolvedValue([
+            { asset_id: 'asset1', total_amount: '1' },
+            { asset_id: 'asset2', total_amount: '5' },
+        ]);
 
-            const result = await service.getMarkets();
-
-            expect(result).toHaveLength(2);
-            expect(result[0]).toHaveProperty('asset');
-            expect(result[0].asset!.symbol).toBe('USDC');
-            expect(mockQueryBuilder.leftJoinAndSelect).toHaveBeenCalledWith('market.asset', 'asset');
+        // Mock prices: BTC = 50000, ETH = 3000
+        priceServiceMock.getPrice.mockImplementation(async (tokenAddress: string) => {
+            if (tokenAddress === '0x123') return 50000; // BTC
+            if (tokenAddress === '0x456') return 3000;  // ETH
+            return 0;
         });
 
-        it('should filter markets by assetId', async () => {
-            const mockMarkets = [createMockMarket()];
+        const result = await service.getMarketSnapshot();
 
-            const mockQueryBuilder = {
-                leftJoinAndSelect: jest.fn().mockReturnThis(),
-                where: jest.fn().mockReturnThis(),
-                getMany: jest.fn().mockResolvedValue(mockMarkets),
-            };
+        // Total Deposit: (2 * 50000) + (10 * 3000) = 100000 + 30000 = 130000
+        expect(result.total_deposit).toBe('130000.00');
 
-            marketRepository.createQueryBuilder.mockReturnValue(mockQueryBuilder as any);
-
-            const result = await service.getMarkets(mockAssetId);
-
-            expect(mockQueryBuilder.where).toHaveBeenCalledWith('market.assetId = :assetId', { assetId: mockAssetId });
-            expect(result).toHaveLength(1);
-            expect(result[0].assetId).toBe(mockAssetId);
-        });
-
-        it('should return empty array when no markets exist', async () => {
-            const mockQueryBuilder = {
-                leftJoinAndSelect: jest.fn().mockReturnThis(),
-                where: jest.fn().mockReturnThis(),
-                getMany: jest.fn().mockResolvedValue([]),
-            };
-
-            marketRepository.createQueryBuilder.mockReturnValue(mockQueryBuilder as any);
-
-            const result = await service.getMarkets();
-
-            expect(result).toEqual([]);
-        });
-    });
-
-    describe('createMarket', () => {
-        const createDto: CreateMarketDto = {
-            assetId: mockAssetId,
-        };
-
-        it('should create a new market with maturity date', async () => {
-            const expectedMarket = createMockMarket({
-                maturity: new Date('2027-06-30T23:59:59.000Z'),
-            });
-
-            marketRepository.create.mockReturnValue(expectedMarket);
-            marketRepository.save.mockResolvedValue(expectedMarket);
-            marketRepository.findOne.mockResolvedValue(expectedMarket);
-
-            const result = await service.createMarket(createDto);
-
-            expect(result).toHaveProperty('id');
-            expect(result.assetId).toBe(mockAssetId);
-            expect(result.asset!.symbol).toBe('USDC');
-        });
-
-        it('should create a perpetual market without maturity', async () => {
-            const dtoPerpetual: CreateMarketDto = {
-                assetId: mockAssetId,
-            };
-
-            const expectedMarket = createMockMarket({
-                maturity: undefined,
-            });
-
-            marketRepository.create.mockReturnValue(expectedMarket);
-            marketRepository.save.mockResolvedValue(expectedMarket);
-            marketRepository.findOne.mockResolvedValue(expectedMarket);
-
-            const result = await service.createMarket(dtoPerpetual);
-
-        });
-
-        it('should validate asset exists before creating market', async () => {
-            const expectedMarket = createMockMarket();
-
-            marketRepository.create.mockReturnValue(expectedMarket);
-            marketRepository.save.mockResolvedValue(expectedMarket);
-            marketRepository.findOne.mockResolvedValue(expectedMarket);
-
-            await service.createMarket(createDto);
-
-        });
-
-        it('should load asset relationship after creation', async () => {
-            const expectedMarket = createMockMarket();
-
-            marketRepository.create.mockReturnValue(expectedMarket);
-            marketRepository.save.mockResolvedValue(expectedMarket);
-            marketRepository.findOne.mockResolvedValue(expectedMarket);
-
-            await service.createMarket(createDto);
-
-            expect(marketRepository.findOne).toHaveBeenCalledWith({
-                where: { id: expectedMarket.id },
-                relations: ['asset'],
-            });
-        });
-
-        it('should throw NotFoundException if market not found after creation', async () => {
-            const expectedMarket = createMockMarket();
-
-            marketRepository.create.mockReturnValue(expectedMarket);
-            marketRepository.save.mockResolvedValue(expectedMarket);
-            marketRepository.findOne.mockResolvedValue(null);
-
-            await expect(
-                service.createMarket(createDto)
-            ).rejects.toThrow(NotFoundException);
-        });
-
-        it('should generate UUID for new market', async () => {
-            const expectedMarket = createMockMarket();
-
-            marketRepository.create.mockReturnValue(expectedMarket);
-            marketRepository.save.mockResolvedValue(expectedMarket);
-            marketRepository.findOne.mockResolvedValue(expectedMarket);
-
-            await service.createMarket(createDto);
-
-            expect(marketRepository.create).toHaveBeenCalledWith(
-                expect.objectContaining({
-                    id: expect.any(String),
-                    assetId: mockAssetId,
-                })
-            );
-        });
+        // Active Loans: (1 * 50000) + (5 * 3000) = 50000 + 15000 = 65000
+        expect(result.active_loans).toBe('65000.00');
     });
 });

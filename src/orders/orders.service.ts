@@ -8,6 +8,7 @@ import {
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
 import { NatsService } from "../core/nats/nats.service";
+import { PriceService } from "../price/price.service";
 import { TokensService } from "../tokens/tokens.service";
 import { NATS_SUBJECTS } from "./constants/nats-subjects.constants";
 import {
@@ -20,49 +21,39 @@ import type { CreateBorrowMarketOrderDto } from "./dto/create-borrow-market-orde
 import type { CreateLendLimitOrderDto } from "./dto/create-lend-limit-order.dto";
 import type { CreateLendMarketOrderDto } from "./dto/create-lend-market-order.dto";
 import { Order } from "./entities/order.entity";
-import { Account } from "./entities/account.entity";
-import { Token } from "../tokens/entities/token.entity";
+import { OrderRepository } from "./repositories/order.repository";
 
 @Injectable()
 export class OrdersService {
     private readonly logger = new Logger(OrdersService.name);
 
     constructor(
-        @InjectRepository(Order)
-        private readonly orderRepository: Repository<Order>,
-        @InjectRepository(Account)
-        private readonly accountRepository: Repository<Account>,
-        @InjectRepository(Token)
-        private readonly tokenRepository: Repository<Token>,
+        private readonly orderRepository: OrderRepository,
+        private readonly priceService: PriceService,
         private readonly tokensService: TokensService,
         private readonly natsService: NatsService,
-    ) {}
+    ) { }
 
-    private async getOrCreateAccount(walletAddress: string, privyUserId: string): Promise<string> {
-        let account = await this.accountRepository.findOne({
-            where: { userWallet: walletAddress },
-        });
+    //@todo : need to make sure to convert to token decimals
+    /**
+     * Get the current USD price for a token by address.
+     * Uses the in-memory price cache (populated by interval worker).
+     */
+    async getTokenPriceInUsd(tokenAddress: string): Promise<number | null> {
+        return this.priceService.getPrice(tokenAddress);
+    }
 
-        if (!account) {
-            this.logger.log(`Creating new account for wallet ${walletAddress} (Privy: ${privyUserId})`);
-            account = this.accountRepository.create({
-                userWallet: walletAddress,
-                privyUserId: privyUserId,
-            });
-            account = await this.accountRepository.save(account);
-        }
-        
+    async getOrCreateAccount(walletAddress: string, privyUserId: string): Promise<string> {
+        const account = await this.orderRepository.getOrCreateAccount(walletAddress, privyUserId);
         return account.id;
     }
 
-    private async getAssetId(tokenAddress: string): Promise<string> {
-        const token = await this.tokenRepository.findOne({
-            where: { tokenAddress },
-        });
-        if (!token) {
+    async getAssetId(tokenAddress: string): Promise<string> {
+        const assetId = await this.orderRepository.getAssetId(tokenAddress);
+        if (!assetId) {
             throw new NotFoundException(`Asset for token ${tokenAddress} not found`);
         }
-        return token.id;
+        return assetId.id;
     }
 
     async createLendMarketOrder(
@@ -179,47 +170,38 @@ export class OrdersService {
 
     async cancelOrder(orderId: string, walletAddress: string): Promise<Order> {
         // Find the order
-        const order = await this.orderRepository.findOne({
-            where: { id: orderId },
-        });
+        const orders = await this.orderRepository.getOpenOrders(orderId);
 
-        if (!order) {
+        if (!orders.length) {
             throw new NotFoundException(`Order with ID ${orderId} not found`);
         }
-        
-        // For cancellation, we expect the account to exist because the order exists.
-        // We just need to verify ownership.
-        const account = await this.accountRepository.findOne({
-             where: { userWallet: walletAddress }
-        });
-        
+
+        const account = await this.orderRepository.findAccountByWallet(walletAddress);
+
         if (!account) {
-             throw new ForbiddenException("Account not found for this wallet");
+            throw new ForbiddenException("Account not found for this wallet");
         }
 
         const accountId = account.id;
 
-        // Validate ownership
-        if (order.accountId !== accountId) {
+        if (orders[0].accountId !== accountId) {
             throw new ForbiddenException("You do not own this order");
         }
 
-        // Validate status - can only cancel open or partial orders
         const cancellableStatuses = [
             OrderStatus.Open,
             OrderStatus.PartiallyFilled,
         ] as OrderStatus[];
 
-        if (!cancellableStatuses.includes(order.status)) {
+        if (!cancellableStatuses.includes(orders[0].status)) {
             throw new BadRequestException(
                 "Order can only be cancelled when status is open or partial",
             );
         }
 
-        // Update order
-        order.status = OrderStatus.Cancelled;
+        orders[0].status = OrderStatus.Cancelled;
 
-        const updatedOrder = await this.orderRepository.save(order);
+        const updatedOrder = await this.orderRepository.save(orders[0]);
 
         // Publish cancellation event to NATS
         await this.publishCancelOrderToNats(orderId, walletAddress);

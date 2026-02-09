@@ -1,12 +1,41 @@
+import { InjectRepository } from '@nestjs/typeorm';
 import { Injectable } from '@nestjs/common';
 import { DataSource, Repository } from 'typeorm';
 import { Order } from '../entities/order.entity';
 import { OrderSide, OrderStatus } from '../constants/order.constants';
+import { Account } from '../entities/account.entity';
+import { Token } from '../../tokens/entities/token.entity';
 
 @Injectable()
 export class OrderRepository extends Repository<Order> {
-    constructor(private dataSource: DataSource) {
+    constructor(
+        private dataSource: DataSource,
+        @InjectRepository(Account) private accountRepository: Repository<Account>,
+        @InjectRepository(Token) private tokenRepository: Repository<Token>
+    ) {
         super(Order, dataSource.createEntityManager());
+    }
+
+    async getOrCreateAccount(walletAddress: string, privyUserId: string): Promise<Account> {
+        let account = await this.accountRepository.findOne({
+            where: { userWallet: walletAddress },
+        });
+
+        if (!account) {
+            account = this.accountRepository.create({
+                userWallet: walletAddress,
+                privyUserId: privyUserId,
+            });
+            account = await this.accountRepository.save(account);
+        }
+
+        return account;
+    }
+
+    async getAssetId(tokenAddress: string): Promise<Token | null> {
+        return this.tokenRepository.findOne({
+            where: { tokenAddress },
+        });
     }
 
     async getBestRates(): Promise<Map<string, { borrow: number; lend: number }>> {
@@ -37,4 +66,11 @@ export class OrderRepository extends Repository<Order> {
             },
         });
     }
+
+    async findAccountByWallet(walletAddress: string): Promise<Account | null> {
+        return this.accountRepository.findOne({
+            where: { userWallet: walletAddress },
+        });
+    }
+
 }

@@ -8,6 +8,7 @@ import { CoreModule } from '../core/core.module';
 import { Token } from '../tokens/entities/token.entity';
 import { PriceModule } from '../price/price.module';
 import { OrdersModule } from '../orders/orders.module';
+import { MarketRepositories } from './repository/market.repository';
 
 @Module({
     imports: [
@@ -20,6 +21,7 @@ import { OrdersModule } from '../orders/orders.module';
     controllers: [MarketController],
     providers: [
         MarketService,
+        MarketRepositories,
     ],
     exports: [MarketService],
 })

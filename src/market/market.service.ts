@@ -2,16 +2,17 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { MarketResponseDto } from './dto/market.dto';
-import { OrderSide, OrderStatus } from '../orders/constants/order.constants';
 import { Token } from '../tokens/entities/token.entity';
 import { PriceService } from '../price/price.service';
 
 import { OrderRepository } from '../orders/repositories/order.repository';
+import { MarketRepositories } from './repository/market.repository';
 
 @Injectable()
 export class MarketService {
     constructor(
         private readonly orderRepository: OrderRepository,
+        private readonly marketRepository: MarketRepositories,
         @InjectRepository(Token)
         private readonly tokenRepository: Repository<Token>,
         private readonly priceService: PriceService,
@@ -35,23 +36,26 @@ export class MarketService {
         let totalDepositUSD = 0;
         let activeLoansUSD = 0;
 
-        const openOrders = await this.orderRepository.find({
-            where: { status: OrderStatus.Open }
-        });
+        const portfolioDeposits = await this.marketRepository.getTotalDepositUsd();
+        const lendPositions = await this.marketRepository.getActiveLoans();
 
-        for (const order of openOrders) {
-            const asset = assets.find(a => a.id === order.assetId);
+        for (const deposit of portfolioDeposits) {
+            const asset = assets.find(a => a.id === deposit.asset_id);
             if (!asset) continue;
 
             const price = priceMap.get(asset.tokenAddress.toLowerCase());
-
             if (price !== undefined) {
-                const valueUSD = Number.parseFloat(order.quantity) * price;
-                if (order.side === OrderSide.Lend) {
-                    totalDepositUSD += valueUSD;
-                } else {
-                    activeLoansUSD += valueUSD;
-                }
+                totalDepositUSD += Number.parseFloat(deposit.total_amount) * price;
+            }
+        }
+
+        for (const loan of lendPositions) {
+            const asset = assets.find(a => a.id === loan.asset_id);
+            if (!asset) continue;
+
+            const price = priceMap.get(asset.tokenAddress.toLowerCase());
+            if (price !== undefined) {
+                activeLoansUSD += Number.parseFloat(loan.total_amount) * price;
             }
         }
 

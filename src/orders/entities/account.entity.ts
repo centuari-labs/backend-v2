@@ -11,6 +11,6 @@ export class Account {
     @Column({ name: "user_wallet", type: "text" })
     userWallet: string;
 
-    @CreateDateColumn({ name: "created_at", type: "timestamptz" })
+    @CreateDateColumn({ name: "created_at", type: "timestamp" })
     createdAt: Date;
 }

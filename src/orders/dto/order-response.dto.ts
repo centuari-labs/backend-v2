@@ -12,6 +12,10 @@ export interface OrderResponseData {
     originalAmount: string; 
     remainingAmount: string;
     settlementFeeAmount: string;
+    /**
+     * Interest rate expressed as a percentage (e.g. 5 = 5%).
+     * Underlying value in the database is stored as basis points.
+     */
     rate: number;
     transactionHash: string | null;
     blockNumber: number | null;

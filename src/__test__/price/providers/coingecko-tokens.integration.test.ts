@@ -2,7 +2,7 @@ import { Test, TestingModule } from "@nestjs/testing";
 import { TypeOrmModule } from "@nestjs/typeorm";
 import { DataSource } from "typeorm";
 import { TokensModule } from "../../../tokens/tokens.module";
-import { TokensService } from "../../../tokens/tokens.service";
+import { TokensRepository } from "../../../tokens/repositories/tokens.repository";
 import { CoinGeckoProvider } from "../../../price/providers/coingecko.provider";
 
 /**
@@ -12,7 +12,7 @@ import { CoinGeckoProvider } from "../../../price/providers/coingecko.provider";
  */
 describe("CoinGeckoProvider with DB tokens (integration)", () => {
     let module: TestingModule;
-    let tokensService: TokensService;
+    let tokensRepository: TokensRepository;
     let provider: CoinGeckoProvider;
 
     beforeAll(async () => {
@@ -31,7 +31,7 @@ describe("CoinGeckoProvider with DB tokens (integration)", () => {
             providers: [CoinGeckoProvider],
         }).compile();
 
-        tokensService = module.get(TokensService);
+        tokensRepository = module.get(TokensRepository);
         provider = module.get(CoinGeckoProvider);
     });
 
@@ -43,7 +43,7 @@ describe("CoinGeckoProvider with DB tokens (integration)", () => {
     it(
         "should fetch prices for all tokens with coingeckoId in DB",
         async () => {
-            const tokens = await tokensService.getActiveTokens();
+            const tokens = await tokensRepository.getActiveTokens();
             const tokensWithCoingecko = tokens.filter((t) => t.coingeckoId);
 
             expect(

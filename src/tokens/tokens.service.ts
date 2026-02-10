@@ -1,12 +1,10 @@
 import { Injectable, BadRequestException } from "@nestjs/common";
-import { InjectRepository } from "@nestjs/typeorm";
 import { Token } from "./entities/token.entity";
 import { TokensRepository } from "./repositories/tokens.repository";
 
 @Injectable()
 export class TokensService {
     constructor(
-        @InjectRepository(Token)
         private readonly tokenRepository: TokensRepository,
     ) { }
 
@@ -22,13 +20,5 @@ export class TokensService {
         }
 
         return token;
-    }
-
-    /**
-     * Get all active tokens
-     */
-    async getActiveTokens(): Promise<Token[]> {
-        const tokens = await this.tokenRepository.getActiveTokens();
-        return tokens;
     }
 }

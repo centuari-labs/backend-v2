@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger, OnModuleInit } from "@nestjs/common";
-import { TokensService } from "../tokens/tokens.service";
 import { PRICE_PROVIDER, type IPriceProvider } from "./interfaces/price-provider.interface";
+import { TokensRepository } from "../tokens/repositories/tokens.repository";
 
 interface CacheEntry {
     price: number;
@@ -22,7 +22,7 @@ export class PriceService implements OnModuleInit {
     private initPromise: Promise<void> | null = null;
 
     constructor(
-        private readonly tokensService: TokensService,
+        private readonly tokensRepository: TokensRepository,
         @Inject(PRICE_PROVIDER) private readonly priceProvider: IPriceProvider,
     ) {}
 
@@ -83,7 +83,7 @@ export class PriceService implements OnModuleInit {
      */
     async fetchAndUpdatePrices(): Promise<void> {
         try {
-            const tokens = await this.tokensService.getActiveTokens();
+            const tokens = await this.tokensRepository.getActiveTokens();
             if (tokens.length === 0) {
                 this.logger.warn("No tokens found, skipping price fetch");
                 return;

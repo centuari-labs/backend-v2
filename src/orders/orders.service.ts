@@ -94,6 +94,8 @@ export class OrdersService {
         const accountId = await this.getOrCreateAccount(walletAddress, privyUserId);
         const assetId = await this.getAssetId(dto.loanToken);
 
+        //@todo : calculate settlement fee amount
+        //@todo : calculate for token decimals
         const order = this.orderRepository.create({
             accountId,
             assetId,

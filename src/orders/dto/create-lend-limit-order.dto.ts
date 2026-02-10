@@ -26,6 +26,7 @@ export class CreateLendLimitOrderDto {
     @IsMinAmount(1, { message: "amount must be at least 1 USD" })
     amount: string;
 
+    //@todo : change to maturity timestamps
     @IsArray()
     @IsInt({ each: true })
     @Min(1, { each: true, message: "Maturity must be a positive integer" })

@@ -65,7 +65,6 @@ export class OrdersService {
         walletAddress: string,
         privyUserId: string,
     ): Promise<OrderResponse> {
-        //@todo : add auto rollover and auto refinance field
         // Validate loan token exists
         await this.tokensService.validateToken(dto.loanToken);
         const accountId = await this.getOrCreateAccount(walletAddress, privyUserId);
@@ -80,6 +79,7 @@ export class OrdersService {
             settlementFee: "0",
             status: OrderStatus.Open,
             rate: 0,
+            autoRollover: dto.autoRollover ?? false,
         });
 
         const savedOrder = await this.orderRepository.save(order);
@@ -110,6 +110,7 @@ export class OrdersService {
             settlementFee: "0",
             rate: dto.rate,
             status: OrderStatus.Open,
+            autoRollover: dto.autoRollover ?? false,
         });
 
         const savedOrder = await this.orderRepository.save(order);
@@ -138,6 +139,7 @@ export class OrdersService {
             settlementFee: "0",
             status: OrderStatus.Open,
             rate: 0,
+            autoRollover: dto.autoRollover ?? false,
         });
 
         const savedOrder = await this.orderRepository.save(order);
@@ -166,6 +168,7 @@ export class OrdersService {
             settlementFee: "0",
             rate: dto.rate,
             status: OrderStatus.Open,
+            autoRollover: dto.autoRollover ?? false,
         });
 
         const savedOrder = await this.orderRepository.save(order);
@@ -236,6 +239,7 @@ export class OrdersService {
                 settlementFeeAmount: order.settlementFee,
                 // order.rate is stored as basis points in the DB; expose percentage in responses
                 rate: toPercentage(order.rate),
+                autoRollover: order.autoRollover,
                 transactionHash: null,
                 blockNumber: null,
                 createdAt: order.createdAt,

@@ -5,6 +5,8 @@ import {
     IsNotEmpty,
     IsString,
     Min,
+    IsBoolean,
+    IsOptional,
 } from "class-validator";
 import {
     IsMinAmount,
@@ -37,6 +39,10 @@ export class CreateBorrowMarketOrderDto {
         message: "At least one maturity timestamp is required",
     })
     maturities: number[];
+
+    @IsOptional()
+    @IsBoolean()
+    autoRollover?: boolean;
 }
 
 

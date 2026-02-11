@@ -15,6 +15,7 @@ export interface OrderResponseData {
     status: OrderStatus;
     originalAmount: string; 
     settlementFeeAmount: string;
+    autoRollover: boolean;
     /**
      * Interest rate expressed as a percentage (e.g. 5 = 5%).
      * Underlying value in the database is stored as basis points.

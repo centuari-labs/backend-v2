@@ -6,6 +6,8 @@ import {
     Max,
     Min,
     ArrayMinSize,
+    IsBoolean,
+    IsOptional,
 } from "class-validator";
 import {
     IsMinAmount,
@@ -43,6 +45,10 @@ export class CreateBorrowLimitOrderDto {
     @Min(1, { message: "Rate must be at least 1 basis point (0.01%)" })
     @Max(10000, { message: "Rate must not exceed 10000 basis points (100%)" })
     rate: number;
+
+    @IsOptional()
+    @IsBoolean()
+    autoRollover?: boolean;
 }
 
 

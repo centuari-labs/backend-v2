@@ -61,6 +61,7 @@ export class OrdersService {
         walletAddress: string,
         privyUserId: string,
     ): Promise<Order> {
+        //@todo : add auto rollover and auto refinance field
         // Validate loan token exists
         await this.tokensService.validateToken(dto.loanToken);
         const accountId = await this.getOrCreateAccount(walletAddress, privyUserId);

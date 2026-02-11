@@ -6,6 +6,6 @@ import { TokensService } from "./tokens.service";
 @Module({
     imports: [TypeOrmModule.forFeature([Token])],
     providers: [TokensService],
-    exports: [TokensService],
+    exports: [TokensService, TypeOrmModule],
 })
-export class TokensModule {}
+export class TokensModule { }

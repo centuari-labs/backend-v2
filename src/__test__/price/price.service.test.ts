@@ -15,10 +15,10 @@ describe("PriceService", () => {
     let loggerDebugSpy: jest.SpyInstance;
 
     beforeAll(() => {
-        loggerErrorSpy = jest.spyOn(Logger.prototype, "error").mockImplementation(() => {});
-        loggerWarnSpy = jest.spyOn(Logger.prototype, "warn").mockImplementation(() => {});
-        loggerLogSpy = jest.spyOn(Logger.prototype, "log").mockImplementation(() => {});
-        loggerDebugSpy = jest.spyOn(Logger.prototype, "debug").mockImplementation(() => {});
+        loggerErrorSpy = jest.spyOn(Logger.prototype, "error").mockImplementation(() => { });
+        loggerWarnSpy = jest.spyOn(Logger.prototype, "warn").mockImplementation(() => { });
+        loggerLogSpy = jest.spyOn(Logger.prototype, "log").mockImplementation(() => { });
+        loggerDebugSpy = jest.spyOn(Logger.prototype, "debug").mockImplementation(() => { });
     });
 
     afterAll(() => {
@@ -35,6 +35,7 @@ describe("PriceService", () => {
         name: "USD Coin",
         isLoanToken: true,
         chainId: 84532,
+        decimals: 6,
         averageLTV: 0.75,
         coingeckoId: "usd-coin",
         createdAt: new Date(),

@@ -52,6 +52,7 @@ SELECT
 FROM assets collateral
 CROSS JOIN assets loan
 WHERE collateral.is_loan_token = false
-  AND loan.is_loan_token = true;
+  AND loan.is_loan_token = true
+  AND collateral.symbol IN ('BTC', 'ETH', 'XAUT', 'SLVon', 'NVDAon', 'AAPLon', 'TLTon');
 
 COMMIT;

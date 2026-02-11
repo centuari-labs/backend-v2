@@ -9,7 +9,7 @@ describe("CoinGeckoProvider", () => {
     let loggerErrorSpy: jest.SpyInstance;
 
     beforeAll(() => {
-        loggerErrorSpy = jest.spyOn(Logger.prototype, "error").mockImplementation(() => {});
+        loggerErrorSpy = jest.spyOn(Logger.prototype, "error").mockImplementation(() => { });
     });
 
     afterAll(() => {
@@ -25,6 +25,7 @@ describe("CoinGeckoProvider", () => {
         chainId: 84532,
         averageLTV: 0.75,
         coingeckoId: "usd-coin",
+        decimals: 6,
         createdAt: new Date(),
         updatedAt: new Date(),
         ...overrides,

@@ -16,6 +16,7 @@ describe('TokensService', () => {
         name: 'USD Coin',
         isLoanToken: true,
         chainId: 84532,
+        decimals: 6,
         averageLTV: 0.75,
         coingeckoId: 'usd-coin',
         createdAt: new Date(),

@@ -1,21 +1,33 @@
+import { Token } from "../../tokens/entities/token.entity";
+import { Account } from "../../orders/entities/account.entity";
 import {
     Column,
     CreateDateColumn,
     Entity,
-    PrimaryGeneratedColumn,
+    JoinColumn,
+    ManyToOne,
+    PrimaryColumn,
     UpdateDateColumn,
 } from "typeorm";
 
 @Entity("portfolio")
 export class Portfolio {
-    @PrimaryGeneratedColumn("uuid")
+    @PrimaryColumn('uuid')
     id: string;
+
+    @Column({ name: "asset_id", type: "uuid" })
+    assetId: string;
+
+    @ManyToOne(() => Token)
+    @JoinColumn({ name: "asset_id" })
+    asset: Token;
 
     @Column({ name: "account_id", type: "uuid" })
     accountId: string;
 
-    @Column({ name: "asset_id", type: "uuid" })
-    assetId: string;
+    @ManyToOne(() => Account)
+    @JoinColumn({ name: "account_id" })
+    account: Account;
 
     @Column({ name: "amount", type: "numeric" })
     amount: string;

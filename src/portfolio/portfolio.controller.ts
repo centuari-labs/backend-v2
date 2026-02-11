@@ -1,0 +1,44 @@
+import { Controller, Get, Query, UseGuards } from "@nestjs/common";
+import { PortfolioService } from "./portfolio.service";
+import {
+    GetMyAssetsQueryDto,
+    MyAssetsResponseDto,
+    MyPortfolioResponseDto,
+    LendBorrowAssetResponseDto,
+    GetMyPositionResponseDto,
+    MyPositionQueryDto,
+} from "./dto/portfolio.dto";
+import { PortfolioAuthGuard } from "./auth/portfolio-auth.guard";
+import { Wallet } from "../common/decorators/wallet.decorator";
+
+@Controller("portfolio")
+@UseGuards(PortfolioAuthGuard)
+export class PortfolioController {
+    constructor(private readonly portfolioService: PortfolioService) { }
+
+    @Get("my-portfolio")
+    async getMyPortfolio(@Wallet() wallet: string): Promise<MyPortfolioResponseDto> {
+        return this.portfolioService.getMyPortfolio(wallet);
+    }
+
+    @Get("my-assets")
+    async getMyAssets(
+        @Wallet() wallet: string,
+        @Query() query: GetMyAssetsQueryDto,
+    ): Promise<MyAssetsResponseDto> {
+        return this.portfolioService.getMyAssets(wallet, query);
+    }
+
+    @Get("lend-borrow-assets")
+    async getLendAndBorrowAssets(@Wallet() wallet: string): Promise<LendBorrowAssetResponseDto> {
+        return this.portfolioService.getLendBorrowAssets(wallet);
+    }
+
+    @Get("my-position")
+    async getMyPosition(
+        @Wallet() wallet: string,
+        @Query() query: MyPositionQueryDto,
+    ): Promise<GetMyPositionResponseDto> {
+        return this.portfolioService.getMyPosition(wallet, query);
+    }
+}

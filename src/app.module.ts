@@ -7,6 +7,7 @@ import { OrdersModule } from "./orders/orders.module";
 import { PriceModule } from "./price/price.module";
 import { TokensModule } from "./tokens/tokens.module";
 import { MarketModule } from "./market/market.module";
+import { PortfolioModule } from "./portfolio/portfolio.module";
 
 @Module({
     imports: [
@@ -16,7 +17,7 @@ import { MarketModule } from "./market/market.module";
             url: process.env.DATABASE_URL,
             autoLoadEntities: true,
             synchronize: false,
-            logging: process.env.NODE_ENV === "development",
+            logging: process.env.AUTH_MODE === "development",
         }),
         AuthModule,
         CoreModule,
@@ -24,6 +25,7 @@ import { MarketModule } from "./market/market.module";
         PriceModule,
         TokensModule,
         MarketModule,
+        PortfolioModule,
     ],
     controllers: [],
     providers: [],

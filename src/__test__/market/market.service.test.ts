@@ -14,8 +14,9 @@ describe('MarketService', () => {
     let priceServiceMock: any;
 
     const mockAssets = [
-        { id: 'asset1', symbol: 'BTC', name: 'Bitcoin', tokenAddress: '0x123', averageLTV: 0.75 },
-        { id: 'asset2', symbol: 'ETH', name: 'Ethereum', tokenAddress: '0x456', averageLTV: 0.80 },
+        // averageLTV is stored as basis points in the DB (e.g. 7500 = 75%)
+        { id: 'asset1', symbol: 'BTC', name: 'Bitcoin', tokenAddress: '0x123', averageLTV: 7500 },
+        { id: 'asset2', symbol: 'ETH', name: 'Ethereum', tokenAddress: '0x456', averageLTV: 8000 },
     ];
 
     beforeEach(async () => {
@@ -48,9 +49,10 @@ describe('MarketService', () => {
     });
 
     it('should correctly map highest borrow rate to lend_rate and lowest lend rate to borrow_rate', async () => {
+        // rates are stored as basis points (e.g. 500 = 5%, 800 = 8%)
         const mockRateMap = new Map<string, { borrow: number; lend: number }>();
-        mockRateMap.set('asset1', { lend: 0.05, borrow: 0.08 });
-        mockRateMap.set('asset2', { lend: 0.04, borrow: 0 });
+        mockRateMap.set('asset1', { lend: 500, borrow: 800 });
+        mockRateMap.set('asset2', { lend: 400, borrow: 0 });
 
         orderRepositoryMock.getBestRates.mockResolvedValue(mockRateMap);
 
@@ -60,11 +62,12 @@ describe('MarketService', () => {
         const ethMarket = result.markets.find(m => m.asset.symbol === 'ETH');
 
         expect(btcMarket).toBeDefined();
-        expect(btcMarket?.lend_rate).toBe(0.05);
-        expect(btcMarket?.borrow_rate).toBe(0.08);
+        // API exposes human-readable percentages
+        expect(btcMarket?.lend_rate).toBe(5);
+        expect(btcMarket?.borrow_rate).toBe(8);
 
         expect(ethMarket).toBeDefined();
-        expect(ethMarket?.lend_rate).toBe(0.04);
+        expect(ethMarket?.lend_rate).toBe(4);
         expect(ethMarket?.borrow_rate).toBe(0);
     });
 

@@ -17,6 +17,7 @@ import { CreateLendLimitOrderDto } from "./dto/create-lend-limit-order.dto";
 import { CreateLendMarketOrderDto } from "./dto/create-lend-market-order.dto";
 import { OrdersService } from "./orders.service";
 import { OrderResponse } from "./dto/order-response.dto";
+import { toPercentage } from "../common/utils/number.utils";
 import { Order } from "./entities/order.entity";
 
 @Controller("orders")
@@ -95,7 +96,8 @@ export class OrdersController {
                 originalAmount: order.quantity,
                 remainingAmount: order.quantity,
                 settlementFeeAmount: order.settlementFee,
-                rate: Number(order.rate),
+                // order.rate is stored as basis points in the DB; expose percentage in responses
+                rate: toPercentage(order.rate),
                 transactionHash: null,
                 blockNumber: null,
                 createdAt: order.createdAt,

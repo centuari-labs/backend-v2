@@ -7,6 +7,7 @@ import { PriceService } from '../price/price.service';
 
 import { OrderRepository } from '../orders/repositories/order.repository';
 import { MarketRepositories } from './repository/market.repository';
+import { toPercentage } from '../common/utils/number.utils';
 
 @Injectable()
 export class MarketService {
@@ -59,7 +60,7 @@ export class MarketService {
             }
         }
 
-        let markets = assets.map(asset => {
+        const markets = assets.map(asset => {
             const rates = rateMap.get(asset.id) || { borrow: 0, lend: 0 };
             return {
                 asset: {
@@ -67,9 +68,11 @@ export class MarketService {
                     symbol: asset.symbol,
                     decimals: asset.decimals ?? null,
                 },
-                borrow_rate: rates.borrow,
-                lend_rate: rates.lend,
-                collateral_factor: Number.parseFloat((asset.averageLTV ?? 0).toString()),
+                // rates in DB are stored as basis points; convert to human percentage for responses
+                borrow_rate: toPercentage(rates.borrow),
+                lend_rate: toPercentage(rates.lend),
+                // averageLTV is stored as basis points on the token entity
+                collateral_factor: toPercentage(asset.averageLTV),
             };
         });
 

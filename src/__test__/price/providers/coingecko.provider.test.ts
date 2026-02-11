@@ -85,6 +85,7 @@ describe("CoinGeckoProvider", () => {
                 tokenAddress: "0xwbtc2234567890abcdef1234567890abcdef12",
                 symbol: "WBTC2",
                 coingeckoId: "bitcoin",
+                decimals: 18,
             });
             const mockResponse = { bitcoin: { usd: 50000 } };
             (fetchSpy as jest.Mock).mockResolvedValue({
@@ -145,6 +146,7 @@ describe("CoinGeckoProvider", () => {
                 tokenAddress: "0xeth1234567890abcdef1234567890abcdef12",
                 symbol: "ETH",
                 coingeckoId: "ethereum",
+                decimals: 18,
             });
             const mockResponse = {
                 "usd-coin": { usd: 1.0 },

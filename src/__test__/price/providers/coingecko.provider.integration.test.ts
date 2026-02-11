@@ -42,6 +42,7 @@ describe("CoinGeckoProvider (integration)", () => {
                     tokenAddress: "0xeth1234567890abcdef1234567890abcdef12",
                     symbol: "ETH",
                     coingeckoId: "ethereum",
+                    decimals: 18,
                 }),
             ];
 

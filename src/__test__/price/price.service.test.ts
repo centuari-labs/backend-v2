@@ -1,13 +1,13 @@
 import { Test, TestingModule } from "@nestjs/testing";
 import { Logger } from "@nestjs/common";
 import { PriceService } from "../../price/price.service";
-import { TokensService } from "../../tokens/tokens.service";
 import { PRICE_PROVIDER } from "../../price/interfaces/price-provider.interface";
 import type { Token } from "../../tokens/entities/token.entity";
+import { TokensRepository } from "../../tokens/repositories/tokens.repository";
 
 describe("PriceService", () => {
     let service: PriceService;
-    let tokensService: jest.Mocked<TokensService>;
+    let tokensRepository: jest.Mocked<TokensRepository>;
     let priceProvider: { fetchPrices: jest.Mock };
     let loggerErrorSpy: jest.SpyInstance;
     let loggerWarnSpy: jest.SpyInstance;
@@ -49,12 +49,14 @@ describe("PriceService", () => {
         symbol: "ETH",
         name: "Ethereum",
         coingeckoId: "ethereum",
+        decimals: 18,
     };
 
     beforeEach(async () => {
-        const mockTokensService = {
+        const mockTokensRepository: jest.Mocked<TokensRepository> = {
             getActiveTokens: jest.fn(),
-        };
+            validateToken: jest.fn(),
+        } as any;
 
         const mockPriceProvider = {
             fetchPrices: jest.fn(),
@@ -63,13 +65,13 @@ describe("PriceService", () => {
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 PriceService,
-                { provide: TokensService, useValue: mockTokensService },
+                { provide: TokensRepository, useValue: mockTokensRepository },
                 { provide: PRICE_PROVIDER, useValue: mockPriceProvider },
             ],
         }).compile();
 
         service = module.get(PriceService);
-        tokensService = module.get(TokensService);
+        tokensRepository = module.get(TokensRepository);
         priceProvider = module.get(PRICE_PROVIDER);
     });
 
@@ -79,7 +81,7 @@ describe("PriceService", () => {
 
     describe("getPrice", () => {
         it("should return cached price when token is in cache", async () => {
-            tokensService.getActiveTokens.mockResolvedValue([mockToken]);
+            tokensRepository.getActiveTokens.mockResolvedValue([mockToken]);
             priceProvider.fetchPrices.mockResolvedValue({ USDC: 1.0 });
 
             await service.fetchAndUpdatePrices();
@@ -90,7 +92,7 @@ describe("PriceService", () => {
         });
 
         it("should return null when token not in cache and cache is populated", async () => {
-            tokensService.getActiveTokens.mockResolvedValue([mockToken]);
+            tokensRepository.getActiveTokens.mockResolvedValue([mockToken]);
             priceProvider.fetchPrices.mockResolvedValue({ USDC: 1.0 });
 
             await service.fetchAndUpdatePrices();
@@ -101,18 +103,18 @@ describe("PriceService", () => {
         });
 
         it("should trigger fetch and return price on cold start (empty cache)", async () => {
-            tokensService.getActiveTokens.mockResolvedValue([mockToken]);
+            tokensRepository.getActiveTokens.mockResolvedValue([mockToken]);
             priceProvider.fetchPrices.mockResolvedValue({ USDC: 1.0 });
 
             const result = await service.getPrice(mockToken.tokenAddress);
 
             expect(result).toBe(1.0);
-            expect(tokensService.getActiveTokens).toHaveBeenCalled();
+            expect(tokensRepository.getActiveTokens).toHaveBeenCalled();
             expect(priceProvider.fetchPrices).toHaveBeenCalledWith([mockToken]);
         });
 
         it("should normalize address to lowercase for lookup", async () => {
-            tokensService.getActiveTokens.mockResolvedValue([mockToken]);
+            tokensRepository.getActiveTokens.mockResolvedValue([mockToken]);
             priceProvider.fetchPrices.mockResolvedValue({ USDC: 1.0 });
 
             await service.fetchAndUpdatePrices();
@@ -125,7 +127,7 @@ describe("PriceService", () => {
 
     describe("getPrices", () => {
         it("should return Record of address to price when cache is populated", async () => {
-            tokensService.getActiveTokens.mockResolvedValue([mockToken, mockTokenEth]);
+            tokensRepository.getActiveTokens.mockResolvedValue([mockToken, mockTokenEth]);
             priceProvider.fetchPrices.mockResolvedValue({ USDC: 1.0, ETH: 2500 });
 
             await service.fetchAndUpdatePrices();
@@ -151,7 +153,7 @@ describe("PriceService", () => {
         });
 
         it("should return true when cache is populated", async () => {
-            tokensService.getActiveTokens.mockResolvedValue([mockToken]);
+            tokensRepository.getActiveTokens.mockResolvedValue([mockToken]);
             priceProvider.fetchPrices.mockResolvedValue({ USDC: 1.0 });
 
             await service.fetchAndUpdatePrices();
@@ -162,7 +164,7 @@ describe("PriceService", () => {
 
     describe("fetchAndUpdatePrices", () => {
         it("should update cache and map symbol to address correctly", async () => {
-            tokensService.getActiveTokens.mockResolvedValue([mockToken, mockTokenEth]);
+            tokensRepository.getActiveTokens.mockResolvedValue([mockToken, mockTokenEth]);
             priceProvider.fetchPrices.mockResolvedValue({ USDC: 1.0, ETH: 2500 });
 
             await service.fetchAndUpdatePrices();
@@ -174,7 +176,7 @@ describe("PriceService", () => {
 
         it("should skip fetch and log warning when no tokens from TokensService", async () => {
             const warnSpy = jest.spyOn(service["logger"], "warn");
-            tokensService.getActiveTokens.mockResolvedValue([]);
+            tokensRepository.getActiveTokens.mockResolvedValue([]);
 
             await service.fetchAndUpdatePrices();
 
@@ -184,7 +186,7 @@ describe("PriceService", () => {
         });
 
         it("should keep existing cache when provider throws", async () => {
-            tokensService.getActiveTokens.mockResolvedValue([mockToken]);
+            tokensRepository.getActiveTokens.mockResolvedValue([mockToken]);
             priceProvider.fetchPrices.mockResolvedValue({ USDC: 1.0 });
 
             await service.fetchAndUpdatePrices();
@@ -200,12 +202,12 @@ describe("PriceService", () => {
 
     describe("onModuleInit", () => {
         it("should call fetchAndUpdatePrices", async () => {
-            tokensService.getActiveTokens.mockResolvedValue([mockToken]);
+            tokensRepository.getActiveTokens.mockResolvedValue([mockToken]);
             priceProvider.fetchPrices.mockResolvedValue({ USDC: 1.0 });
 
             await service.onModuleInit();
 
-            expect(tokensService.getActiveTokens).toHaveBeenCalled();
+            expect(tokensRepository.getActiveTokens).toHaveBeenCalled();
             expect(priceProvider.fetchPrices).toHaveBeenCalledWith([mockToken]);
         });
     });

@@ -143,8 +143,8 @@ describe('OrdersService', () => {
             const result = await service.createLendLimitOrder(lendLimitDto, mockWalletAddress, mockPrivyUserId);
 
             expect(result.statusCode).toBe(HttpStatus.CREATED);
-            expect(result.data.side).toBe('lend');
-            expect(result.data.type).toBe('limit');
+            expect(result.data.side).toBe(OrderSide.Lend);
+            expect(result.data.type).toBe(OrderType.Limit);
             expect(result.data.rate).toBe(5); // 500 basis points = 5%
             expect(tokensService.validateToken).toHaveBeenCalledWith(mockTokenAddress);
         });
@@ -164,7 +164,7 @@ describe('OrdersService', () => {
 
             const result = await service.createLendLimitOrder(lendLimitDto, mockWalletAddress, mockPrivyUserId);
 
-            expect(result.data.remainingAmount).toBe('1000');
+            expect(result.data.originalAmount).toBe('1000');
         });
 
         it('should set initial status to Open', async () => {
@@ -179,7 +179,7 @@ describe('OrdersService', () => {
 
             const result = await service.createLendLimitOrder(lendLimitDto, mockWalletAddress, mockPrivyUserId);
 
-            expect(result.data.status).toBe('open');
+            expect(result.data.status).toBe(OrderStatus.Open);
         });
 
         it('should publish order to NATS', async () => {
@@ -269,8 +269,8 @@ describe('OrdersService', () => {
             const result = await service.createLendMarketOrder(lendMarketDto, mockWalletAddress, mockPrivyUserId);
 
             expect(result.statusCode).toBe(HttpStatus.CREATED);
-            expect(result.data.side).toBe('lend');
-            expect(result.data.type).toBe('market');
+            expect(result.data.side).toBe(OrderSide.Lend);
+            expect(result.data.type).toBe(OrderType.Market);
             expect(result.data.rate).toBe(0);
         });
 
@@ -324,8 +324,8 @@ describe('OrdersService', () => {
             const result = await service.createBorrowLimitOrder(borrowLimitDto, mockWalletAddress, mockPrivyUserId);
 
             expect(result.statusCode).toBe(HttpStatus.CREATED);
-            expect(result.data.side).toBe('borrow');
-            expect(result.data.type).toBe('limit');
+            expect(result.data.side).toBe(OrderSide.Borrow);
+            expect(result.data.type).toBe(OrderType.Limit);
             expect(result.data.rate).toBe(7.5); // 750 basis points = 7.5%
         });
 
@@ -376,8 +376,8 @@ describe('OrdersService', () => {
             const result = await service.createBorrowMarketOrder(borrowMarketDto, mockWalletAddress, mockPrivyUserId);
 
             expect(result.statusCode).toBe(HttpStatus.CREATED);
-            expect(result.data.side).toBe('borrow');
-            expect(result.data.type).toBe('market');
+            expect(result.data.side).toBe(OrderSide.Borrow);
+            expect(result.data.type).toBe(OrderType.Market);
             expect(result.data.rate).toBe(0);
         });
 

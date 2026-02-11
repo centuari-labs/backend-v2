@@ -1,4 +1,5 @@
 import { HttpStatus } from "@nestjs/common";
+import { OrderSide, OrderStatus, OrderType } from "../constants/order.constants";
 
 export interface OrderResponseData {
     orderId: string;
@@ -9,11 +10,10 @@ export interface OrderResponseData {
      */
     maturities: number[];
     timestamp: number;
-    side: string;
-    type: string;
-    status: string;
+    side: OrderSide;
+    type: OrderType;
+    status: OrderStatus;
     originalAmount: string; 
-    remainingAmount: string;
     settlementFeeAmount: string;
     /**
      * Interest rate expressed as a percentage (e.g. 5 = 5%).

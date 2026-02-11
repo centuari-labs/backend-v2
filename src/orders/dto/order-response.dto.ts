@@ -4,6 +4,9 @@ export interface OrderResponseData {
     orderId: string;
     walletAddress: string;
     loanToken: string;
+    /**
+     * Maturities for the order as Unix timestamps (seconds).
+     */
     maturities: number[];
     timestamp: number;
     side: string;

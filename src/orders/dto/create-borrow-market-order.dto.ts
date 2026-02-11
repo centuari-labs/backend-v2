@@ -24,10 +24,18 @@ export class CreateBorrowMarketOrderDto {
     @IsMinAmount(1, { message: "amount must be at least 1 USD" })
     amount: string;
 
+    /**
+     * List of market maturities as Unix timestamps (seconds).
+     */
     @IsArray()
     @IsInt({ each: true })
-    @Min(1, { each: true, message: "Maturity must be a positive integer" })
-    @ArrayMinSize(1, { message: "At least one maturity date is required" })
+    @Min(1, {
+        each: true,
+        message: "Maturity must be a positive Unix timestamp in seconds",
+    })
+    @ArrayMinSize(1, {
+        message: "At least one maturity timestamp is required",
+    })
     maturities: number[];
 }
 

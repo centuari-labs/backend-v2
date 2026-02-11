@@ -141,15 +141,15 @@ describe('CreateBorrowLimitOrderDto', () => {
         });
     });
 
-    describe('maturities validation', () => {
-        it('should accept single maturity', async () => {
+    describe('maturities validation (Unix timestamps in seconds)', () => {
+        it('should accept single maturity timestamp', async () => {
             const dto = createDto({ maturities: [1704067200] });
             const errors = await validate(dto);
             const maturityErrors = errors.filter(e => e.property === 'maturities');
             expect(maturityErrors).toHaveLength(0);
         });
 
-        it('should accept multiple maturities', async () => {
+        it('should accept multiple maturity timestamps', async () => {
             const dto = createDto({ maturities: [1704067200, 1706745600] });
             const errors = await validate(dto);
             const maturityErrors = errors.filter(e => e.property === 'maturities');
@@ -163,8 +163,15 @@ describe('CreateBorrowLimitOrderDto', () => {
             expect(maturityErrors.length).toBeGreaterThan(0);
         });
 
-        it('should reject non-positive maturity values', async () => {
+        it('should reject non-positive maturity timestamp values', async () => {
             const dto = createDto({ maturities: [0] });
+            const errors = await validate(dto);
+            const maturityErrors = errors.filter(e => e.property === 'maturities');
+            expect(maturityErrors.length).toBeGreaterThan(0);
+        });
+
+        it('should reject non-integer maturity timestamp values', async () => {
+            const dto = createDto({ maturities: [1704067200.5 as any] });
             const errors = await validate(dto);
             const maturityErrors = errors.filter(e => e.property === 'maturities');
             expect(maturityErrors.length).toBeGreaterThan(0);

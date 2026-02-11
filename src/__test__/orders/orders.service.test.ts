@@ -14,6 +14,7 @@ import { CreateLendLimitOrderDto } from '../../orders/dto/create-lend-limit-orde
 import { CreateLendMarketOrderDto } from '../../orders/dto/create-lend-market-order.dto';
 import { CreateBorrowLimitOrderDto } from '../../orders/dto/create-borrow-limit-order.dto';
 import { CreateBorrowMarketOrderDto } from '../../orders/dto/create-borrow-market-order.dto';
+import { HttpStatus } from '@nestjs/common';
 
 describe('OrdersService', () => {
     let service: OrdersService;
@@ -120,6 +121,7 @@ describe('OrdersService', () => {
         const lendLimitDto: CreateLendLimitOrderDto = {
             loanToken: mockTokenAddress,
             amount: '1000',
+            // maturities are Unix timestamps (seconds)
             maturities: [1704067200],
             rate: 500,
         };
@@ -140,9 +142,10 @@ describe('OrdersService', () => {
 
             const result = await service.createLendLimitOrder(lendLimitDto, mockWalletAddress, mockPrivyUserId);
 
-            expect(result.side).toBe(OrderSide.Lend);
-            expect(result.type).toBe(OrderType.Limit);
-            expect(result.rate).toBe(500);
+            expect(result.statusCode).toBe(HttpStatus.CREATED);
+            expect(result.data.side).toBe('lend');
+            expect(result.data.type).toBe('limit');
+            expect(result.data.rate).toBe(5); // 500 basis points = 5%
             expect(tokensService.validateToken).toHaveBeenCalledWith(mockTokenAddress);
         });
 
@@ -161,7 +164,7 @@ describe('OrdersService', () => {
 
             const result = await service.createLendLimitOrder(lendLimitDto, mockWalletAddress, mockPrivyUserId);
 
-            expect(result.filledQuantity).toBe('0');
+            expect(result.data.remainingAmount).toBe('1000');
         });
 
         it('should set initial status to Open', async () => {
@@ -176,7 +179,7 @@ describe('OrdersService', () => {
 
             const result = await service.createLendLimitOrder(lendLimitDto, mockWalletAddress, mockPrivyUserId);
 
-            expect(result.status).toBe(OrderStatus.Open);
+            expect(result.data.status).toBe('open');
         });
 
         it('should publish order to NATS', async () => {
@@ -245,6 +248,7 @@ describe('OrdersService', () => {
         const lendMarketDto: CreateLendMarketOrderDto = {
             loanToken: mockTokenAddress,
             amount: '1000',
+            // maturities are Unix timestamps (seconds)
             maturities: [1704067200],
         };
 
@@ -264,9 +268,10 @@ describe('OrdersService', () => {
 
             const result = await service.createLendMarketOrder(lendMarketDto, mockWalletAddress, mockPrivyUserId);
 
-            expect(result.side).toBe(OrderSide.Lend);
-            expect(result.type).toBe(OrderType.Market);
-            expect(result.rate).toBe(0);
+            expect(result.statusCode).toBe(HttpStatus.CREATED);
+            expect(result.data.side).toBe('lend');
+            expect(result.data.type).toBe('market');
+            expect(result.data.rate).toBe(0);
         });
 
         it('should publish to lend market NATS subject', async () => {
@@ -296,6 +301,7 @@ describe('OrdersService', () => {
         const borrowLimitDto: CreateBorrowLimitOrderDto = {
             loanToken: mockTokenAddress,
             amount: '5000',
+            // maturities are Unix timestamps (seconds)
             maturities: [1704067200],
             rate: 750,
         };
@@ -317,9 +323,10 @@ describe('OrdersService', () => {
 
             const result = await service.createBorrowLimitOrder(borrowLimitDto, mockWalletAddress, mockPrivyUserId);
 
-            expect(result.side).toBe(OrderSide.Borrow);
-            expect(result.type).toBe(OrderType.Limit);
-            expect(result.rate).toBe(750);
+            expect(result.statusCode).toBe(HttpStatus.CREATED);
+            expect(result.data.side).toBe('borrow');
+            expect(result.data.type).toBe('limit');
+            expect(result.data.rate).toBe(7.5); // 750 basis points = 7.5%
         });
 
         it('should publish to borrow limit NATS subject', async () => {
@@ -348,6 +355,7 @@ describe('OrdersService', () => {
         const borrowMarketDto: CreateBorrowMarketOrderDto = {
             loanToken: mockTokenAddress,
             amount: '5000',
+            // maturities are Unix timestamps (seconds)
             maturities: [1704067200],
         };
 
@@ -367,9 +375,10 @@ describe('OrdersService', () => {
 
             const result = await service.createBorrowMarketOrder(borrowMarketDto, mockWalletAddress, mockPrivyUserId);
 
-            expect(result.side).toBe(OrderSide.Borrow);
-            expect(result.type).toBe(OrderType.Market);
-            expect(result.rate).toBe(0);
+            expect(result.statusCode).toBe(HttpStatus.CREATED);
+            expect(result.data.side).toBe('borrow');
+            expect(result.data.type).toBe('market');
+            expect(result.data.rate).toBe(0);
         });
 
         it('should publish to borrow market NATS subject', async () => {

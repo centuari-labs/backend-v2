@@ -4,7 +4,7 @@ import { OrderSide, OrderStatus, OrderType } from "../constants/order.constants"
 export interface OrderResponseData {
     orderId: string;
     walletAddress: string;
-    loanToken: string;
+    assetId: string;
     /**
      * Maturities for the order as Unix timestamps (seconds).
      */

@@ -17,7 +17,7 @@ import { IsValidMaturities } from "../../common/validators/maturity.validator";
 export class CreateLendMarketOrderDto {
     @IsString()
     @IsNotEmpty()
-    loanToken: string;
+    assetId: string;
 
     @IsString()
     @IsNotEmpty()

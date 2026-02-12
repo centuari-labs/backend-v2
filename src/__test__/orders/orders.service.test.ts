@@ -20,7 +20,6 @@ describe('OrdersService', () => {
 
     const mockWalletAddress = '0xLender1234567890abcdef1234567890abcdef12';
     const mockPrivyUserId = 'did:privy:mock-user-id';
-    const mockTokenAddress = '0xToken1234567890abcdef1234567890abcdef12';
     const mockAccountId = 'uuid-account-001';
     const mockAssetId = 'uuid-asset-001';
 
@@ -46,14 +45,15 @@ describe('OrdersService', () => {
             create: jest.fn(),
             save: jest.fn(),
             getOrCreateAccount: jest.fn(),
-            getAssetId: jest.fn(),
             getOpenOrders: jest.fn(),
             findAccountByWallet: jest.fn(),
         };
 
-        const mockTokensService = {
-            validateToken: jest.fn(),
-        };
+        const mockTokensService: jest.Mocked<TokensService> = {
+            validateTokenByAssetId: jest.fn(),
+            getTokenDecimalsByAssetId: jest.fn(),
+            getTokenByAssetId: jest.fn(),
+        } as any;
 
         const mockNatsService = {
             publish: jest.fn(),
@@ -97,7 +97,7 @@ describe('OrdersService', () => {
 
     describe('createLendLimitOrder', () => {
         const lendLimitDto: CreateLendLimitOrderDto = {
-            loanToken: mockTokenAddress,
+            assetId: mockAssetId,
             amount: '1000',
             // maturities are Unix timestamps (seconds)
             maturities: [1704067200],
@@ -111,9 +111,9 @@ describe('OrdersService', () => {
                 rate: 500,
             });
 
-            tokensService.validateToken.mockResolvedValue({} as any);
+            tokensService.validateTokenByAssetId.mockResolvedValue({} as any);
+            tokensService.getTokenDecimalsByAssetId.mockResolvedValue(6);
             orderRepository.getOrCreateAccount.mockResolvedValue({ id: mockAccountId } as any);
-            orderRepository.getAssetId.mockResolvedValue({ id: mockAssetId } as any);
             orderRepository.create.mockReturnValue(expectedOrder);
             orderRepository.save.mockResolvedValue(expectedOrder);
             natsService.publish.mockResolvedValue(undefined);
@@ -125,7 +125,6 @@ describe('OrdersService', () => {
             expect(result.data.type).toBe(OrderType.Limit);
             expect(result.data.rate).toBe(5); // 500 basis points = 5%
             expect(result.data.autoRollover).toBe(false);
-            expect(tokensService.validateToken).toHaveBeenCalledWith(mockTokenAddress);
         });
 
         it('should set filledQuantity to 0 on creation', async () => {
@@ -134,9 +133,9 @@ describe('OrdersService', () => {
                 filledQuantity: '0',
             });
 
-            tokensService.validateToken.mockResolvedValue({} as any);
+            tokensService.validateTokenByAssetId.mockResolvedValue({} as any);
+            tokensService.getTokenDecimalsByAssetId.mockResolvedValue(6);
             orderRepository.getOrCreateAccount.mockResolvedValue({ id: mockAccountId } as any);
-            orderRepository.getAssetId.mockResolvedValue({ id: mockAssetId } as any);
             orderRepository.create.mockReturnValue(expectedOrder);
             orderRepository.save.mockResolvedValue(expectedOrder);
             natsService.publish.mockResolvedValue(undefined);
@@ -149,9 +148,9 @@ describe('OrdersService', () => {
         it('should set initial status to Open', async () => {
             const expectedOrder = createMockOrder({ status: OrderStatus.Open });
 
-            tokensService.validateToken.mockResolvedValue({} as any);
+            tokensService.validateTokenByAssetId.mockResolvedValue({} as any);
+            tokensService.getTokenDecimalsByAssetId.mockResolvedValue(6);
             orderRepository.getOrCreateAccount.mockResolvedValue({ id: mockAccountId } as any);
-            orderRepository.getAssetId.mockResolvedValue({ id: mockAssetId } as any);
             orderRepository.create.mockReturnValue(expectedOrder);
             orderRepository.save.mockResolvedValue(expectedOrder);
             natsService.publish.mockResolvedValue(undefined);
@@ -164,9 +163,8 @@ describe('OrdersService', () => {
         it('should publish order to NATS', async () => {
             const expectedOrder = createMockOrder();
 
-            tokensService.validateToken.mockResolvedValue({} as any);
+            tokensService.getTokenDecimalsByAssetId.mockResolvedValue(6);
             orderRepository.getOrCreateAccount.mockResolvedValue({ id: mockAccountId } as any);
-            orderRepository.getAssetId.mockResolvedValue({ id: mockAssetId } as any);
             orderRepository.create.mockReturnValue(expectedOrder);
             orderRepository.save.mockResolvedValue(expectedOrder);
             natsService.publish.mockResolvedValue(undefined);
@@ -182,21 +180,11 @@ describe('OrdersService', () => {
             );
         });
 
-        it('should throw BadRequestException for unsupported token', async () => {
-            tokensService.validateToken.mockRejectedValue(
-                new BadRequestException('Token not supported'),
-            );
-
-            await expect(
-                service.createLendLimitOrder(lendLimitDto, mockWalletAddress, mockPrivyUserId),
-            ).rejects.toThrow(BadRequestException);
-        });
-
         it('should create new account if wallet not found', async () => {
             const expectedOrder = createMockOrder();
-            tokensService.validateToken.mockResolvedValue({} as any);
+            tokensService.validateTokenByAssetId.mockResolvedValue({} as any);
+            tokensService.getTokenDecimalsByAssetId.mockResolvedValue(6);
             orderRepository.getOrCreateAccount.mockResolvedValue({ id: 'new-account-id' } as any);
-            orderRepository.getAssetId.mockResolvedValue({ id: mockAssetId } as any);
             orderRepository.create.mockReturnValue(expectedOrder);
             orderRepository.save.mockResolvedValue(expectedOrder);
             natsService.publish.mockResolvedValue(undefined);
@@ -209,20 +197,21 @@ describe('OrdersService', () => {
             );
         });
 
-        it('should throw NotFoundException if asset not found', async () => {
-            tokensService.validateToken.mockResolvedValue({} as any);
+        it('should throw BadRequestException if assetId is not supported', async () => {
+            tokensService.validateTokenByAssetId.mockRejectedValue(
+                new BadRequestException('Token not supported'),
+            );
             orderRepository.getOrCreateAccount.mockResolvedValue({ id: mockAccountId } as any);
-            orderRepository.getAssetId.mockResolvedValue(null);
 
             await expect(
                 service.createLendLimitOrder(lendLimitDto, mockWalletAddress, mockPrivyUserId),
-            ).rejects.toThrow(NotFoundException);
+            ).rejects.toThrow(BadRequestException);
         });
     });
 
     describe('createLendMarketOrder', () => {
         const lendMarketDto: CreateLendMarketOrderDto = {
-            loanToken: mockTokenAddress,
+            assetId: mockAssetId,
             amount: '1000',
             // maturities are Unix timestamps (seconds)
             maturities: [1704067200],
@@ -235,9 +224,9 @@ describe('OrdersService', () => {
                 rate: 0,
             });
 
-            tokensService.validateToken.mockResolvedValue({} as any);
+            tokensService.validateTokenByAssetId.mockResolvedValue({} as any);
+            tokensService.getTokenDecimalsByAssetId.mockResolvedValue(6);
             orderRepository.getOrCreateAccount.mockResolvedValue({ id: mockAccountId } as any);
-            orderRepository.getAssetId.mockResolvedValue({ id: mockAssetId } as any);
             orderRepository.create.mockReturnValue(expectedOrder);
             orderRepository.save.mockResolvedValue(expectedOrder);
             natsService.publish.mockResolvedValue(undefined);
@@ -258,9 +247,9 @@ describe('OrdersService', () => {
                 rate: 0,
             });
 
-            tokensService.validateToken.mockResolvedValue({} as any);
+            tokensService.validateTokenByAssetId.mockResolvedValue({} as any);
+            tokensService.getTokenDecimalsByAssetId.mockResolvedValue(6);
             orderRepository.getOrCreateAccount.mockResolvedValue({ id: mockAccountId } as any);
-            orderRepository.getAssetId.mockResolvedValue({ id: mockAssetId } as any);
             orderRepository.create.mockReturnValue(expectedOrder);
             orderRepository.save.mockResolvedValue(expectedOrder);
             natsService.publish.mockResolvedValue(undefined);
@@ -276,7 +265,7 @@ describe('OrdersService', () => {
 
     describe('createBorrowLimitOrder', () => {
         const borrowLimitDto: CreateBorrowLimitOrderDto = {
-            loanToken: mockTokenAddress,
+            assetId: mockAssetId,
             amount: '5000',
             // maturities are Unix timestamps (seconds)
             maturities: [1704067200],
@@ -291,9 +280,9 @@ describe('OrdersService', () => {
                 quantity: '5000',
             });
 
-            tokensService.validateToken.mockResolvedValue({} as any);
+            tokensService.validateTokenByAssetId.mockResolvedValue({} as any);
+            tokensService.getTokenDecimalsByAssetId.mockResolvedValue(6);
             orderRepository.getOrCreateAccount.mockResolvedValue({ id: mockAccountId } as any);
-            orderRepository.getAssetId.mockResolvedValue({ id: mockAssetId } as any);
             orderRepository.create.mockReturnValue(expectedOrder);
             orderRepository.save.mockResolvedValue(expectedOrder);
             natsService.publish.mockResolvedValue(undefined);
@@ -313,9 +302,9 @@ describe('OrdersService', () => {
                 type: OrderType.Limit,
             });
 
-            tokensService.validateToken.mockResolvedValue({} as any);
+            tokensService.validateTokenByAssetId.mockResolvedValue({} as any);
+            tokensService.getTokenDecimalsByAssetId.mockResolvedValue(6);
             orderRepository.getOrCreateAccount.mockResolvedValue({ id: mockAccountId } as any);
-            orderRepository.getAssetId.mockResolvedValue({ id: mockAssetId } as any);
             orderRepository.create.mockReturnValue(expectedOrder);
             orderRepository.save.mockResolvedValue(expectedOrder);
             natsService.publish.mockResolvedValue(undefined);
@@ -331,7 +320,7 @@ describe('OrdersService', () => {
 
     describe('createBorrowMarketOrder', () => {
         const borrowMarketDto: CreateBorrowMarketOrderDto = {
-            loanToken: mockTokenAddress,
+            assetId: mockAssetId,
             amount: '5000',
             // maturities are Unix timestamps (seconds)
             maturities: [1704067200],
@@ -344,9 +333,9 @@ describe('OrdersService', () => {
                 rate: 0,
             });
 
-            tokensService.validateToken.mockResolvedValue({} as any);
+            tokensService.validateTokenByAssetId.mockResolvedValue({} as any);
+            tokensService.getTokenDecimalsByAssetId.mockResolvedValue(6);
             orderRepository.getOrCreateAccount.mockResolvedValue({ id: mockAccountId } as any);
-            orderRepository.getAssetId.mockResolvedValue({ id: mockAssetId } as any);
             orderRepository.create.mockReturnValue(expectedOrder);
             orderRepository.save.mockResolvedValue(expectedOrder);
             natsService.publish.mockResolvedValue(undefined);
@@ -367,9 +356,9 @@ describe('OrdersService', () => {
                 rate: 0,
             });
 
-            tokensService.validateToken.mockResolvedValue({} as any);
+            tokensService.validateTokenByAssetId.mockResolvedValue({} as any);
+            tokensService.getTokenDecimalsByAssetId.mockResolvedValue(6);
             orderRepository.getOrCreateAccount.mockResolvedValue({ id: mockAccountId } as any);
-            orderRepository.getAssetId.mockResolvedValue({ id: mockAssetId } as any);
             orderRepository.create.mockReturnValue(expectedOrder);
             orderRepository.save.mockResolvedValue(expectedOrder);
             natsService.publish.mockResolvedValue(undefined);

@@ -64,6 +64,7 @@ export class MarketService {
             const rates = rateMap.get(asset.id) || { borrow: 0, lend: 0 };
             return {
                 asset: {
+                    id: asset.id,
                     name: asset.name,
                     symbol: asset.symbol,
                     decimals: asset.decimals ?? null,

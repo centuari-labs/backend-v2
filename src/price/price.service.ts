@@ -11,6 +11,7 @@ interface CacheEntry {
 export class PriceService implements OnModuleInit {
     private readonly logger = new Logger(PriceService.name);
 
+    //@todo : should map base on asset id not token address
     /**
      * In-memory cache: tokenAddress -> { price, updatedAt }
      */
@@ -30,6 +31,7 @@ export class PriceService implements OnModuleInit {
         await this.fetchAndUpdatePrices();
     }
 
+    //@todo : should get price from asset id
     /**
      * Get the current USD price for a token by address.
      * Returns null if not found or cache not ready.

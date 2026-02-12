@@ -9,7 +9,7 @@ describe('CreateLendMarketOrderDto', () => {
     const allowedMaturities = getAllowedMaturitiesUtcSeconds(fixedNow);
 
     const validDto = {
-        loanToken: '0x1234567890abcdef1234567890abcdef12345678',
+        assetId: 'b66a2641-3339-4a48-805c-6da248f33dee',
         amount: '1000',
         maturities: [allowedMaturities[0]],
     };
@@ -84,18 +84,18 @@ describe('CreateLendMarketOrderDto', () => {
         });
     });
 
-    describe('loanToken validation', () => {
-        it('should accept valid token address', async () => {
+    describe('assetId validation', () => {
+        it('should accept valid asset id', async () => {
             const dto = createDto();
             const errors = await validate(dto);
-            const tokenErrors = errors.filter(e => e.property === 'loanToken');
+            const tokenErrors = errors.filter(e => e.property === 'assetId');
             expect(tokenErrors).toHaveLength(0);
         });
 
-        it('should reject empty loanToken', async () => {
-            const dto = createDto({ loanToken: '' });
+        it('should reject empty assetId', async () => {
+            const dto = createDto({ assetId: '' });
             const errors = await validate(dto);
-            const tokenErrors = errors.filter(e => e.property === 'loanToken');
+            const tokenErrors = errors.filter(e => e.property === 'assetId');
             expect(tokenErrors.length).toBeGreaterThan(0);
         });
     });

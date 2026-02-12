@@ -49,29 +49,20 @@ export class OrdersService {
         return account.id;
     }
 
-    async getAssetId(tokenAddress: string): Promise<string> {
-        const assetId = await this.orderRepository.getAssetId(tokenAddress);
-        if (!assetId) {
-            throw new NotFoundException(`Asset for token ${tokenAddress} not found`);
-        }
-        return assetId.id;
-    }
-
     async createLendMarketOrder(
         dto: CreateLendMarketOrderDto,
         walletAddress: string,
         privyUserId: string,
     ): Promise<OrderResponse> {
-        // Validate loan token exists
-        const token = await this.tokensService.validateToken(dto.loanToken);
         const accountId = await this.getOrCreateAccount(walletAddress, privyUserId);
-        const assetId = await this.getAssetId(dto.loanToken);
-
-        const quantityBaseUnits = humanToBaseUnits(dto.amount, token.decimals!);
+        
+        await this.tokensService.validateTokenByAssetId(dto.assetId);
+        const decimals = await this.tokensService.getTokenDecimalsByAssetId(dto.assetId);
+        const quantityBaseUnits = humanToBaseUnits(dto.amount, decimals!);
 
         const order = this.orderRepository.create({
             accountId,
-            assetId,
+            assetId: dto.assetId,
             side: OrderSide.Lend,
             type: OrderType.Market,
             quantity: quantityBaseUnits,
@@ -93,17 +84,16 @@ export class OrdersService {
         walletAddress: string,
         privyUserId: string,
     ): Promise<OrderResponse> {
-        // Validate loan token exists
-        const token = await this.tokensService.validateToken(dto.loanToken);
         const accountId = await this.getOrCreateAccount(walletAddress, privyUserId);
-        const assetId = await this.getAssetId(dto.loanToken);
-
-        const quantityBaseUnits = humanToBaseUnits(dto.amount, token.decimals!);
+        
+        await this.tokensService.validateTokenByAssetId(dto.assetId);
+        const decimals = await this.tokensService.getTokenDecimalsByAssetId(dto.assetId);
+        const quantityBaseUnits = humanToBaseUnits(dto.amount, decimals!);
 
         //@todo : calculate settlement fee amount
         const order = this.orderRepository.create({
             accountId,
-            assetId,
+            assetId: dto.assetId,
             side: OrderSide.Lend,
             type: OrderType.Limit,
             quantity: quantityBaseUnits,
@@ -125,16 +115,15 @@ export class OrdersService {
         walletAddress: string,
         privyUserId: string,
     ): Promise<OrderResponse> {
-        // Validate loan token exists
-        const token = await this.tokensService.validateToken(dto.loanToken);
         const accountId = await this.getOrCreateAccount(walletAddress, privyUserId);
-        const assetId = await this.getAssetId(dto.loanToken);
+        await this.tokensService.validateTokenByAssetId(dto.assetId);
 
-        const quantityBaseUnits = humanToBaseUnits(dto.amount, token.decimals!);
+        const decimals = await this.tokensService.getTokenDecimalsByAssetId(dto.assetId);
+        const quantityBaseUnits = humanToBaseUnits(dto.amount, decimals!);
 
         const order = this.orderRepository.create({
             accountId,
-            assetId,
+            assetId: dto.assetId,
             side: OrderSide.Borrow,
             type: OrderType.Market,
             quantity: quantityBaseUnits,
@@ -156,16 +145,15 @@ export class OrdersService {
         walletAddress: string,
         privyUserId: string,
     ): Promise<OrderResponse> {
-        // Validate loan token exists
-        const token = await this.tokensService.validateToken(dto.loanToken);
         const accountId = await this.getOrCreateAccount(walletAddress, privyUserId);
-        const assetId = await this.getAssetId(dto.loanToken);
+        await this.tokensService.validateTokenByAssetId(dto.assetId);
 
-        const quantityBaseUnits = humanToBaseUnits(dto.amount, token.decimals!);
+        const decimals = await this.tokensService.getTokenDecimalsByAssetId(dto.assetId);
+        const quantityBaseUnits = humanToBaseUnits(dto.amount, decimals!);
 
         const order = this.orderRepository.create({
             accountId,
-            assetId,
+            assetId: dto.assetId,
             side: OrderSide.Borrow,
             type: OrderType.Limit,
             quantity: quantityBaseUnits,
@@ -233,7 +221,7 @@ export class OrdersService {
             data: {
                 orderId: order.id,
                 walletAddress: walletAddress,
-                loanToken: dto.loanToken,
+                assetId: dto.assetId,
                 maturities: dto.maturities,
                 timestamp: new Date(order.createdAt).getTime(),
                 side: order.side,

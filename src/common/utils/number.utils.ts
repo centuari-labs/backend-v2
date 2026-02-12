@@ -130,4 +130,48 @@ export function baseUnitsToHuman(
     return `${integerPart}.${fractionalPartTrimmed}`;
 }
 
+/**
+ * Calculate the settlement fee for an order in human-readable token units.
+ *
+ * The fee is computed as:
+ * 1. rawFeeInToken = amountHuman * (feeRateBps / 10000)
+ * 2. feeInUsd = rawFeeInToken * priceUsd
+ * 3. If feeInUsd > maxCapUsd:
+ *      feeInToken = maxCapUsd / priceUsd
+ *    else:
+ *      feeInToken = rawFeeInToken
+ *
+ * @param amountHuman - Order amount in human-readable token units (e.g. 1000 USDC)
+ * @param priceUsd - Token price in USD
+ * @param feeRateBps - Fee rate in basis points (default 1 = 0.01%)
+ * @param maxCapUsd - Maximum fee in USD (default 0.05)
+ */
+export function calculateSettlementFee(
+    amountHuman: number,
+    priceUsd: number,
+    feeRateBps = 1,
+    maxCapUsd = 0.05,
+): number {
+    if (
+        !Number.isFinite(amountHuman) ||
+        !Number.isFinite(priceUsd) ||
+        amountHuman <= 0 ||
+        priceUsd <= 0 ||
+        feeRateBps <= 0 ||
+        maxCapUsd <= 0
+    ) {
+        return 0;
+    }
+
+    const feeRate = feeRateBps / 10000;
+    const rawFeeInToken = amountHuman * feeRate;
+    const feeInUsd = rawFeeInToken * priceUsd;
+
+    const feeInToken =
+        feeInUsd > maxCapUsd ? maxCapUsd / priceUsd : rawFeeInToken;
+
+    // Limit to a sensible precision to avoid floating point noise
+    return Number(feeInToken.toFixed(8));
+}
+
 

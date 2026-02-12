@@ -1,5 +1,6 @@
 import {
     baseUnitsToHuman,
+    calculateSettlementFee,
     humanToBaseUnits,
     toPercentage,
 } from "../../../common/utils/number.utils";
@@ -85,5 +86,37 @@ describe("baseUnitsToHuman", () => {
         );
     });
 });
+
+describe("calculateSettlementFee", () => {
+    it("applies USD cap when raw fee exceeds max", () => {
+        // 1000 * 0.01% = 0.1 token, price = 1 → capped to 0.05
+        const fee = calculateSettlementFee(1000, 1);
+        expect(fee).toBe(0.05);
+    });
+
+    it("uses raw fee when under cap", () => {
+        // 100 * 0.01% = 0.01 token, price = 1 → below 0.05 cap
+        const fee = calculateSettlementFee(100, 1);
+        expect(fee).toBe(0.01);
+    });
+
+    it("returns 0 for non-positive amount", () => {
+        expect(calculateSettlementFee(0, 1)).toBe(0);
+        expect(calculateSettlementFee(-10, 1)).toBe(0);
+    });
+
+    it("returns 0 for non-positive price", () => {
+        expect(calculateSettlementFee(1000, 0)).toBe(0);
+        expect(calculateSettlementFee(1000, -1)).toBe(0);
+    });
+
+    it("respects custom fee rate and max cap", () => {
+        // 1000 * 1% (100 bps) = 10, cap 0.05 → capped
+        expect(calculateSettlementFee(1000, 1, 100, 0.05)).toBe(0.05);
+        // 100 * 1% = 1, cap 5 → not capped
+        expect(calculateSettlementFee(100, 1, 100, 5)).toBe(1);
+    });
+});
+
 
 

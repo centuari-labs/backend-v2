@@ -17,6 +17,7 @@ describe('OrdersService', () => {
     let orderRepository: jest.Mocked<OrderRepository>;
     let tokensService: jest.Mocked<TokensService>;
     let natsService: jest.Mocked<NatsService>;
+    let priceService: { getPrice: jest.MockedFunction<PriceService["getPrice"]> };
 
     const mockWalletAddress = '0xLender1234567890abcdef1234567890abcdef12';
     const mockPrivyUserId = 'did:privy:mock-user-id';
@@ -60,7 +61,7 @@ describe('OrdersService', () => {
         };
 
         const mockPriceService = {
-            getPrice: jest.fn(),
+            getPrice: jest.fn().mockResolvedValue(1),
         };
 
         const module: TestingModule = await Test.createTestingModule({
@@ -89,6 +90,9 @@ describe('OrdersService', () => {
         orderRepository = module.get(OrderRepository) as jest.Mocked<OrderRepository>;
         tokensService = module.get(TokensService);
         natsService = module.get(NatsService);
+        priceService = {
+            getPrice: module.get(PriceService).getPrice as any,
+        };
     });
 
     afterEach(() => {
@@ -125,6 +129,31 @@ describe('OrdersService', () => {
             expect(result.data.type).toBe(OrderType.Limit);
             expect(result.data.rate).toBe(5); // 500 basis points = 5%
             expect(result.data.autoRollover).toBe(false);
+        });
+
+        it('should compute and pass settlement fee based on price', async () => {
+            const expectedOrder = createMockOrder({
+                side: OrderSide.Lend,
+                type: OrderType.Limit,
+                rate: 500,
+            });
+
+            tokensService.validateTokenByAssetId.mockResolvedValue({} as any);
+            tokensService.getTokenDecimalsByAssetId.mockResolvedValue(6);
+            orderRepository.getOrCreateAccount.mockResolvedValue({ id: mockAccountId } as any);
+            orderRepository.create.mockReturnValue(expectedOrder);
+            orderRepository.save.mockResolvedValue(expectedOrder);
+            natsService.publish.mockResolvedValue(undefined);
+            // 1000 * 0.01% = 0.1, capped to 0.05 since price = 1
+            (priceService.getPrice as jest.Mock).mockResolvedValue(1);
+
+            await service.createLendLimitOrder(lendLimitDto, mockWalletAddress, mockPrivyUserId);
+
+            expect(orderRepository.create).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    settlementFee: "50000", // 0.05 * 10^6
+                }),
+            );
         });
 
         it('should set filledQuantity to 0 on creation', async () => {
@@ -207,6 +236,17 @@ describe('OrdersService', () => {
                 service.createLendLimitOrder(lendLimitDto, mockWalletAddress, mockPrivyUserId),
             ).rejects.toThrow(BadRequestException);
         });
+
+        it('should throw BadRequestException when price is not available', async () => {
+            tokensService.validateTokenByAssetId.mockResolvedValue({} as any);
+            tokensService.getTokenDecimalsByAssetId.mockResolvedValue(6);
+            orderRepository.getOrCreateAccount.mockResolvedValue({ id: mockAccountId } as any);
+            (priceService.getPrice as jest.Mock).mockResolvedValue(null);
+
+            await expect(
+                service.createLendLimitOrder(lendLimitDto, mockWalletAddress, mockPrivyUserId),
+            ).rejects.toThrow(BadRequestException);
+        });
     });
 
     describe('createLendMarketOrder', () => {
@@ -238,6 +278,30 @@ describe('OrdersService', () => {
             expect(result.data.type).toBe(OrderType.Market);
             expect(result.data.rate).toBe(0);
             expect(result.data.autoRollover).toBe(false);
+        });
+
+        it('should compute and pass settlement fee for lend market orders', async () => {
+            const expectedOrder = createMockOrder({
+                side: OrderSide.Lend,
+                type: OrderType.Market,
+                rate: 0,
+            });
+
+            tokensService.validateTokenByAssetId.mockResolvedValue({} as any);
+            tokensService.getTokenDecimalsByAssetId.mockResolvedValue(6);
+            orderRepository.getOrCreateAccount.mockResolvedValue({ id: mockAccountId } as any);
+            orderRepository.create.mockReturnValue(expectedOrder);
+            orderRepository.save.mockResolvedValue(expectedOrder);
+            natsService.publish.mockResolvedValue(undefined);
+            (priceService.getPrice as jest.Mock).mockResolvedValue(1);
+
+            await service.createLendMarketOrder(lendMarketDto, mockWalletAddress, mockPrivyUserId);
+
+            expect(orderRepository.create).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    settlementFee: "50000",
+                }),
+            );
         });
 
         it('should publish to lend market NATS subject', async () => {
@@ -296,6 +360,31 @@ describe('OrdersService', () => {
             expect(result.data.autoRollover).toBe(false);
         });
 
+        it('should compute and pass settlement fee for borrow limit orders', async () => {
+            const expectedOrder = createMockOrder({
+                side: OrderSide.Borrow,
+                type: OrderType.Limit,
+                rate: 750,
+                quantity: '5000',
+            });
+
+            tokensService.validateTokenByAssetId.mockResolvedValue({} as any);
+            tokensService.getTokenDecimalsByAssetId.mockResolvedValue(6);
+            orderRepository.getOrCreateAccount.mockResolvedValue({ id: mockAccountId } as any);
+            orderRepository.create.mockReturnValue(expectedOrder);
+            orderRepository.save.mockResolvedValue(expectedOrder);
+            natsService.publish.mockResolvedValue(undefined);
+            (priceService.getPrice as jest.Mock).mockResolvedValue(1);
+
+            await service.createBorrowLimitOrder(borrowLimitDto, mockWalletAddress, mockPrivyUserId);
+
+            expect(orderRepository.create).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    settlementFee: "50000",
+                }),
+            );
+        });
+
         it('should publish to borrow limit NATS subject', async () => {
             const expectedOrder = createMockOrder({
                 side: OrderSide.Borrow,
@@ -347,6 +436,31 @@ describe('OrdersService', () => {
             expect(result.data.type).toBe(OrderType.Market);
             expect(result.data.rate).toBe(0);
             expect(result.data.autoRollover).toBe(false);
+        });
+
+        it('should compute and pass settlement fee for borrow market orders', async () => {
+            const expectedOrder = createMockOrder({
+                side: OrderSide.Borrow,
+                type: OrderType.Market,
+                rate: 0,
+                quantity: '5000',
+            });
+
+            tokensService.validateTokenByAssetId.mockResolvedValue({} as any);
+            tokensService.getTokenDecimalsByAssetId.mockResolvedValue(6);
+            orderRepository.getOrCreateAccount.mockResolvedValue({ id: mockAccountId } as any);
+            orderRepository.create.mockReturnValue(expectedOrder);
+            orderRepository.save.mockResolvedValue(expectedOrder);
+            natsService.publish.mockResolvedValue(undefined);
+            (priceService.getPrice as jest.Mock).mockResolvedValue(1);
+
+            await service.createBorrowMarketOrder(borrowMarketDto, mockWalletAddress, mockPrivyUserId);
+
+            expect(orderRepository.create).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    settlementFee: "50000",
+                }),
+            );
         });
 
         it('should publish to borrow market NATS subject', async () => {

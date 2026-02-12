@@ -14,6 +14,8 @@ import {
     OrderSide,
     OrderStatus,
     OrderType,
+    SETTLEMENT_FEE_MAX_CAP_USD,
+    SETTLEMENT_FEE_RATE_BPS,
 } from "./constants/order.constants";
 import type { CreateBorrowLimitOrderDto } from "./dto/create-borrow-limit-order.dto";
 import type { CreateBorrowMarketOrderDto } from "./dto/create-borrow-market-order.dto";
@@ -21,9 +23,8 @@ import type { CreateLendLimitOrderDto } from "./dto/create-lend-limit-order.dto"
 import type { CreateLendMarketOrderDto } from "./dto/create-lend-market-order.dto";
 import { OrderResponse } from "./dto/order-response.dto";
 import { Order } from "./entities/order.entity";
-import { toPercentage } from "../common/utils/number.utils";
+import { toPercentage, humanToBaseUnits, calculateSettlementFee } from "../common/utils/number.utils";
 import { OrderRepository } from "./repositories/order.repository";
-import { humanToBaseUnits } from "../common/utils/number.utils";
 
 @Injectable()
 export class OrdersService {
@@ -33,6 +34,7 @@ export class OrdersService {
         private readonly orderRepository: OrderRepository,
         private readonly tokensService: TokensService,
         private readonly natsService: NatsService,
+        private readonly priceService: PriceService,
     ) { }
 
     async getOrCreateAccount(walletAddress: string, privyUserId: string): Promise<string> {
@@ -50,6 +52,7 @@ export class OrdersService {
         await this.tokensService.validateTokenByAssetId(dto.assetId);
         const decimals = await this.tokensService.getTokenDecimalsByAssetId(dto.assetId);
         const quantityBaseUnits = humanToBaseUnits(dto.amount, decimals!);
+        const settlementFee = await this.computeSettlementFee(dto.assetId, dto.amount, decimals!);
 
         const order = this.orderRepository.create({
             accountId,
@@ -57,7 +60,7 @@ export class OrdersService {
             side: OrderSide.Lend,
             type: OrderType.Market,
             quantity: quantityBaseUnits,
-            settlementFee: "0",
+            settlementFee,
             status: OrderStatus.Open,
             rate: 0,
             autoRollover: dto.autoRollover ?? false,
@@ -80,15 +83,14 @@ export class OrdersService {
         await this.tokensService.validateTokenByAssetId(dto.assetId);
         const decimals = await this.tokensService.getTokenDecimalsByAssetId(dto.assetId);
         const quantityBaseUnits = humanToBaseUnits(dto.amount, decimals!);
-
-        //@todo : calculate settlement fee amount
+        const settlementFee = await this.computeSettlementFee(dto.assetId, dto.amount, decimals!);
         const order = this.orderRepository.create({
             accountId,
             assetId: dto.assetId,
             side: OrderSide.Lend,
             type: OrderType.Limit,
             quantity: quantityBaseUnits,
-            settlementFee: "0",
+            settlementFee,
             rate: dto.rate,
             status: OrderStatus.Open,
             autoRollover: dto.autoRollover ?? false,
@@ -111,6 +113,7 @@ export class OrdersService {
 
         const decimals = await this.tokensService.getTokenDecimalsByAssetId(dto.assetId);
         const quantityBaseUnits = humanToBaseUnits(dto.amount, decimals!);
+        const settlementFee = await this.computeSettlementFee(dto.assetId, dto.amount, decimals!);
 
         //@todo : validate health factor
 
@@ -120,7 +123,7 @@ export class OrdersService {
             side: OrderSide.Borrow,
             type: OrderType.Market,
             quantity: quantityBaseUnits,
-            settlementFee: "0",
+            settlementFee,
             status: OrderStatus.Open,
             rate: 0,
             autoRollover: dto.autoRollover ?? false,
@@ -143,6 +146,7 @@ export class OrdersService {
 
         const decimals = await this.tokensService.getTokenDecimalsByAssetId(dto.assetId);
         const quantityBaseUnits = humanToBaseUnits(dto.amount, decimals!);
+        const settlementFee = await this.computeSettlementFee(dto.assetId, dto.amount, decimals!);
 
         //@todo : validate health factor
 
@@ -152,7 +156,7 @@ export class OrdersService {
             side: OrderSide.Borrow,
             type: OrderType.Limit,
             quantity: quantityBaseUnits,
-            settlementFee: "0",
+            settlementFee,
             rate: dto.rate,
             status: OrderStatus.Open,
             autoRollover: dto.autoRollover ?? false,
@@ -204,6 +208,32 @@ export class OrdersService {
         await this.publishCancelOrderToNats(orderId, walletAddress);
 
         return updatedOrder;
+    }
+
+    private async computeSettlementFee(
+        assetId: string,
+        amountHuman: string,
+        decimals: number,
+    ): Promise<string> {
+        const price = await this.priceService.getPrice(assetId);
+        if (price == null || price <= 0) {
+            throw new BadRequestException("Price not available for this asset");
+        }
+
+        const amountNum = Number.parseFloat(amountHuman);
+        if (!Number.isFinite(amountNum) || amountNum <= 0) {
+            return "0";
+        }
+
+        const feeHuman = calculateSettlementFee(
+            amountNum,
+            price,
+            SETTLEMENT_FEE_RATE_BPS,
+            SETTLEMENT_FEE_MAX_CAP_USD,
+        );
+        // Ensure we do not lose precision when converting to base units
+        const feeAsString = feeHuman.toFixed(decimals);
+        return humanToBaseUnits(feeAsString, decimals);
     }
 
     private mapToResponse(

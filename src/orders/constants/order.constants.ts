@@ -20,3 +20,7 @@ export const order_group_status = {
     cancelled: "cancelled",
     completed: "completed",
 } as const;
+
+// Settlement fee configuration
+export const SETTLEMENT_FEE_RATE_BPS = 1; // 0.01%
+export const SETTLEMENT_FEE_MAX_CAP_USD = 0.05;

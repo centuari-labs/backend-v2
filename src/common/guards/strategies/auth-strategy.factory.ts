@@ -1,11 +1,11 @@
 import { Injectable, Logger } from "@nestjs/common";
-import type { IAuthStrategy } from "./strategies/auth-strategy.interface";
-import { PrivyAuthStrategy } from "./strategies/privy-auth.strategy";
-import { DevAuthStrategy } from "./strategies/dev-auth.strategy";
+import type { IAuthStrategy } from "./auth-strategy.interface";
+import { PrivyAuthStrategy } from "./privy-auth.strategy";
+import { DevAuthStrategy } from "./dev-auth.strategy";
 
 @Injectable()
-export class PortfolioAuthStrategyFactory {
-    private readonly logger = new Logger(PortfolioAuthStrategyFactory.name);
+export class AuthStrategyFactory {
+    private readonly logger = new Logger(AuthStrategyFactory.name);
     private readonly isDev: boolean;
 
     constructor(
@@ -15,7 +15,9 @@ export class PortfolioAuthStrategyFactory {
         this.isDev = process.env.AUTH_MODE === "development";
 
         if (this.isDev) {
-            this.logger.warn("⚠️  PORTFOLIO AUTH IN DEV MODE (AUTH_MODE=development)");
+            this.logger.warn("⚠️  AUTH IN DEV MODE (AUTH_MODE=development)");
+        } else {
+            this.logger.log("⚠️ AUTH IN PRODUCTION MODE (NODE_ENV=production)");
         }
     }
 

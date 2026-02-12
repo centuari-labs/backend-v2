@@ -1,6 +1,6 @@
 import { Test, TestingModule } from "@nestjs/testing";
 import { UnauthorizedException } from "@nestjs/common";
-import { DevAuthStrategy } from "../../../portfolio/auth/strategies/dev-auth.strategy";
+import { DevAuthStrategy } from "../../../../common/guards/strategies/dev-auth.strategy";
 
 describe("DevAuthStrategy", () => {
     let strategy: DevAuthStrategy;

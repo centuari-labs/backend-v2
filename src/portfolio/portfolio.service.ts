@@ -1,4 +1,4 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable, NotFoundException } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
 import { Token } from "../tokens/entities/token.entity";
@@ -7,7 +7,6 @@ import { MyPortfolioResponseDto, GetMyAssetsQueryDto, MyAssetsResponseDto, LendB
 import { PortfolioRepository } from "./repositories/portfolio.repository";
 import { OrderRepository } from "../orders/repositories/order.repository";
 import { calculateUsdAmount, createPaginatedResponse } from "./helpers/position.helpers";
-import { buildPriceMapForAssets } from "./helpers/price.helper";
 
 @Injectable()
 export class PortfolioService {
@@ -22,23 +21,19 @@ export class PortfolioService {
     async getMyPortfolio(wallet: string): Promise<MyPortfolioResponseDto> {
         const account = await this.orderRepository.findAccountByWallet(wallet);
         if (!account) {
-            return {
-                totalDeposit: "0.00",
-                netAPY: 0,
-                allTimeReturn: 0,
-            };
+            throw new NotFoundException("Account not found");
         }
 
         const assets = await this.tokenRepository.find();
+        const allPrices = this.priceService.getPrices();
         const priceMap = new Map<string, number>();
-        await Promise.all(
-            assets.map(async (asset) => {
-                const price = await this.priceService.getPrice(asset.tokenAddress);
-                if (price !== null) {
-                    priceMap.set(asset.id, price);
-                }
-            })
-        );
+
+        for (const asset of assets) {
+            const price = allPrices[asset.tokenAddress.toLowerCase()];
+            if (price !== undefined) {
+                priceMap.set(asset.id, price);
+            }
+        }
 
         let totalBalanceUsd = 0;
         let totalNetAPY = 0;
@@ -62,30 +57,26 @@ export class PortfolioService {
         return {
             totalDeposit: totalBalanceUsd.toFixed(2),
             netAPY: Number(totalNetAPY.toFixed(2)),
-            allTimeReturn: 0, // Placeholder as actual all-time return logic depends on history
+            allTimeReturn: "0.00",
         };
     }
 
     async getLendBorrowAssets(wallet: string): Promise<LendBorrowAssetResponseDto> {
         const account = await this.orderRepository.findAccountByWallet(wallet);
         if (!account) {
-            return {
-                suppliedAssets: "0.00",
-                borrowedAssets: 0.00,
-                healthFactor: 0,
-            };
+            throw new NotFoundException("Account not found");
         }
 
         const assets = await this.tokenRepository.find();
+        const allPrices = this.priceService.getPrices();
         const priceMap = new Map<string, number>();
-        await Promise.all(
-            assets.map(async (asset) => {
-                const price = await this.priceService.getPrice(asset.tokenAddress);
-                if (price !== null) {
-                    priceMap.set(asset.id, price);
-                }
-            })
-        );
+
+        for (const asset of assets) {
+            const price = allPrices[asset.tokenAddress.toLowerCase()];
+            if (price !== undefined) {
+                priceMap.set(asset.id, price);
+            }
+        }
 
         let suppliedAmountUsd = 0;
         let borrowedAmountUsd = 0;
@@ -135,29 +126,24 @@ export class PortfolioService {
         }
 
         const assetIds = userAssets.map((ua) => ua.asset_id);
-        const priceMap = await buildPriceMapForAssets(
-            assetIds,
-            this.priceService,
-            this.tokenRepository
-        );
-
         const tokens = await this.tokenRepository
             .createQueryBuilder('token')
             .where('token.id IN (:...assetIds)', { assetIds })
             .getMany();
 
         const tokenMap = new Map(tokens.map((t) => [t.id, t]));
+        const allPrices = this.priceService.getPrices();
 
         const data = userAssets.map((ua) => {
             const token = tokenMap.get(ua.asset_id);
-            const price = priceMap.get(ua.asset_id);
+            const price = token ? allPrices[token.tokenAddress.toLowerCase()] : undefined;
             const amount = Number.parseFloat(ua.amount);
 
             return {
                 symbol: token?.symbol || "UNKNOWN",
                 name: token?.name || "Unknown Token",
                 walletBalance: amount.toString(),
-                amountInUsd: calculateUsdAmount(amount, price),
+                amountInUsd: calculateUsdAmount(amount, price ?? 0),
                 isCollateral: ua.is_collateral,
             };
         });
@@ -170,7 +156,7 @@ export class PortfolioService {
 
         const account = await this.orderRepository.findAccountByWallet(wallet);
         if (!account) {
-            return createPaginatedResponse([], 0, page, limit);
+            throw new NotFoundException("Account not found");
         }
 
         const { data: positions, total } = await this.portfolioRepository.getUserPositions(
@@ -184,22 +170,17 @@ export class PortfolioService {
             return createPaginatedResponse([], total, page, limit);
         }
 
-        const assetIds = positions.map((p) => p.asset_id);
-        const priceMap = await buildPriceMapForAssets(
-            assetIds,
-            this.priceService,
-            this.tokenRepository
-        );
+        const allPrices = this.priceService.getPrices();
 
         const data = positions.map((position) => {
-            const price = priceMap.get(position.asset_id);
-            const remainingQuantity = Number.parseFloat(position.quantity) - Number.parseFloat(position.filled_quantity);
+            const price = allPrices[position.token_address?.toLowerCase()];
+            const quantity = Number.parseFloat(position.quantity);
 
             return {
                 symbol: position.symbol,
                 name: position.name,
-                walletBalance: remainingQuantity.toString(),
-                amountInUsd: calculateUsdAmount(remainingQuantity, price),
+                walletBalance: quantity.toString(),
+                amountInUsd: calculateUsdAmount(quantity, price ?? 0),
                 isCollateral: false,
             };
         });

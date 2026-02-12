@@ -13,13 +13,33 @@ export class PrivyAuthStrategy implements IAuthStrategy {
             throw new UnauthorizedException("Invalid Privy token");
         }
 
+        const walletAddress = await this.extractWalletAddress(result.userId);
+
         return {
             userId: result.userId,
-            walletAddress: result.userId,
+            walletAddress,
         };
     }
 
     getName(): string {
         return "privy";
+    }
+
+    private async extractWalletAddress(userId: string): Promise<string> {
+        try {
+            const user = await this.privyService.getUser(userId);
+            const walletAccount = user.linkedAccounts.find(
+                (account: any) => account.type === 'wallet'
+            );
+
+            if (walletAccount && (walletAccount as any).address) {
+                return (walletAccount as any).address;
+            }
+
+            return userId;
+        } catch (error) {
+            console.error("Failed to extract wallet address:", error);
+            return userId;
+        }
     }
 }

@@ -24,7 +24,7 @@ export class PriceService implements OnModuleInit {
     constructor(
         private readonly tokensRepository: TokensRepository,
         @Inject(PRICE_PROVIDER) private readonly priceProvider: IPriceProvider,
-    ) {}
+    ) { }
 
     async onModuleInit(): Promise<void> {
         await this.fetchAndUpdatePrices();
@@ -90,7 +90,6 @@ export class PriceService implements OnModuleInit {
             }
 
             const pricesBySymbol = await this.priceProvider.fetchPrices(tokens);
-            
             const newCache = new Map<string, CacheEntry>();
             const now = new Date();
 

@@ -8,11 +8,11 @@ import {
     GetMyPositionResponseDto,
     MyPositionQueryDto,
 } from "./dto/portfolio.dto";
-import { PortfolioAuthGuard } from "./auth/portfolio-auth.guard";
+import { AuthGuard } from "../common/guards/auth.guard";
 import { Wallet } from "../common/decorators/wallet.decorator";
 
 @Controller("portfolio")
-@UseGuards(PortfolioAuthGuard)
+@UseGuards(AuthGuard)
 export class PortfolioController {
     constructor(private readonly portfolioService: PortfolioService) { }
 

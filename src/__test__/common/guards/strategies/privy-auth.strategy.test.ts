@@ -1,9 +1,9 @@
 import { Test, TestingModule } from "@nestjs/testing";
 import { UnauthorizedException } from "@nestjs/common";
-import { PrivyAuthStrategy } from "../../../portfolio/auth/strategies/privy-auth.strategy";
+import { PrivyAuthStrategy } from "../../../../common/guards/strategies/privy-auth.strategy";
 
 // Mock PrivyService to avoid jose ESM import issues
-jest.mock("../../../core/privy/privy.service");
+jest.mock("../../../../core/privy/privy.service");
 
 describe("PrivyAuthStrategy", () => {
     let strategy: PrivyAuthStrategy;

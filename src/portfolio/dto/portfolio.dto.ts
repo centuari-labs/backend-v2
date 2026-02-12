@@ -3,7 +3,7 @@ export class TotalBalanceDto {
 }
 
 export class AllTimeReturnDto {
-    allTimeReturn: number;
+    allTimeReturn: string;
 }
 
 export class NetAPYDto {
@@ -12,11 +12,9 @@ export class NetAPYDto {
 
 export class MyPortfolioResponseDto {
     totalDeposit: string;
-    allTimeReturn: number;
+    allTimeReturn: string;
     netAPY: number;
 }
-
-// Removed suppliedAssetsDto and borrowedAssetsDto as they are no longer needed
 
 export class healthFactorDto {
     healthFactor: number;

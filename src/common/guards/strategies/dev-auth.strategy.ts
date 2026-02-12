@@ -13,7 +13,7 @@ export class DevAuthStrategy implements IAuthStrategy {
                 throw new UnauthorizedException("Dev token must include wallet address");
             }
 
-            this.logger.warn(`[Portfolio] Dev auth: ${wallet}`);
+            this.logger.warn(`[Auth] Dev mode: ${wallet}`);
 
             return {
                 userId: `dev-user-${wallet}`,

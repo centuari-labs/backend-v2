@@ -1,12 +1,15 @@
 import { Test, TestingModule } from "@nestjs/testing";
 import { ExecutionContext, UnauthorizedException } from "@nestjs/common";
-import { PortfolioAuthGuard } from "../../../portfolio/auth/portfolio-auth.guard";
-import { PortfolioAuthStrategyFactory } from "../../../portfolio/auth/auth-strategy.factory";
-import type { IAuthStrategy } from "../../../portfolio/auth/strategies/auth-strategy.interface";
+import { AuthGuard } from "../../../common/guards/auth.guard";
+import { AuthStrategyFactory } from "../../../common/guards/strategies/auth-strategy.factory";
+import type { IAuthStrategy } from "../../../common/guards/strategies/auth-strategy.interface";
 
-describe("PortfolioAuthGuard", () => {
-    let guard: PortfolioAuthGuard;
-    let strategyFactory: jest.Mocked<PortfolioAuthStrategyFactory>;
+// Mock PrivyService to avoid jose ESM import issues
+jest.mock("../../../core/privy/privy.service");
+
+describe("AuthGuard", () => {
+    let guard: AuthGuard;
+    let strategyFactory: jest.Mocked<AuthStrategyFactory>;
     let mockStrategy: jest.Mocked<IAuthStrategy>;
 
     beforeEach(async () => {
@@ -21,16 +24,16 @@ describe("PortfolioAuthGuard", () => {
 
         const module: TestingModule = await Test.createTestingModule({
             providers: [
-                PortfolioAuthGuard,
+                AuthGuard,
                 {
-                    provide: PortfolioAuthStrategyFactory,
+                    provide: AuthStrategyFactory,
                     useValue: mockStrategyFactory,
                 },
             ],
         }).compile();
 
-        guard = module.get<PortfolioAuthGuard>(PortfolioAuthGuard);
-        strategyFactory = module.get(PortfolioAuthStrategyFactory);
+        guard = module.get<AuthGuard>(AuthGuard);
+        strategyFactory = module.get(AuthStrategyFactory);
     });
 
     const createMockExecutionContext = (
@@ -76,7 +79,7 @@ describe("PortfolioAuthGuard", () => {
                 UnauthorizedException,
             );
             await expect(guard.canActivate(context)).rejects.toThrow(
-                "Authorization header required",
+                "Authorization header is required",
             );
         });
 
@@ -87,7 +90,7 @@ describe("PortfolioAuthGuard", () => {
                 UnauthorizedException,
             );
             await expect(guard.canActivate(context)).rejects.toThrow(
-                "Invalid authorization format",
+                "Invalid authorization header format",
             );
         });
 

@@ -14,6 +14,13 @@ export class TokensRepository {
         return this.tokensRepository.findOne({ where: { tokenAddress } });
     }
 
+    async findById(id: string): Promise<Token | null> {
+        return this.tokensRepository.findOne({
+            where: { id },
+            select: ['id', 'tokenAddress'],
+        });
+    }
+
     async getActiveTokens(tokenAddress?: string): Promise<Token[]> {
         if (tokenAddress) {
             return this.tokensRepository.find({

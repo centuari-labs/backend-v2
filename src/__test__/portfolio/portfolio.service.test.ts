@@ -32,6 +32,8 @@ describe('PortfolioService', () => {
 
         priceServiceMock = {
             getPrice: jest.fn(),
+            getPrices: jest.fn(),
+            getPriceByAssetId: jest.fn(),
         } as any;
 
         portfolioRepositoryMock = {
@@ -41,7 +43,6 @@ describe('PortfolioService', () => {
             getUserBorrowedAssets: jest.fn(),
             getUserAssets: jest.fn(),
             getUserPositions: jest.fn(),
-            getCollateralAssets: jest.fn(),
         };
 
         orderRepositoryMock = {
@@ -68,11 +69,10 @@ describe('PortfolioService', () => {
     describe('getMyPortfolio', () => {
         it('should calculate total deposit correctly in USD', async () => {
             tokenRepositoryMock.find.mockResolvedValue(mockTokens as any);
-            priceServiceMock.getPrice.mockImplementation(async (tokenAddress: string) => {
-                if (tokenAddress === '0xETH') return 3000;
-                if (tokenAddress === '0xBTC') return 50000;
-                if (tokenAddress === '0xUSDC') return 1;
-                return null;
+            priceServiceMock.getPrices.mockReturnValue({
+                '0xeth': 3000,
+                '0xbtc': 50000,
+                '0xusdc': 1,
             });
 
             portfolioRepositoryMock.getUserTotalBalances.mockResolvedValue([
@@ -84,12 +84,14 @@ describe('PortfolioService', () => {
             const result = await service.getMyPortfolio(mockWalletAddress);
 
             // (2 * 3000) + (0.5 * 50000) = 6000 + 25000 = 31000
-            expect(result.totalDeposit).toBe(31000.00);
+            expect(result.totalDeposit).toBe('31000.00');
         });
 
         it('should calculate net APY correctly', async () => {
             tokenRepositoryMock.find.mockResolvedValue(mockTokens as any);
-            priceServiceMock.getPrice.mockResolvedValue(1000);
+            const prices = {};
+            mockTokens.forEach(t => prices[t.tokenAddress.toLowerCase()] = 1000);
+            priceServiceMock.getPrices.mockReturnValue(prices);
 
             portfolioRepositoryMock.getUserTotalBalances.mockResolvedValue([]);
             portfolioRepositoryMock.getUserNetAPY.mockResolvedValue([
@@ -104,7 +106,9 @@ describe('PortfolioService', () => {
 
         it('should calculate all time return correctly', async () => {
             tokenRepositoryMock.find.mockResolvedValue(mockTokens as any);
-            priceServiceMock.getPrice.mockResolvedValue(1000);
+            const prices = {};
+            mockTokens.forEach(t => prices[t.tokenAddress.toLowerCase()] = 1000);
+            priceServiceMock.getPrices.mockReturnValue(prices);
 
             portfolioRepositoryMock.getUserTotalBalances.mockResolvedValue([]);
             portfolioRepositoryMock.getUserNetAPY.mockResolvedValue([]);
@@ -116,7 +120,7 @@ describe('PortfolioService', () => {
 
         it('should handle missing price data gracefully', async () => {
             tokenRepositoryMock.find.mockResolvedValue(mockTokens as any);
-            priceServiceMock.getPrice.mockResolvedValue(null);
+            priceServiceMock.getPrices.mockReturnValue({});
 
             portfolioRepositoryMock.getUserTotalBalances.mockResolvedValue([
                 { asset_id: 'token-uuid-001', total_amount: '2' },
@@ -125,7 +129,7 @@ describe('PortfolioService', () => {
 
             const result = await service.getMyPortfolio(mockWalletAddress);
 
-            expect(result.totalDeposit).toBe(0);
+            expect(result.totalDeposit).toBe('0.00');
         });
     });
 
@@ -158,10 +162,9 @@ describe('PortfolioService', () => {
             };
             tokenRepositoryMock.createQueryBuilder.mockReturnValue(mockQueryBuilder as any);
 
-            priceServiceMock.getPrice.mockImplementation(async (tokenAddress: string) => {
-                if (tokenAddress === '0xETH') return 3000;
-                if (tokenAddress === '0xBTC') return 50000;
-                return null;
+            priceServiceMock.getPrices.mockReturnValue({
+                '0xeth': 3000,
+                '0xbtc': 50000,
             });
 
             const result = await service.getMyAssets(mockWalletAddress, { page: 1, limit: 10 });
@@ -201,7 +204,9 @@ describe('PortfolioService', () => {
                 getMany: jest.fn().mockResolvedValue([mockTokens[0]]),
             };
             tokenRepositoryMock.createQueryBuilder.mockReturnValue(mockQueryBuilder as any);
-            priceServiceMock.getPrice.mockResolvedValue(3000);
+            const prices = {};
+            mockTokens.forEach(t => prices[t.tokenAddress.toLowerCase()] = 3000);
+            priceServiceMock.getPrices.mockReturnValue(prices);
 
             const result = await service.getMyAssets(mockWalletAddress, { page: 2, limit: 10 });
 
@@ -225,7 +230,7 @@ describe('PortfolioService', () => {
                 getMany: jest.fn().mockResolvedValue([mockTokens[0]]),
             };
             tokenRepositoryMock.createQueryBuilder.mockReturnValue(mockQueryBuilder as any);
-            priceServiceMock.getPrice.mockResolvedValue(null);
+            priceServiceMock.getPrices.mockReturnValue({});
 
             const result = await service.getMyAssets(mockWalletAddress, { page: 1, limit: 10 });
 
@@ -234,14 +239,11 @@ describe('PortfolioService', () => {
     });
 
     describe('getMyPosition', () => {
-        it('should return empty result for non-existent account', async () => {
+        it('should throw NotFoundException for non-existent account', async () => {
             orderRepositoryMock.findAccountByWallet.mockResolvedValue(null);
 
-            const result = await service.getMyPosition(mockWalletAddress, { page: 1, limit: 10 });
-
-            expect(result.data).toEqual([]);
-            expect(result.totalData).toBe(0);
-            expect(result.totalPages).toBe(0);
+            await expect(service.getMyPosition(mockWalletAddress, { page: 1, limit: 10 }))
+                .rejects.toThrow("Account not found");
         });
 
         it('should return all positions when no type filter is provided', async () => {
@@ -284,10 +286,9 @@ describe('PortfolioService', () => {
             };
             tokenRepositoryMock.createQueryBuilder.mockReturnValue(mockQueryBuilder as any);
 
-            priceServiceMock.getPrice.mockImplementation(async (tokenAddress: string) => {
-                if (tokenAddress === '0xETH') return 3000;
-                if (tokenAddress === '0xBTC') return 50000;
-                return null;
+            priceServiceMock.getPrices.mockReturnValue({
+                '0xeth': 3000,
+                '0xbtc': 50000,
             });
 
             const result = await service.getMyPosition(mockWalletAddress, { page: 1, limit: 10 });
@@ -323,7 +324,7 @@ describe('PortfolioService', () => {
                 getMany: jest.fn().mockResolvedValue([mockTokens[0]]),
             };
             tokenRepositoryMock.createQueryBuilder.mockReturnValue(mockQueryBuilder as any);
-            priceServiceMock.getPrice.mockResolvedValue(3000);
+            priceServiceMock.getPrices.mockReturnValue({ '0xeth': 3000 });
 
             const result = await service.getMyPosition(mockWalletAddress, { page: 1, limit: 10, type: 'LEND' });
 
@@ -363,7 +364,7 @@ describe('PortfolioService', () => {
                 getMany: jest.fn().mockResolvedValue([mockTokens[1]]),
             };
             tokenRepositoryMock.createQueryBuilder.mockReturnValue(mockQueryBuilder as any);
-            priceServiceMock.getPrice.mockResolvedValue(50000);
+            priceServiceMock.getPrices.mockReturnValue({ '0xbtc': 50000 });
 
             const result = await service.getMyPosition(mockWalletAddress, { page: 1, limit: 10, type: 'BORROW' });
 
@@ -403,7 +404,7 @@ describe('PortfolioService', () => {
                 getMany: jest.fn().mockResolvedValue([mockTokens[0]]),
             };
             tokenRepositoryMock.createQueryBuilder.mockReturnValue(mockQueryBuilder as any);
-            priceServiceMock.getPrice.mockResolvedValue(3000);
+            priceServiceMock.getPrices.mockReturnValue({ '0xeth': 3000 });
 
             const result = await service.getMyPosition(mockWalletAddress, { page: 1, limit: 10 });
 
@@ -438,7 +439,7 @@ describe('PortfolioService', () => {
                 getMany: jest.fn().mockResolvedValue([mockTokens[0]]),
             };
             tokenRepositoryMock.createQueryBuilder.mockReturnValue(mockQueryBuilder as any);
-            priceServiceMock.getPrice.mockResolvedValue(3000);
+            priceServiceMock.getPrices.mockReturnValue({ '0xeth': 3000 });
 
             const result = await service.getMyPosition(mockWalletAddress, { page: 1, limit: 10 });
 
@@ -474,7 +475,7 @@ describe('PortfolioService', () => {
                 getMany: jest.fn().mockResolvedValue([mockTokens[0]]),
             };
             tokenRepositoryMock.createQueryBuilder.mockReturnValue(mockQueryBuilder as any);
-            priceServiceMock.getPrice.mockResolvedValue(null);
+            priceServiceMock.getPrices.mockReturnValue({});
 
             const result = await service.getMyPosition(mockWalletAddress, { page: 1, limit: 10 });
 
@@ -508,7 +509,7 @@ describe('PortfolioService', () => {
                 getMany: jest.fn().mockResolvedValue([mockTokens[0]]),
             };
             tokenRepositoryMock.createQueryBuilder.mockReturnValue(mockQueryBuilder as any);
-            priceServiceMock.getPrice.mockResolvedValue(3000);
+            priceServiceMock.getPrices.mockReturnValue({ '0xeth': 3000 });
 
             const result = await service.getMyPosition(mockWalletAddress, { page: 1, limit: 10 });
 
@@ -518,10 +519,9 @@ describe('PortfolioService', () => {
             it('should return aggregated USD values and formatted health factor', async () => {
                 orderRepositoryMock.findAccountByWallet.mockResolvedValue({ id: mockAccountId });
                 tokenRepositoryMock.find.mockResolvedValue(mockTokens as any);
-                priceServiceMock.getPrice.mockImplementation(async (tokenAddress: string) => {
-                    if (tokenAddress === '0xETH') return 3000;
-                    if (tokenAddress === '0xBTC') return 50000;
-                    return null;
+                priceServiceMock.getPrices.mockReturnValue({
+                    '0xeth': 3000,
+                    '0xbtc': 50000,
                 });
 
                 portfolioRepositoryMock.getUserSuppliedAssets.mockResolvedValue([
@@ -533,7 +533,7 @@ describe('PortfolioService', () => {
 
                 const result = await service.getLendBorrowAssets(mockWalletAddress);
 
-                expect(result.suppliedAssets).toBe(6000);
+                expect(result.suppliedAssets).toBe("6000.00");
                 expect(result.borrowedAssets).toBe(5000);
                 // HF = 6000 / 5000 = 1.2
                 expect(result.healthFactor).toBe(1.2);
@@ -542,7 +542,9 @@ describe('PortfolioService', () => {
             it('should handle zero borrowed amount correctly', async () => {
                 orderRepositoryMock.findAccountByWallet.mockResolvedValue({ id: mockAccountId });
                 tokenRepositoryMock.find.mockResolvedValue(mockTokens as any);
-                priceServiceMock.getPrice.mockResolvedValue(3000);
+                const prices = {};
+                mockTokens.forEach(t => prices[t.tokenAddress.toLowerCase()] = 3000);
+                priceServiceMock.getPrices.mockReturnValue(prices);
 
                 portfolioRepositoryMock.getUserSuppliedAssets.mockResolvedValue([
                     { asset_id: 'token-uuid-001', amount: '1' },
@@ -551,19 +553,16 @@ describe('PortfolioService', () => {
 
                 const result = await service.getLendBorrowAssets(mockWalletAddress);
 
-                expect(result.suppliedAssets).toBe(3000);
+                expect(result.suppliedAssets).toBe("3000.00");
                 expect(result.borrowedAssets).toBe(0);
                 expect(result.healthFactor).toBe(0);
             });
 
-            it('should handle non-existent account gracefully', async () => {
+            it('should throw NotFoundException for non-existent account', async () => {
                 orderRepositoryMock.findAccountByWallet.mockResolvedValue(null);
 
-                const result = await service.getLendBorrowAssets(mockWalletAddress);
-
-                expect(result.suppliedAssets).toBe(0);
-                expect(result.borrowedAssets).toBe(0);
-                expect(result.healthFactor).toBe(0);
+                await expect(service.getLendBorrowAssets(mockWalletAddress))
+                    .rejects.toThrow("Account not found");
             });
         });
     });

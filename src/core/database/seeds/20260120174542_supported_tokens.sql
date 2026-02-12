@@ -16,8 +16,6 @@ INSERT INTO assets (name, symbol, token_address, is_loan_token, chain_id, coinge
     ('Apple (Ondo Tokenized)', 'AAPLon', '0x000000000000000000000000000000000000000a', false, 84532, 'apple-ondo-tokenized-stock', 18),
     ('iShares 20+ Year Treasury Bond ETF (Ondo Tokenized)', 'TLTon', '0x000000000000000000000000000000000000000b', false, 84532, 'ishares-20-year-treasury-bond-etf-ondo-tokenized-etf', 18);
 
--- Collateral tokens: BTC, ETH, XAUT, SLVon, NVDAon, AAPLon, TLTon
--- Loan tokens: USDC, USDT, IDRX, XSGD
 INSERT INTO risk (collateral_token_id, loan_token_id, ltv, lt, lp)
 SELECT 
     collateral.id,
@@ -52,7 +50,6 @@ SELECT
 FROM assets collateral
 CROSS JOIN assets loan
 WHERE collateral.is_loan_token = false
-  AND loan.is_loan_token = true
-  AND collateral.symbol IN ('BTC', 'ETH', 'XAUT', 'SLVon', 'NVDAon', 'AAPLon', 'TLTon');
+  AND loan.is_loan_token = true;
 
 COMMIT;

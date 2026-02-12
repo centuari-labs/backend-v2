@@ -78,12 +78,26 @@
           }
         ],
         "url": {
-          "raw": "{{base url}}portfolio/my-position",
+          "raw": "{{base url}}portfolio/my-position?page=1&limit=10",
           "host": [
             "{{base url}}portfolio"
           ],
           "path": [
             "my-position"
+          ],
+          "query": [
+            {
+              "key": "page",
+              "value": "1",
+              "type": "text",
+              "uuid": "365492b6-d51b-4355-9d21-0176f56daa93"
+            },
+            {
+              "key": "limit",
+              "value": "10",
+              "type": "text",
+              "uuid": "d1bb12d0-34a2-45e7-90b0-206e8c345aa7"
+            }
           ]
         }
       },

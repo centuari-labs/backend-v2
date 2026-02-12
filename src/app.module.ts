@@ -17,7 +17,7 @@ import { PortfolioModule } from "./portfolio/portfolio.module";
             url: process.env.DATABASE_URL,
             autoLoadEntities: true,
             synchronize: false,
-            logging: process.env.AUTH_MODE === "development",
+            logging: process.env.NODE_ENV === "development",
         }),
         AuthModule,
         CoreModule,

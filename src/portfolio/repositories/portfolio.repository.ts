@@ -9,11 +9,11 @@ export interface RawPosition {
     side: OrderSide;
     rate: string;
     quantity: string;
-    filled_quantity: string;
     status: OrderStatus;
     symbol: string;
     name: string;
     token_address: string;
+    created_at: Date;
 }
 
 @Injectable()
@@ -33,36 +33,36 @@ export class PortfolioRepository extends Repository<Portfolio> {
 
     async getUserNetAPY(accountId: string): Promise<{ asset_id: string, net_apy: string }[]> {
         return this.dataSource.createQueryBuilder()
-            .select('o.asset_id', 'asset_id')
-            .addSelect('AVG(o.rate)', 'net_apy') // Using AVG for net APY across open lend positions
-            .from('orders', 'o')
-            .where('o.account_id = :accountId', { accountId })
-            .andWhere('o.side = :side', { side: OrderSide.Lend })
-            .andWhere('o.status IN (:...statuses)', { statuses: [OrderStatus.Open, OrderStatus.PartiallyFilled] })
-            .groupBy('o.asset_id')
+            .select('lp.asset_id', 'asset_id')
+            .addSelect('AVG(m.rate)', 'net_apy')
+            .from('lend_positions', 'lp')
+            .innerJoin('order_markets', 'om', 'lp.market_id = om.market_id')
+            .innerJoin('matches', 'm', 'om.order_market_id = m.lend_order_market_id')
+            .where('lp.account_id = :accountId', { accountId })
+            .andWhere('lp.amount > 0')
+            .groupBy('lp.asset_id')
             .getRawMany();
     }
 
     async getUserSuppliedAssets(accountId: string): Promise<{ asset_id: string, amount: string }[]> {
-        // Assets in portfolio with amount > 0 are considered supplied/deposited
-        return this.createQueryBuilder('portfolio')
-            .select('portfolio.asset_id', 'asset_id')
-            .addSelect('SUM(portfolio.amount)', 'amount')
-            .where('portfolio.account_id = :accountId', { accountId })
-            .andWhere('portfolio.amount > 0')
-            .groupBy('portfolio.asset_id')
+        return this.dataSource.createQueryBuilder()
+            .select('lp.asset_id', 'asset_id')
+            .addSelect('SUM(lp.amount)', 'amount')
+            .from('lend_positions', 'lp')
+            .where('lp.account_id = :accountId', { accountId })
+            .andWhere('lp.amount > 0')
+            .groupBy('lp.asset_id')
             .getRawMany();
     }
 
     async getUserBorrowedAssets(accountId: string): Promise<{ asset_id: string, amount: string }[]> {
-        // In this system, borrowed assets seem to be handled by orders or negative balances.
-        // If borrowed is represented by negative portfolio amount:
-        return this.createQueryBuilder('portfolio')
-            .select('portfolio.asset_id', 'asset_id')
-            .addSelect('ABS(SUM(portfolio.amount))', 'amount')
-            .where('portfolio.account_id = :accountId', { accountId })
-            .andWhere('portfolio.amount < 0')
-            .groupBy('portfolio.asset_id')
+        return this.dataSource.createQueryBuilder()
+            .select('bp.asset_id', 'asset_id')
+            .addSelect('SUM(bp.debt)', 'amount')
+            .from('borrow_positions', 'bp')
+            .where('bp.account_id = :accountId', { accountId })
+            .andWhere('bp.debt > 0')
+            .groupBy('bp.asset_id')
             .getRawMany();
     }
 
@@ -109,72 +109,73 @@ export class PortfolioRepository extends Repository<Portfolio> {
         page = 1,
         limit = 10
     ): Promise<{ data: RawPosition[]; total: number }> {
-        const skip = (page - 1) * limit;
+        const offset = (page - 1) * limit;
 
-        const queryBuilder = this.dataSource
-            .createQueryBuilder()
-            .select([
-                'o.id AS order_id',
-                'o.asset_id AS asset_id',
-                'o.side AS side',
-                'o.rate AS rate',
-                'o.quantity AS quantity',
-                'o.filled_quantity AS filled_quantity',
-                'o.status AS status',
-                't.symbol AS symbol',
-                't.name AS name',
-                't.token_address AS token_address',
-            ])
-            .from('orders', 'o')
-            .innerJoin('assets', 't', 'o.asset_id = t.id')
-            .where('o.account_id = :accountId', { accountId })
-            .andWhere('o.side IN (:...sides)', {
-                sides: positionType ? [positionType] : [OrderSide.Lend, OrderSide.Borrow],
-            })
-            .andWhere('o.status IN (:...statuses)', {
-                statuses: [OrderStatus.Open, OrderStatus.PartiallyFilled],
-            })
-            .orderBy('o.created_at', 'DESC')
-            .offset(skip)
-            .limit(limit);
+        const includeLend = !positionType || positionType === 'LEND';
+        const includeBorrow = !positionType || positionType === 'BORROW';
 
-        const data = await queryBuilder.getRawMany<RawPosition>();
+        const queries: string[] = [];
+        const countQueries: string[] = [];
+        const queryParams: any[] = [accountId];
 
-        const countQuery = this.dataSource
-            .createQueryBuilder()
-            .select('COUNT(*)', 'count')
-            .from('orders', 'o')
-            .where('o.account_id = :accountId', { accountId })
-            .andWhere('o.side IN (:...sides)', {
-                sides: positionType ? [positionType] : [OrderSide.Lend, OrderSide.Borrow],
-            })
-            .andWhere('o.status IN (:...statuses)', {
-                statuses: [OrderStatus.Open, OrderStatus.PartiallyFilled],
-            });
+        if (includeLend) {
+            queries.push(`
+                SELECT 
+                    lp.id AS order_id,
+                    lp.asset_id AS asset_id,
+                    'LEND' AS side,
+                    '0' AS rate,
+                    lp.amount AS quantity,
+                    '${OrderStatus.Filled}' AS status,
+                    t.symbol AS symbol,
+                    t.name AS name,
+                    t.token_address AS token_address,
+                    lp.created_at AS created_at
+                FROM lend_positions lp
+                INNER JOIN assets t ON lp.asset_id = t.id
+                WHERE lp.account_id = $1 AND lp.amount > 0
+            `);
+            countQueries.push(`
+                SELECT id FROM lend_positions WHERE account_id = $1 AND amount > 0
+            `);
+        }
 
-        const countResult = await countQuery.getRawOne<{ count: string }>();
-        const total = Number.parseInt(countResult?.count || '0', 10);
+        if (includeBorrow) {
+            queries.push(`
+                SELECT 
+                    bp.id AS order_id,
+                    bp.asset_id AS asset_id,
+                    'BORROW' AS side,
+                    '0' AS rate,
+                    bp.debt AS quantity,
+                    '${OrderStatus.Filled}' AS status,
+                    t.symbol AS symbol,
+                    t.name AS name,
+                    t.token_address AS token_address,
+                    bp.created_at AS created_at
+                FROM borrow_positions bp
+                INNER JOIN assets t ON bp.asset_id = t.id
+                WHERE bp.account_id = $1 AND bp.debt > 0
+            `);
+            countQueries.push(`
+                SELECT id FROM borrow_positions WHERE account_id = $1 AND debt > 0
+            `);
+        }
+
+        if (queries.length === 0) {
+            return { data: [], total: 0 };
+        }
+
+        queryParams.push(limit, offset);
+
+        const finalQuery = queries.join(' UNION ALL ') + ` ORDER BY created_at DESC LIMIT $2 OFFSET $3`;
+        const countQuery = `SELECT COUNT(*) as count FROM (${countQueries.join(' UNION ALL ')}) as combined_count`;
+
+        const data = await this.dataSource.query(finalQuery, queryParams);
+        const countResult = await this.dataSource.query(countQuery, [accountId]);
+
+        const total = Number.parseInt(countResult[0]?.count || '0', 10);
 
         return { data, total };
-    }
-
-    async getCollateralAssets(accountId: string): Promise<{
-        asset_id: string;
-        symbol: string;
-        name: string;
-    }[]> {
-        return this.dataSource
-            .createQueryBuilder()
-            .select([
-                'p.asset_id AS asset_id',
-                't.symbol AS symbol',
-                't.name AS name',
-            ])
-            .from('portfolio', 'p')
-            .innerJoin('assets', 't', 'p.asset_id = t.id')
-            .where('p.account_id = :accountId', { accountId })
-            .andWhere('p.is_collateral = true', { accountId })
-            .andWhere('p.amount > 0')
-            .getRawMany();
     }
 }

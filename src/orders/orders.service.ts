@@ -23,6 +23,7 @@ import { OrderResponse } from "./dto/order-response.dto";
 import { Order } from "./entities/order.entity";
 import { toPercentage } from "../common/utils/number.utils";
 import { OrderRepository } from "./repositories/order.repository";
+import { humanToBaseUnits } from "../common/utils/number.utils";
 
 @Injectable()
 export class OrdersService {
@@ -35,7 +36,6 @@ export class OrdersService {
         private readonly natsService: NatsService,
     ) { }
 
-    //@todo : need to make sure to convert to token decimals
     /**
      * Get the current USD price for a token by address.
      * Uses the in-memory price cache (populated by interval worker).
@@ -63,16 +63,18 @@ export class OrdersService {
         privyUserId: string,
     ): Promise<OrderResponse> {
         // Validate loan token exists
-        await this.tokensService.validateToken(dto.loanToken);
+        const token = await this.tokensService.validateToken(dto.loanToken);
         const accountId = await this.getOrCreateAccount(walletAddress, privyUserId);
         const assetId = await this.getAssetId(dto.loanToken);
+
+        const quantityBaseUnits = humanToBaseUnits(dto.amount, token.decimals!);
 
         const order = this.orderRepository.create({
             accountId,
             assetId,
             side: OrderSide.Lend,
             type: OrderType.Market,
-            quantity: dto.amount,
+            quantity: quantityBaseUnits,
             settlementFee: "0",
             status: OrderStatus.Open,
             rate: 0,
@@ -92,18 +94,19 @@ export class OrdersService {
         privyUserId: string,
     ): Promise<OrderResponse> {
         // Validate loan token exists
-        await this.tokensService.validateToken(dto.loanToken);
+        const token = await this.tokensService.validateToken(dto.loanToken);
         const accountId = await this.getOrCreateAccount(walletAddress, privyUserId);
         const assetId = await this.getAssetId(dto.loanToken);
 
+        const quantityBaseUnits = humanToBaseUnits(dto.amount, token.decimals!);
+
         //@todo : calculate settlement fee amount
-        //@todo : calculate for token decimals
         const order = this.orderRepository.create({
             accountId,
             assetId,
             side: OrderSide.Lend,
             type: OrderType.Limit,
-            quantity: dto.amount,
+            quantity: quantityBaseUnits,
             settlementFee: "0",
             rate: dto.rate,
             status: OrderStatus.Open,
@@ -123,16 +126,18 @@ export class OrdersService {
         privyUserId: string,
     ): Promise<OrderResponse> {
         // Validate loan token exists
-        await this.tokensService.validateToken(dto.loanToken);
+        const token = await this.tokensService.validateToken(dto.loanToken);
         const accountId = await this.getOrCreateAccount(walletAddress, privyUserId);
         const assetId = await this.getAssetId(dto.loanToken);
+
+        const quantityBaseUnits = humanToBaseUnits(dto.amount, token.decimals!);
 
         const order = this.orderRepository.create({
             accountId,
             assetId,
             side: OrderSide.Borrow,
             type: OrderType.Market,
-            quantity: dto.amount,
+            quantity: quantityBaseUnits,
             settlementFee: "0",
             status: OrderStatus.Open,
             rate: 0,
@@ -152,16 +157,18 @@ export class OrdersService {
         privyUserId: string,
     ): Promise<OrderResponse> {
         // Validate loan token exists
-        await this.tokensService.validateToken(dto.loanToken);
+        const token = await this.tokensService.validateToken(dto.loanToken);
         const accountId = await this.getOrCreateAccount(walletAddress, privyUserId);
         const assetId = await this.getAssetId(dto.loanToken);
+
+        const quantityBaseUnits = humanToBaseUnits(dto.amount, token.decimals!);
 
         const order = this.orderRepository.create({
             accountId,
             assetId,
             side: OrderSide.Borrow,
             type: OrderType.Limit,
-            quantity: dto.amount,
+            quantity: quantityBaseUnits,
             settlementFee: "0",
             rate: dto.rate,
             status: OrderStatus.Open,
@@ -232,7 +239,7 @@ export class OrdersService {
                 side: order.side,
                 type: order.type,
                 status: order.status,
-                originalAmount: order.quantity,
+                originalAmount: dto.amount,
                 settlementFeeAmount: order.settlementFee,
                 // order.rate is stored as basis points in the DB; expose percentage in responses
                 rate: toPercentage(order.rate),

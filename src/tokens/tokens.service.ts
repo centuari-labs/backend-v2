@@ -8,6 +8,7 @@ export class TokensService {
         private readonly tokenRepository: TokensRepository,
     ) { }
 
+    //@todo : should only load token when first start the service
     /**
      * Validates that a token address exists and is active in the database
      * @throws BadRequestException if token is not supported

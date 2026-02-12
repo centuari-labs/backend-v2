@@ -27,9 +27,9 @@ export class MarketService {
         const priceMap = new Map<string, number>();
         await Promise.all(
             assets.map(async (asset) => {
-                const price = await this.priceService.getPrice(asset.tokenAddress);
+                const price = await this.priceService.getPrice(asset.id);
                 if (price !== null) {
-                    priceMap.set(asset.tokenAddress.toLowerCase(), price);
+                    priceMap.set(asset.id.toLowerCase(), price);
                 }
             })
         );
@@ -44,7 +44,7 @@ export class MarketService {
             const asset = assets.find(a => a.id === deposit.asset_id);
             if (!asset) continue;
 
-            const price = priceMap.get(asset.tokenAddress.toLowerCase());
+            const price = priceMap.get(asset.id.toLowerCase());
             if (price !== undefined) {
                 totalDepositUSD += Number.parseFloat(deposit.total_amount) * price;
             }
@@ -54,7 +54,7 @@ export class MarketService {
             const asset = assets.find(a => a.id === loan.asset_id);
             if (!asset) continue;
 
-            const price = priceMap.get(asset.tokenAddress.toLowerCase());
+            const price = priceMap.get(asset.id.toLowerCase());
             if (price !== undefined) {
                 activeLoansUSD += Number.parseFloat(loan.total_amount) * price;
             }

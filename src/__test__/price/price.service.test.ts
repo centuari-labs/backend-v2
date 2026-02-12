@@ -80,53 +80,53 @@ describe("PriceService", () => {
     });
 
     describe("getPrice", () => {
-        it("should return cached price when token is in cache", async () => {
+        it("should return cached price when asset is in cache", async () => {
             tokensRepository.getActiveTokens.mockResolvedValue([mockToken]);
             priceProvider.fetchPrices.mockResolvedValue({ USDC: 1.0 });
 
             await service.fetchAndUpdatePrices();
 
-            const result = await service.getPrice(mockToken.tokenAddress);
+            const result = await service.getPrice(mockToken.id);
 
             expect(result).toBe(1.0);
         });
 
-        it("should return null when token not in cache and cache is populated", async () => {
+        it("should return null when asset not in cache and cache is populated", async () => {
             tokensRepository.getActiveTokens.mockResolvedValue([mockToken]);
             priceProvider.fetchPrices.mockResolvedValue({ USDC: 1.0 });
 
             await service.fetchAndUpdatePrices();
 
-            const result = await service.getPrice("0xunknown1234567890abcdef1234567890abcdef12");
+            const result = await service.getPrice("unknown-asset-id");
 
             expect(result).toBeNull();
         });
 
-        it("should trigger fetch and return price on cold start (empty cache)", async () => {
+        it("should trigger fetch and return price on cold start (empty cache) by asset id", async () => {
             tokensRepository.getActiveTokens.mockResolvedValue([mockToken]);
             priceProvider.fetchPrices.mockResolvedValue({ USDC: 1.0 });
 
-            const result = await service.getPrice(mockToken.tokenAddress);
+            const result = await service.getPrice(mockToken.id);
 
             expect(result).toBe(1.0);
             expect(tokensRepository.getActiveTokens).toHaveBeenCalled();
             expect(priceProvider.fetchPrices).toHaveBeenCalledWith([mockToken]);
         });
 
-        it("should normalize address to lowercase for lookup", async () => {
+        it("should normalize assetId to lowercase for lookup", async () => {
             tokensRepository.getActiveTokens.mockResolvedValue([mockToken]);
             priceProvider.fetchPrices.mockResolvedValue({ USDC: 1.0 });
 
             await service.fetchAndUpdatePrices();
 
-            const result = await service.getPrice(mockToken.tokenAddress.toUpperCase());
+            const result = await service.getPrice(mockToken.id.toUpperCase());
 
             expect(result).toBe(1.0);
         });
     });
 
     describe("getPrices", () => {
-        it("should return Record of address to price when cache is populated", async () => {
+        it("should return Record of assetId to price when cache is populated", async () => {
             tokensRepository.getActiveTokens.mockResolvedValue([mockToken, mockTokenEth]);
             priceProvider.fetchPrices.mockResolvedValue({ USDC: 1.0, ETH: 2500 });
 
@@ -135,8 +135,8 @@ describe("PriceService", () => {
             const result = service.getPrices();
 
             expect(result).toEqual({
-                [mockToken.tokenAddress.toLowerCase()]: 1.0,
-                [mockTokenEth.tokenAddress.toLowerCase()]: 2500,
+                [mockToken.id.toLowerCase()]: 1.0,
+                [mockTokenEth.id.toLowerCase()]: 2500,
             });
         });
 
@@ -163,15 +163,15 @@ describe("PriceService", () => {
     });
 
     describe("fetchAndUpdatePrices", () => {
-        it("should update cache and map symbol to address correctly", async () => {
+        it("should update cache and map symbol to assetId correctly", async () => {
             tokensRepository.getActiveTokens.mockResolvedValue([mockToken, mockTokenEth]);
             priceProvider.fetchPrices.mockResolvedValue({ USDC: 1.0, ETH: 2500 });
 
             await service.fetchAndUpdatePrices();
 
             expect(service.isCacheReady()).toBe(true);
-            expect(await service.getPrice(mockToken.tokenAddress)).toBe(1.0);
-            expect(await service.getPrice(mockTokenEth.tokenAddress)).toBe(2500);
+            expect(await service.getPrice(mockToken.id)).toBe(1.0);
+            expect(await service.getPrice(mockTokenEth.id)).toBe(2500);
         });
 
         it("should skip fetch and log warning when no tokens from TokensService", async () => {
@@ -190,13 +190,13 @@ describe("PriceService", () => {
             priceProvider.fetchPrices.mockResolvedValue({ USDC: 1.0 });
 
             await service.fetchAndUpdatePrices();
-            expect(await service.getPrice(mockToken.tokenAddress)).toBe(1.0);
+            expect(await service.getPrice(mockToken.id)).toBe(1.0);
 
             priceProvider.fetchPrices.mockRejectedValue(new Error("API error"));
 
             await service.fetchAndUpdatePrices();
 
-            expect(await service.getPrice(mockToken.tokenAddress)).toBe(1.0);
+            expect(await service.getPrice(mockToken.id)).toBe(1.0);
         });
     });
 

@@ -31,18 +31,9 @@ export class OrdersService {
 
     constructor(
         private readonly orderRepository: OrderRepository,
-        private readonly priceService: PriceService,
         private readonly tokensService: TokensService,
         private readonly natsService: NatsService,
     ) { }
-
-    /**
-     * Get the current USD price for a token by address.
-     * Uses the in-memory price cache (populated by interval worker).
-     */
-    async getTokenPriceInUsd(tokenAddress: string): Promise<number | null> {
-        return this.priceService.getPrice(tokenAddress);
-    }
 
     async getOrCreateAccount(walletAddress: string, privyUserId: string): Promise<string> {
         const account = await this.orderRepository.getOrCreateAccount(walletAddress, privyUserId);

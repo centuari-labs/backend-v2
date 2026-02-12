@@ -27,6 +27,7 @@ describe('MarketService', () => {
         marketRepositoryMock = {
             getTotalDepositUsd: jest.fn().mockResolvedValue([]),
             getLendPositionTotalAmounts: jest.fn().mockResolvedValue([]),
+            getActiveLoans: jest.fn().mockResolvedValue([]),
         };
         tokenRepositoryMock = {
             find: jest.fn().mockResolvedValue(mockAssets),
@@ -82,15 +83,15 @@ describe('MarketService', () => {
         ]);
 
         // Mock lend positions: 1 BTC and 5 ETH
-        marketRepositoryMock.getLendPositionTotalAmounts.mockResolvedValue([
+        marketRepositoryMock.getActiveLoans.mockResolvedValue([
             { asset_id: 'asset1', total_amount: '1' },
             { asset_id: 'asset2', total_amount: '5' },
         ]);
 
-        // Mock prices: BTC = 50000, ETH = 3000
-        priceServiceMock.getPrice.mockImplementation(async (tokenAddress: string) => {
-            if (tokenAddress === '0x123') return 50000; // BTC
-            if (tokenAddress === '0x456') return 3000;  // ETH
+        // Mock prices by assetId: BTC = 50000, ETH = 3000
+        priceServiceMock.getPrice.mockImplementation(async (assetId: string) => {
+            if (assetId === 'asset1') return 50000; // BTC
+            if (assetId === 'asset2') return 3000;  // ETH
             return 0;
         });
 

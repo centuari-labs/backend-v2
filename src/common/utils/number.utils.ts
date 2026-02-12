@@ -19,7 +19,6 @@ export function toPercentage(value: number | null | undefined): number {
     return numericValue / 100;
 }
 
-//@todo : instead of giving the decimals, we should give the token address or asset id to get the decimals from the cache
 /**
  * Convert a human-readable token amount into base units using the token decimals.
  *

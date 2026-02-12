@@ -57,9 +57,6 @@ export class OrdersService {
         return assetId.id;
     }
 
-    // NOTE: Order DTOs provide `maturities` as Unix timestamps (seconds);
-    // any conversion to `Date`/DB `timestamp` happens downstream in repositories/DB layer.
-    //@todo : when order always need to check if the maturities is really in unix timestamp format and not pass the 3 months from now
     async createLendMarketOrder(
         dto: CreateLendMarketOrderDto,
         walletAddress: string,

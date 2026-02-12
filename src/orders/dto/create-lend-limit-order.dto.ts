@@ -13,6 +13,7 @@ import {
     IsMinAmount,
     IsPositiveNumericString,
 } from "../../common/validators/amount.validator";
+import { IsValidMaturities } from "../../common/validators/maturity.validator";
 
 export class CreateLendLimitOrderDto {
     @IsString()
@@ -40,6 +41,10 @@ export class CreateLendLimitOrderDto {
     })
     @ArrayMinSize(1, {
         message: "At least one maturity timestamp is required",
+    })
+    @IsValidMaturities({
+        message:
+            "Maturities must be on the 1st day of the next three calendar months (UTC).",
     })
     maturities: number[];
 

@@ -1,12 +1,16 @@
 import { validate } from 'class-validator';
 import { plainToInstance } from 'class-transformer';
 import { CreateBorrowLimitOrderDto } from '../../../orders/dto/create-borrow-limit-order.dto';
+import { getAllowedMaturitiesUtcSeconds } from '../../../orders/utils/maturity.utils';
 
 describe('CreateBorrowLimitOrderDto', () => {
+    const fixedNow = new Date(Date.UTC(2026, 1, 15, 0, 0, 0)); // 2026-02-15 UTC
+    const allowedMaturities = getAllowedMaturitiesUtcSeconds(fixedNow);
+
     const validDto = {
         loanToken: '0x1234567890abcdef1234567890abcdef12345678',
         amount: '1000',
-        maturities: [1704067200],
+        maturities: [allowedMaturities[0]],
         rate: 500, // 5% in basis points
     };
 
@@ -142,15 +146,15 @@ describe('CreateBorrowLimitOrderDto', () => {
     });
 
     describe('maturities validation (Unix timestamps in seconds)', () => {
-        it('should accept single maturity timestamp', async () => {
-            const dto = createDto({ maturities: [1704067200] });
+        it('should accept single maturity timestamp within next three months on day 1', async () => {
+            const dto = createDto({ maturities: [allowedMaturities[0]] });
             const errors = await validate(dto);
             const maturityErrors = errors.filter(e => e.property === 'maturities');
             expect(maturityErrors).toHaveLength(0);
         });
 
-        it('should accept multiple maturity timestamps', async () => {
-            const dto = createDto({ maturities: [1704067200, 1706745600] });
+        it('should accept multiple maturity timestamps that are allowed first-of-month dates', async () => {
+            const dto = createDto({ maturities: allowedMaturities });
             const errors = await validate(dto);
             const maturityErrors = errors.filter(e => e.property === 'maturities');
             expect(maturityErrors).toHaveLength(0);
@@ -171,7 +175,23 @@ describe('CreateBorrowLimitOrderDto', () => {
         });
 
         it('should reject non-integer maturity timestamp values', async () => {
-            const dto = createDto({ maturities: [1704067200.5 as any] });
+            const dto = createDto({ maturities: [allowedMaturities[0] + 0.5 as any] });
+            const errors = await validate(dto);
+            const maturityErrors = errors.filter(e => e.property === 'maturities');
+            expect(maturityErrors.length).toBeGreaterThan(0);
+        });
+
+        it('should reject maturities not on the 1st of a month', async () => {
+            const invalid = allowedMaturities[0] + 24 * 60 * 60;
+            const dto = createDto({ maturities: [invalid] });
+            const errors = await validate(dto);
+            const maturityErrors = errors.filter(e => e.property === 'maturities');
+            expect(maturityErrors.length).toBeGreaterThan(0);
+        });
+
+        it('should reject maturities beyond the next three calendar months', async () => {
+            const beyond = allowedMaturities[2] + 31 * 24 * 60 * 60;
+            const dto = createDto({ maturities: [beyond] });
             const errors = await validate(dto);
             const maturityErrors = errors.filter(e => e.property === 'maturities');
             expect(maturityErrors.length).toBeGreaterThan(0);

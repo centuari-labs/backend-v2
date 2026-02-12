@@ -21,12 +21,8 @@ export interface OrderResponseData {
      * Underlying value in the database is stored as basis points.
      */
     rate: number;
-    transactionHash: string | null;
-    blockNumber: number | null;
     createdAt: Date;
     updatedAt: Date;
-    filledAt: Date | null;
-    cancelledAt: Date | null;
 }
 
 export class OrderResponse {

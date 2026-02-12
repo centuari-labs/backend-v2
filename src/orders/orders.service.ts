@@ -112,6 +112,8 @@ export class OrdersService {
         const decimals = await this.tokensService.getTokenDecimalsByAssetId(dto.assetId);
         const quantityBaseUnits = humanToBaseUnits(dto.amount, decimals!);
 
+        //@todo : validate health factor
+
         const order = this.orderRepository.create({
             accountId,
             assetId: dto.assetId,
@@ -141,6 +143,8 @@ export class OrdersService {
 
         const decimals = await this.tokensService.getTokenDecimalsByAssetId(dto.assetId);
         const quantityBaseUnits = humanToBaseUnits(dto.amount, decimals!);
+
+        //@todo : validate health factor
 
         const order = this.orderRepository.create({
             accountId,
@@ -223,12 +227,8 @@ export class OrdersService {
                 // order.rate is stored as basis points in the DB; expose percentage in responses
                 rate: toPercentage(order.rate),
                 autoRollover: order.autoRollover,
-                transactionHash: null,
-                blockNumber: null,
                 createdAt: order.createdAt,
                 updatedAt: order.updatedAt,
-                filledAt: null,
-                cancelledAt: null,
             },
         };
     }

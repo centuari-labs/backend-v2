@@ -19,9 +19,18 @@ import type {
   UnsubscribeUserOrdersDto,
 } from './dto/subscribe-orderbook.dto';
 
+const websocketCorsOrigin =
+  process.env.NODE_ENV === 'production'
+    ? (process.env.WS_CORS_ORIGINS ?? '')
+        .split(',')
+        .map((origin) => origin.trim())
+        .filter((origin) => origin.length > 0)
+    : '*';
+
+
 @WebSocketGateway({
   cors: {
-    origin: '*',
+    origin: websocketCorsOrigin,
   },
 })
 export class EventsGateway

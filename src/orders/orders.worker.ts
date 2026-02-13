@@ -23,6 +23,15 @@ const ASSET_ID_POOL = (process.env.ORDER_WORKER_ASSET_IDS ?? "")
     .map((value) => value.trim())
     .filter(Boolean);
 
+const WALLET_ADDRESS_POOL = [
+    "0xcA2E021f8FEA9E3fb5F86A68A3158315404e6157",
+    "0xAb9A004468A39cCC07e1f62B59F990f45304a222",
+    "0x43765641b3632f45366cD91D9F128CFeb34b218F",
+    "0x103D2146DE8E682ca21eb2fbF9CF9a3e8a127749",
+    "0xCeCe52a44e9e6E57051791E7472CA87b3D789c3e",
+    "0xd0c75db43eBa0512D84e6f77104646809f1cac99",
+];
+
 @Injectable()
 export class OrdersWorker {
     private readonly logger = new Logger(OrdersWorker.name);
@@ -57,7 +66,7 @@ export class OrdersWorker {
             const amount = this.getRandomNumber(QUANTITY_MIN, QUANTITY_MAX, 6).toString();
             const rate = this.getRandomNumber(RATE_MIN, RATE_MAX, 6);
             const maturities = [30];
-            const walletAddress = this.getRandomWalletAddress();
+            const walletAddress = this.getRandomWalletFromPool();
             const privyUserId = randomUUID();
 
             if (side === OrderSide.Lend && type === OrderType.Market) {
@@ -156,20 +165,15 @@ export class OrdersWorker {
         return null;
     }
 
+    private getRandomWalletFromPool(): string {
+        return WALLET_ADDRESS_POOL[Math.floor(Math.random() * WALLET_ADDRESS_POOL.length)];
+    }
+
     private getRandomNumber(min: number, max: number, decimals: number): number {
         const lower = Math.min(min, max);
         const upper = Math.max(min, max);
         const value = lower + Math.random() * (upper - lower);
         const factor = 10 ** decimals
         return Math.round(value * factor) / factor;
-    }
-
-    private getRandomWalletAddress(): string {
-        const chars = "0123456789abcdef";
-        let value = "0x";
-        for (let i = 0; i < 40; i += 1) {
-            value += chars[Math.floor(Math.random() * chars.length)];
-        }
-        return value;
     }
 }

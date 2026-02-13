@@ -2,10 +2,12 @@ import { Injectable, Logger } from "@nestjs/common";
 import { Interval } from "@nestjs/schedule";
 import { InjectRepository } from "@nestjs/typeorm";
 import { randomUUID } from "node:crypto";
+import { Repository } from "typeorm";
 import { OrderSide, OrderStatus, OrderType } from "./constants/order.constants";
 import { Order } from "./entities/order.entity";
 import { OrderRepository } from "./repositories/order.repository";
 import { OrdersService } from "./orders.service";
+import { Market } from "../market/entities/market.entity";
 
 const INSERT_INTERVAL_MS = Number.parseInt(process.env.ORDER_WORKER_INSERT_INTERVAL_MS ?? "5000", 10);
 const PARTIAL_FILL_INTERVAL_MS = Number.parseInt(process.env.ORDER_WORKER_PARTIAL_FILL_INTERVAL_MS ?? "7000", 10);
@@ -18,10 +20,19 @@ const QUANTITY_MAX = Number.parseFloat(process.env.ORDER_WORKER_QUANTITY_MAX ?? 
 const PARTIAL_FILL_MIN_FRACTION = Number.parseFloat(process.env.ORDER_WORKER_PARTIAL_FILL_MIN_FRACTION ?? "0.05");
 const PARTIAL_FILL_MAX_FRACTION = Number.parseFloat(process.env.ORDER_WORKER_PARTIAL_FILL_MAX_FRACTION ?? "0.25");
 
-const ASSET_ID_POOL = (process.env.ORDER_WORKER_ASSET_IDS ?? "")
-    .split(",")
-    .map((value) => value.trim())
-    .filter(Boolean);
+const ASSET_ID_POOL = [
+    "6af39856-6e85-4196-b836-e9139a678dc0",
+    "54bc1539-a7d3-45c9-9fd1-ca7ef88103a0",
+    "25f2c7bf-074c-4a61-a95b-fe5f2fe49b3c",
+    "c72ae3bf-7b2b-45b9-a4df-61830fae07da",
+    "536c1513-66f9-4d9c-b003-4d62331e33c3",
+    "985258d1-52cf-420c-b548-100895502a54",
+    "7afe1837-11f7-4a96-bb17-4df36a96f48d",
+    "d0be9ff3-5b42-43f1-aae9-ceef045a7d20",
+    "7a6503b1-b3fa-46ff-a957-c7e0b878faea",
+    "4a841549-9856-430a-8bba-b7feaa8f2460",
+    "fbae698d-50d5-40cb-9574-c86c0b3e1e8c",
+];
 
 const WALLET_ADDRESS_POOL = [
     "0xcA2E021f8FEA9E3fb5F86A68A3158315404e6157",
@@ -39,11 +50,13 @@ export class OrdersWorker {
     constructor(
         @InjectRepository(Order)
         private readonly orderRepository: OrderRepository,
+        @InjectRepository(Market)
+        private readonly marketRepository: Repository<Market>,
         private readonly ordersService: OrdersService,
     ) {
         if (ASSET_ID_POOL.length === 0) {
             this.logger.warn(
-                "ORDER_WORKER_ASSET_IDS not set. Random orders will be skipped until token addresses are provided.",
+                "Asset ID pool is empty. Random orders will be skipped.",
             );
         }
     }
@@ -56,22 +69,30 @@ export class OrdersWorker {
                 return;
             }
 
-            const loanToken = this.getRandomLoanToken();
-            if (!loanToken) {
+            const assetId = this.getRandomAssetId();
+            if (!assetId) {
                 return;
             }
+
+            // Get markets for this asset
+            const markets = await this.marketRepository.find({ where: { assetId } });
+            if (markets.length === 0) {
+                this.logger.warn(`No markets found for asset ${assetId}`);
+                return;
+            }
+
+            const marketIds = markets.map(m => m.id);
 
             const side = this.getRandomSide();
             const type = this.getRandomType();
             const amount = this.getRandomNumber(QUANTITY_MIN, QUANTITY_MAX, 6).toString();
             const rate = this.getRandomNumber(RATE_MIN, RATE_MAX, 6);
-            const maturities = [30];
             const walletAddress = this.getRandomWalletFromPool();
             const privyUserId = randomUUID();
 
             if (side === OrderSide.Lend && type === OrderType.Market) {
                 await this.ordersService.createLendMarketOrder(
-                    { loanToken, amount, maturities },
+                    { assetId, amount, marketIds },
                     walletAddress,
                     privyUserId,
                 );
@@ -80,7 +101,7 @@ export class OrdersWorker {
 
             if (side === OrderSide.Lend && type === OrderType.Limit) {
                 await this.ordersService.createLendLimitOrder(
-                    { loanToken, amount, maturities, rate },
+                    { assetId, amount, marketIds, rate },
                     walletAddress,
                     privyUserId,
                 );
@@ -89,7 +110,7 @@ export class OrdersWorker {
 
             if (side === OrderSide.Borrow && type === OrderType.Market) {
                 await this.ordersService.createBorrowMarketOrder(
-                    { loanToken, amount, maturities },
+                    { assetId, amount, marketIds },
                     walletAddress,
                     privyUserId,
                 );
@@ -97,7 +118,7 @@ export class OrdersWorker {
             }
 
             await this.ordersService.createBorrowLimitOrder(
-                { loanToken, amount, maturities, rate },
+                { assetId, amount, marketIds, rate },
                 walletAddress,
                 privyUserId,
             );
@@ -158,11 +179,11 @@ export class OrdersWorker {
         return Math.random() < 0.5 ? OrderType.Market : OrderType.Limit;
     }
 
-    private getRandomLoanToken(): string | null {
-        if (ASSET_ID_POOL.length > 0) {
-            return ASSET_ID_POOL[Math.floor(Math.random() * ASSET_ID_POOL.length)];
+    private getRandomAssetId(): string | null {
+        if (ASSET_ID_POOL.length === 0) {
+            return null;
         }
-        return null;
+        return ASSET_ID_POOL[Math.floor(Math.random() * ASSET_ID_POOL.length)];
     }
 
     private getRandomWalletFromPool(): string {

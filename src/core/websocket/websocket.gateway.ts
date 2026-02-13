@@ -12,8 +12,6 @@ import { Logger } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
 import { NatsService } from '../nats/nats.service';
 import type { OrderBookSnapshotDto } from './dto/orderbook-snapshot.dto';
-import type { OrderStatusUpdateDto } from './dto/order-status-update.dto';
-import type { OrderErrorDto } from './dto/order-error.dto';
 import type {
   SubscribeOrderbookDto,
   UnsubscribeOrderbookDto,
@@ -53,8 +51,6 @@ export class EventsGateway
   private setupNatsSubscriptions() {
     this.subscribeToOrderCreates();
     this.subscribeToOrderCancels();
-    this.subscribeToOrderStatusUpdates();
-    this.subscribeToErrors();
   }
 
   private async subscribeToOrderCreates() {
@@ -98,47 +94,6 @@ export class EventsGateway
     }
   }
 
-  private async subscribeToOrderStatusUpdates() {
-    try {
-      await this.natsService.subscribe<OrderStatusUpdateDto>(
-        'orders.status',
-        (data) => {
-          // Broadcast to user-specific room
-          const userRoom = `user:${data.accountId}`;
-          this.server.to(userRoom).emit('order-status-update', data);
-          
-          this.logger.debug(
-            `Broadcasted order status update to room ${userRoom}`,
-          );
-        },
-      );
-      this.logger.log('Subscribed to orders.status');
-    } catch (error) {
-      this.logger.error('Failed to subscribe to orders.status', error);
-    }
-  }
-
-  private async subscribeToErrors() {
-    try {
-      await this.natsService.subscribe<OrderErrorDto>(
-        'errors',
-        (data) => {
-          // Broadcast to user-specific room if accountId exists
-          if (data.accountId) {
-            const userRoom = `user:${data.accountId}`;
-            this.server.to(userRoom).emit('order-error', data);
-          }
-          
-          this.logger.warn(
-            `Order error: ${data.errorCode} - ${data.message}`,
-          );
-        },
-      );
-      this.logger.log('Subscribed to errors');
-    } catch (error) {
-      this.logger.error('Failed to subscribe to errors', error);
-    }
-  }
 
   @SubscribeMessage('subscribe-orderbook')
   handleSubscribeOrderbook(

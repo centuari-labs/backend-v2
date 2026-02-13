@@ -2,11 +2,10 @@ import { Injectable, Logger } from "@nestjs/common";
 import { Interval } from "@nestjs/schedule";
 import { InjectRepository } from "@nestjs/typeorm";
 import { randomUUID } from "node:crypto";
-import { Repository } from "typeorm";
 import { OrderSide, OrderStatus, OrderType } from "./constants/order.constants";
-import { Account } from "./entities/account.entity";
 import { Order } from "./entities/order.entity";
 import { OrderRepository } from "./repositories/order.repository";
+import { OrdersService } from "./orders.service";
 
 const INSERT_INTERVAL_MS = Number.parseInt(process.env.ORDER_WORKER_INSERT_INTERVAL_MS ?? "5000", 10);
 const PARTIAL_FILL_INTERVAL_MS = Number.parseInt(process.env.ORDER_WORKER_PARTIAL_FILL_INTERVAL_MS ?? "7000", 10);
@@ -16,15 +15,8 @@ const RATE_MIN = Number.parseFloat(process.env.ORDER_WORKER_RATE_MIN ?? "0.01");
 const RATE_MAX = Number.parseFloat(process.env.ORDER_WORKER_RATE_MAX ?? "0.25");
 const QUANTITY_MIN = Number.parseFloat(process.env.ORDER_WORKER_QUANTITY_MIN ?? "0.1");
 const QUANTITY_MAX = Number.parseFloat(process.env.ORDER_WORKER_QUANTITY_MAX ?? "1000");
-const SETTLEMENT_FEE_MIN = Number.parseFloat(process.env.ORDER_WORKER_SETTLEMENT_FEE_MIN ?? "0.0001");
-const SETTLEMENT_FEE_MAX = Number.parseFloat(process.env.ORDER_WORKER_SETTLEMENT_FEE_MAX ?? "0.01");
 const PARTIAL_FILL_MIN_FRACTION = Number.parseFloat(process.env.ORDER_WORKER_PARTIAL_FILL_MIN_FRACTION ?? "0.05");
 const PARTIAL_FILL_MAX_FRACTION = Number.parseFloat(process.env.ORDER_WORKER_PARTIAL_FILL_MAX_FRACTION ?? "0.25");
-
-const ACCOUNT_ID_POOL = (process.env.ORDER_WORKER_ACCOUNT_IDS ?? "")
-    .split(",")
-    .map((value) => value.trim())
-    .filter(Boolean);
 
 const ASSET_ID_POOL = (process.env.ORDER_WORKER_ASSET_IDS ?? "")
     .split(",")
@@ -34,17 +26,15 @@ const ASSET_ID_POOL = (process.env.ORDER_WORKER_ASSET_IDS ?? "")
 @Injectable()
 export class OrdersWorker {
     private readonly logger = new Logger(OrdersWorker.name);
-    private readonly generatedAccountIds: string[] = [];
 
     constructor(
         @InjectRepository(Order)
         private readonly orderRepository: OrderRepository,
-        @InjectRepository(Account)
-        private readonly accountRepository: Repository<Account>,
+        private readonly ordersService: OrdersService,
     ) {
-        if (ACCOUNT_ID_POOL.length === 0 || ASSET_ID_POOL.length === 0) {
+        if (ASSET_ID_POOL.length === 0) {
             this.logger.warn(
-                "ORDER_WORKER_ACCOUNT_IDS or ORDER_WORKER_ASSET_IDS not set. Accounts will be created automatically; assets will use random UUIDs.",
+                "ORDER_WORKER_ASSET_IDS not set. Random orders will be skipped until token addresses are provided.",
             );
         }
     }
@@ -57,18 +47,51 @@ export class OrdersWorker {
                 return;
             }
 
-            const order = this.orderRepository.create({
-                accountId: await this.getOrCreateAccountId(),
-                assetId: this.getRandomAssetId(),
-                side: this.getRandomSide(),
-                type: this.getRandomType(),
-                rate: this.getRandomNumber(RATE_MIN, RATE_MAX, 6),
-                quantity: this.getRandomNumber(QUANTITY_MIN, QUANTITY_MAX, 6).toString(),
-                settlementFee: this.getRandomNumber(SETTLEMENT_FEE_MIN, SETTLEMENT_FEE_MAX, 6).toString(),
-                status: OrderStatus.Open,
-            });
+            const loanToken = this.getRandomLoanToken();
+            if (!loanToken) {
+                return;
+            }
 
-            await this.orderRepository.save(order);
+            const side = this.getRandomSide();
+            const type = this.getRandomType();
+            const amount = this.getRandomNumber(QUANTITY_MIN, QUANTITY_MAX, 6).toString();
+            const rate = this.getRandomNumber(RATE_MIN, RATE_MAX, 6);
+            const maturities = [30];
+            const walletAddress = this.getRandomWalletAddress();
+            const privyUserId = randomUUID();
+
+            if (side === OrderSide.Lend && type === OrderType.Market) {
+                await this.ordersService.createLendMarketOrder(
+                    { loanToken, amount, maturities },
+                    walletAddress,
+                    privyUserId,
+                );
+                return;
+            }
+
+            if (side === OrderSide.Lend && type === OrderType.Limit) {
+                await this.ordersService.createLendLimitOrder(
+                    { loanToken, amount, maturities, rate },
+                    walletAddress,
+                    privyUserId,
+                );
+                return;
+            }
+
+            if (side === OrderSide.Borrow && type === OrderType.Market) {
+                await this.ordersService.createBorrowMarketOrder(
+                    { loanToken, amount, maturities },
+                    walletAddress,
+                    privyUserId,
+                );
+                return;
+            }
+
+            await this.ordersService.createBorrowLimitOrder(
+                { loanToken, amount, maturities, rate },
+                walletAddress,
+                privyUserId,
+            );
         } catch (error) {
             this.logger.error(`Failed to insert order: ${(error as Error).message}`);
         }
@@ -126,36 +149,18 @@ export class OrdersWorker {
         return Math.random() < 0.5 ? OrderType.Market : OrderType.Limit;
     }
 
-    private async getOrCreateAccountId(): Promise<string> {
-        if (ACCOUNT_ID_POOL.length > 0) {
-            return ACCOUNT_ID_POOL[Math.floor(Math.random() * ACCOUNT_ID_POOL.length)];
-        }
-
-        if (this.generatedAccountIds.length > 0) {
-            return this.generatedAccountIds[Math.floor(Math.random() * this.generatedAccountIds.length)];
-        }
-
-        const account = this.accountRepository.create({
-            privyUserId: randomUUID(),
-            userWallet: this.getRandomWalletAddress(),
-        });
-        const savedAccount = await this.accountRepository.save(account);
-        this.generatedAccountIds.push(savedAccount.id);
-        return savedAccount.id;
-    }
-
-    private getRandomAssetId(): string {
+    private getRandomLoanToken(): string | null {
         if (ASSET_ID_POOL.length > 0) {
             return ASSET_ID_POOL[Math.floor(Math.random() * ASSET_ID_POOL.length)];
         }
-        return randomUUID();
+        return null;
     }
 
     private getRandomNumber(min: number, max: number, decimals: number): number {
         const lower = Math.min(min, max);
         const upper = Math.max(min, max);
         const value = lower + Math.random() * (upper - lower);
-        const factor = Math.pow(10, decimals);
+        const factor = 10 ** decimals
         return Math.round(value * factor) / factor;
     }
 

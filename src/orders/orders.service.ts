@@ -5,8 +5,6 @@ import {
     Logger,
     NotFoundException,
 } from "@nestjs/common";
-import { InjectRepository } from "@nestjs/typeorm";
-import { Repository } from "typeorm";
 import { NatsService } from "../core/nats/nats.service";
 import { PriceService } from "../price/price.service";
 import { TokensService } from "../tokens/tokens.service";

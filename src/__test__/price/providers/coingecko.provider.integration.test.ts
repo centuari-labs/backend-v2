@@ -16,6 +16,7 @@ describe("CoinGeckoProvider (integration)", () => {
         symbol: "USDC",
         name: "USD Coin",
         isLoanToken: true,
+        decimals: 6,
         chainId: 84532,
         averageLTV: 0.75,
         coingeckoId: "usd-coin",

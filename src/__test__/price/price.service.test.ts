@@ -32,6 +32,7 @@ describe("PriceService", () => {
         id: "uuid-token-001",
         tokenAddress: "0xusdc1234567890abcdef1234567890abcdef12",
         symbol: "USDC",
+        decimals: 6,
         name: "USD Coin",
         isLoanToken: true,
         chainId: 84532,

@@ -21,6 +21,7 @@ describe("CoinGeckoProvider", () => {
         tokenAddress: "0xusdc1234567890abcdef1234567890abcdef12",
         symbol: "USDC",
         name: "USD Coin",
+        decimals: 6,
         isLoanToken: true,
         chainId: 84532,
         averageLTV: 0.75,

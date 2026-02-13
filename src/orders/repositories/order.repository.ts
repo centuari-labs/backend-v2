@@ -32,12 +32,6 @@ export class OrderRepository extends Repository<Order> {
         return account;
     }
 
-    async getAssetId(tokenAddress: string): Promise<Token | null> {
-        return this.tokenRepository.findOne({
-            where: { tokenAddress },
-        });
-    }
-
     async getBestRates(): Promise<Map<string, { borrow: number; lend: number }>> {
         const rawResults = await this.createQueryBuilder('order')
             .select('order.assetId', 'assetId')

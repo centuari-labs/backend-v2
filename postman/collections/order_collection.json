@@ -26,7 +26,7 @@
         ],
         "body": {
           "mode": "raw",
-          "raw": "{\n    \"loanToken\": \"0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf\",\n    \"amount\": \"100\",\n    \"rate\": 550,\n    \"maturities\": [1720000000]\n  }",
+          "raw": "{\n    \"assetId\": \"b66a2641-3339-4a48-805c-6da248f33dee\",\n    \"amount\": \"100\",\n    \"rate\": 550,\n    \"maturities\": [1720000000]\n  }",
           "options": {
             "raw": {
               "language": "json"
@@ -67,7 +67,7 @@
         ],
         "body": {
           "mode": "raw",
-          "raw": "{\n    \"loanToken\": \"0x036CbD53842c5426634e7929541eC2318f3dCF7e\",\n    \"amount\": \"100\"\n  }",
+          "raw": "{\n    \"assetId\": \"b66a2641-3339-4a48-805c-6da248f33dee\",\n    \"amount\": \"100\"\n  }",
           "options": {
             "raw": {
               "language": "json"
@@ -108,7 +108,7 @@
         ],
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"loanToken\": \"0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf\",\n  \"amount\": \"10\",\n  \"rate\": 2.5\n}\n",
+          "raw": "{\n  \"assetId\": \"b66a2641-3339-4a48-805c-6da248f33dee\",\n  \"amount\": \"10\",\n  \"rate\": 2.5\n}\n",
           "options": {
             "raw": {
               "language": "json"
@@ -149,7 +149,7 @@
         ],
         "body": {
           "mode": "raw",
-          "raw": "{\n    \"loanToken\": \"0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf\",\n    \"amount\": \"10\"\n  }",
+          "raw": "{\n    \"assetId\": \"b66a2641-3339-4a48-805c-6da248f33dee\",\n    \"amount\": \"10\"\n  }",
           "options": {
             "raw": {
               "language": "json"

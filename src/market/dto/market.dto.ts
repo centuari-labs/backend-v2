@@ -1,5 +1,9 @@
 export class MarketItemDto {
     asset: {
+        /**
+         * Asset identifier (Token.id UUID).
+         */
+        id: string;
         name: string;
         symbol: string;
         decimals?: number | null;

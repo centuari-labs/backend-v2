@@ -4,7 +4,7 @@ import { DataSource, Repository } from "typeorm";
 import { OrderSide, OrderStatus } from "../../orders/constants/order.constants";
 
 export interface RawPosition {
-    order_id: string;
+    position_id: string;
     asset_id: string;
     side: OrderSide;
     rate: string;
@@ -13,6 +13,7 @@ export interface RawPosition {
     symbol: string;
     name: string;
     token_address: string;
+    maturity: Date | null;
     created_at: Date;
 }
 
@@ -31,13 +32,12 @@ export class PortfolioRepository extends Repository<Portfolio> {
             .getRawMany();
     }
 
+    //@TODO: find how to get net APR from user's lend position shares
     async getUserNetAPY(accountId: string): Promise<{ asset_id: string, net_apy: string }[]> {
         return this.dataSource.createQueryBuilder()
             .select('lp.asset_id', 'asset_id')
-            .addSelect('AVG(m.rate)', 'net_apy')
+            .addSelect("'0'", 'net_apy')
             .from('lend_positions', 'lp')
-            .innerJoin('order_markets', 'om', 'lp.market_id = om.market_id')
-            .innerJoin('matches', 'm', 'om.order_market_id = m.lend_order_market_id')
             .where('lp.account_id = :accountId', { accountId })
             .andWhere('lp.amount > 0')
             .groupBy('lp.asset_id')
@@ -66,18 +66,6 @@ export class PortfolioRepository extends Repository<Portfolio> {
             .getRawMany();
     }
 
-    async isCollateral(accountId: string) {
-        return this.dataSource
-            .createQueryBuilder()
-            .select([
-                'portfolio.asset_id AS asset_id',
-                'portfolio.is_collateral AS is_collateral'
-            ])
-            .from('portfolio', 'portfolio')
-            .where('portfolio.account_id = :accountId', { accountId })
-            .andWhere('portfolio.amount > 0')
-            .getRawMany();
-    }
 
     async getUserAssets(
         accountId: string,
@@ -110,29 +98,28 @@ export class PortfolioRepository extends Repository<Portfolio> {
         limit = 10
     ): Promise<{ data: RawPosition[]; total: number }> {
         const offset = (page - 1) * limit;
-
         const includeLend = !positionType || positionType === 'LEND';
         const includeBorrow = !positionType || positionType === 'BORROW';
 
         const queries: string[] = [];
         const countQueries: string[] = [];
-        const queryParams: any[] = [accountId];
 
         if (includeLend) {
             queries.push(`
                 SELECT 
-                    lp.id AS order_id,
+                    lp.id AS position_id,
                     lp.asset_id AS asset_id,
                     'LEND' AS side,
-                    '0' AS rate,
+                    '0' AS rate, -- Placeholder: should use lp.rate if exists
                     lp.amount AS quantity,
-                    '${OrderStatus.Filled}' AS status,
                     t.symbol AS symbol,
                     t.name AS name,
                     t.token_address AS token_address,
+                    m.maturity AS maturity,
                     lp.created_at AS created_at
                 FROM lend_positions lp
                 INNER JOIN assets t ON lp.asset_id = t.id
+                LEFT JOIN markets m ON lp.market_id = m.id
                 WHERE lp.account_id = $1 AND lp.amount > 0
             `);
             countQueries.push(`
@@ -143,18 +130,19 @@ export class PortfolioRepository extends Repository<Portfolio> {
         if (includeBorrow) {
             queries.push(`
                 SELECT 
-                    bp.id AS order_id,
+                    bp.id AS position_id,
                     bp.asset_id AS asset_id,
                     'BORROW' AS side,
-                    '0' AS rate,
+                    '0' AS rate, -- Placeholder
                     bp.debt AS quantity,
-                    '${OrderStatus.Filled}' AS status,
                     t.symbol AS symbol,
                     t.name AS name,
                     t.token_address AS token_address,
+                    m.maturity AS maturity,
                     bp.created_at AS created_at
                 FROM borrow_positions bp
                 INNER JOIN assets t ON bp.asset_id = t.id
+                LEFT JOIN markets m ON bp.market_id = m.id
                 WHERE bp.account_id = $1 AND bp.debt > 0
             `);
             countQueries.push(`
@@ -166,16 +154,22 @@ export class PortfolioRepository extends Repository<Portfolio> {
             return { data: [], total: 0 };
         }
 
-        queryParams.push(limit, offset);
+        const finalQuery = `
+            SELECT * FROM (
+                ${queries.join(' UNION ALL ')}
+            ) combined_positions
+            ORDER BY created_at DESC 
+            LIMIT $2 OFFSET $3
+        `;
 
-        const finalQuery = queries.join(' UNION ALL ') + ` ORDER BY created_at DESC LIMIT $2 OFFSET $3`;
         const countQuery = `SELECT COUNT(*) as count FROM (${countQueries.join(' UNION ALL ')}) as combined_count`;
 
-        const data = await this.dataSource.query(finalQuery, queryParams);
+        const data = await this.dataSource.query(finalQuery, [accountId, limit, offset]);
         const countResult = await this.dataSource.query(countQuery, [accountId]);
 
-        const total = Number.parseInt(countResult[0]?.count || '0', 10);
-
-        return { data, total };
+        return {
+            data,
+            total: Number.parseInt(countResult[0]?.count || '0', 10)
+        };
     }
 }

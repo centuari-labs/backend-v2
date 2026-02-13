@@ -26,6 +26,7 @@ describe("TokensService", () => {
         const mockTokensRepository: jest.Mocked<TokensRepository> = {
             validateToken: jest.fn(),
             getActiveTokens: jest.fn(),
+            findByAssetId: jest.fn(),
         } as any;
 
         const module: TestingModule = await Test.createTestingModule({
@@ -46,63 +47,126 @@ describe("TokensService", () => {
         jest.clearAllMocks();
     });
 
-    describe("validateToken", () => {
-        it("should return token for valid active address", async () => {
-            tokensRepository.validateToken.mockResolvedValue(mockToken);
+    describe("validateTokenByAssetId (primary path)", () => {
+        it("should return token for valid asset id", async () => {
+            tokensRepository.getActiveTokens.mockResolvedValue([]);
+            tokensRepository.findByAssetId.mockResolvedValue(mockToken);
 
-            const result = await service.validateToken(mockToken.tokenAddress);
+            const result = await service.validateTokenByAssetId(mockToken.id);
 
             expect(result).toEqual(mockToken);
-            expect(tokensRepository.validateToken).toHaveBeenCalledWith(
-                mockToken.tokenAddress,
+            expect(tokensRepository.findByAssetId).toHaveBeenCalledWith(
+                mockToken.id,
             );
         });
 
-        it("should throw BadRequestException for unknown token address", async () => {
-            tokensRepository.validateToken.mockResolvedValue(null);
+        it("should throw BadRequestException for unknown asset id", async () => {
+            tokensRepository.getActiveTokens.mockResolvedValue([]);
+            tokensRepository.findByAssetId.mockResolvedValue(null);
 
             await expect(
-                service.validateToken("0xUnknownToken12345678901234567890123456"),
+                service.validateTokenByAssetId("unknown-asset-id"),
             ).rejects.toThrow(BadRequestException);
         });
 
-        it("should include error message with token address", async () => {
-            const unknownAddress = "0xUnknownToken12345678901234567890123456";
-            tokensRepository.validateToken.mockResolvedValue(null);
+        it("should include error message with asset id", async () => {
+            const unknownAssetId = "unknown-asset-id";
+            tokensRepository.getActiveTokens.mockResolvedValue([]);
+            tokensRepository.findByAssetId.mockResolvedValue(null);
 
-            await expect(service.validateToken(unknownAddress)).rejects.toThrow(
-                `Token ${unknownAddress} is not supported`,
-            );
+            await expect(
+                service.validateTokenByAssetId(unknownAssetId),
+            ).rejects.toThrow(`Token ${unknownAssetId} is not supported`);
         });
 
         it("should return avg_ltv from database for loan tokens", async () => {
             const loanTokenWithAvgLtv = { ...mockToken, averageLTV: 0.75 };
-            tokensRepository.validateToken.mockResolvedValue(
+            tokensRepository.getActiveTokens.mockResolvedValue([]);
+            tokensRepository.findByAssetId.mockResolvedValue(
                 loanTokenWithAvgLtv as Token,
             );
 
-            const result = await service.validateToken(mockToken.tokenAddress);
+            const result = await service.validateTokenByAssetId(mockToken.id);
 
             expect(result.averageLTV).toBe(0.75);
         });
 
         it("should return null avg_ltv when no risk records exist", async () => {
             const loanTokenWithNullAvgLtv = { ...mockToken, averageLTV: null };
-            tokensRepository.validateToken.mockResolvedValue(
+            tokensRepository.getActiveTokens.mockResolvedValue([]);
+            tokensRepository.findByAssetId.mockResolvedValue(
                 loanTokenWithNullAvgLtv as Token,
             );
 
-            const result = await service.validateToken(mockToken.tokenAddress);
+            const result = await service.validateTokenByAssetId(mockToken.id);
 
             expect(result.averageLTV).toBeNull();
         });
     });
 
+    describe("asset-id-based cache", () => {
+        it("should load all tokens into cache on first access", async () => {
+            tokensRepository.getActiveTokens.mockResolvedValue([mockToken]);
+            tokensRepository.findByAssetId.mockResolvedValue(mockToken);
+
+            const result = await service.validateTokenByAssetId(mockToken.id);
+
+            expect(tokensRepository.getActiveTokens).toHaveBeenCalledTimes(1);
+            expect(result).toEqual(mockToken);
+        });
+
+        it("should return token from cache when available", async () => {
+            tokensRepository.getActiveTokens.mockResolvedValue([mockToken]);
+            tokensRepository.findByAssetId.mockResolvedValue(null);
+
+            // First call will populate cache via getActiveTokens
+            await service.validateTokenByAssetId(mockToken.id);
+            tokensRepository.findByAssetId.mockClear();
+
+            // Second call should hit cache only
+            const result = await service.validateTokenByAssetId(mockToken.id);
+
+            expect(result).toEqual(mockToken);
+            expect(tokensRepository.findByAssetId).not.toHaveBeenCalled();
+        });
+
+        it("should fall back to DB when token not in cache", async () => {
+            tokensRepository.getActiveTokens.mockResolvedValue([]);
+            tokensRepository.findByAssetId.mockResolvedValue(mockToken);
+
+            const result = await service.validateTokenByAssetId(mockToken.id);
+
+            expect(tokensRepository.findByAssetId).toHaveBeenCalledWith(
+                mockToken.id,
+            );
+            expect(result).toEqual(mockToken);
+        });
+
+        it("should throw BadRequestException for unknown asset id", async () => {
+            tokensRepository.getActiveTokens.mockResolvedValue([]);
+            tokensRepository.findByAssetId.mockResolvedValue(null);
+
+            await expect(
+                service.validateTokenByAssetId("unknown-asset-id"),
+            ).rejects.toThrow(BadRequestException);
+        });
+
+        it("should return decimals via getTokenDecimalsByAssetId", async () => {
+            tokensRepository.getActiveTokens.mockResolvedValue([mockToken]);
+            tokensRepository.findByAssetId.mockResolvedValue(mockToken);
+
+            const decimals = await service.getTokenDecimalsByAssetId(mockToken.id);
+
+            expect(decimals).toBe(mockToken.decimals);
+        });
+    });
+
     describe("token data integrity", () => {
         it("should return complete token data with all fields", async () => {
-            tokensRepository.validateToken.mockResolvedValue(mockToken);
+            tokensRepository.getActiveTokens.mockResolvedValue([]);
+            tokensRepository.findByAssetId.mockResolvedValue(mockToken);
 
-            const result = await service.validateToken(mockToken.tokenAddress);
+            const result = await service.validateTokenByAssetId(mockToken.id);
 
             expect(result).toHaveProperty("id");
             expect(result).toHaveProperty("tokenAddress");
@@ -117,11 +181,12 @@ describe("TokensService", () => {
 
         it("should handle token with null chainId", async () => {
             const tokenWithNullChainId = { ...mockToken, chainId: null };
-            tokensRepository.validateToken.mockResolvedValue(
+            tokensRepository.getActiveTokens.mockResolvedValue([]);
+            tokensRepository.findByAssetId.mockResolvedValue(
                 tokenWithNullChainId as Token,
             );
 
-            const result = await service.validateToken(mockToken.tokenAddress);
+            const result = await service.validateTokenByAssetId(mockToken.id);
 
             expect(result.chainId).toBeNull();
         });

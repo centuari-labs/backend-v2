@@ -14,11 +14,11 @@ export class TokensRepository {
         return this.tokensRepository.findOne({ where: { tokenAddress } });
     }
 
-    async findById(id: string): Promise<Token | null> {
-        return this.tokensRepository.findOne({
-            where: { id },
-            select: ['id', 'tokenAddress'],
-        });
+    /**
+     * Lookup a token by its asset id (primary key on the assets table).
+     */
+    async findByAssetId(assetId: string): Promise<Token | null> {
+        return this.tokensRepository.findOne({ where: { id: assetId } });
     }
 
     async getActiveTokens(tokenAddress?: string): Promise<Token[]> {

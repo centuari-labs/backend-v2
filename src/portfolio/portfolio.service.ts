@@ -29,7 +29,7 @@ export class PortfolioService {
         const priceMap = new Map<string, number>();
 
         for (const asset of assets) {
-            const price = allPrices[asset.tokenAddress.toLowerCase()];
+            const price = allPrices[asset.id.toLowerCase()];
             if (price !== undefined) {
                 priceMap.set(asset.id, price);
             }
@@ -48,7 +48,6 @@ export class PortfolioService {
             }
         }
 
-        // Calculate average APY weighted by amount or just simple average for now
         if (netAPY.length > 0) {
             const sumAPY = netAPY.reduce((sum, item) => sum + Number.parseFloat(item.net_apy), 0);
             totalNetAPY = sumAPY / netAPY.length;
@@ -72,7 +71,7 @@ export class PortfolioService {
         const priceMap = new Map<string, number>();
 
         for (const asset of assets) {
-            const price = allPrices[asset.tokenAddress.toLowerCase()];
+            const price = allPrices[asset.id.toLowerCase()];
             if (price !== undefined) {
                 priceMap.set(asset.id, price);
             }
@@ -136,7 +135,7 @@ export class PortfolioService {
 
         const data = userAssets.map((ua) => {
             const token = tokenMap.get(ua.asset_id);
-            const price = token ? allPrices[token.tokenAddress.toLowerCase()] : undefined;
+            const price = allPrices[ua.asset_id.toLowerCase()];
             const amount = Number.parseFloat(ua.amount);
 
             return {
@@ -173,7 +172,7 @@ export class PortfolioService {
         const allPrices = this.priceService.getPrices();
 
         const data = positions.map((position) => {
-            const price = allPrices[position.token_address?.toLowerCase()];
+            const price = allPrices[position.asset_id.toLowerCase()];
             const quantity = Number.parseFloat(position.quantity);
 
             return {

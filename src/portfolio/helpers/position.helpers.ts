@@ -2,12 +2,12 @@
 export function calculateUsdAmount(
     amount: string | number,
     price: number | undefined
-): string {
+): number {
     if (price === undefined) {
-        return '0.00';
+        return 0;
     }
     const numAmount = typeof amount === 'string' ? Number.parseFloat(amount) : amount;
-    return (numAmount * price).toFixed(2);
+    return Number((numAmount * price).toFixed(2));
 }
 
 export function createPaginatedResponse<T>(

@@ -55,9 +55,9 @@ export class PortfolioService {
         }
 
         return {
-            totalDeposit: totalBalanceUsd.toFixed(2),
+            totalDeposit: totalBalanceUsd,
             netAPY: Number(totalNetAPY.toFixed(2)),
-            allTimeReturn: "0.00",
+            allTimeReturn: 0,
         };
     }
 
@@ -101,9 +101,9 @@ export class PortfolioService {
         const healthFactorValue = borrowedAmountUsd > 0 ? (suppliedAmountUsd / borrowedAmountUsd) : 0;
 
         return {
-            suppliedAssets: suppliedAmountUsd.toFixed(2),
-            borrowedAssets: Number(borrowedAmountUsd.toFixed(2)),
-            healthFactor: Number(healthFactorValue.toFixed(2)),
+            suppliedAssets: suppliedAmountUsd,
+            borrowedAssets: borrowedAmountUsd,
+            healthFactor: healthFactorValue,
         };
     }
 
@@ -142,9 +142,9 @@ export class PortfolioService {
             return {
                 symbol: token?.symbol || "UNKNOWN",
                 name: token?.name || "Unknown Token",
-                walletBalance: amount.toString(),
+                walletBalance: amount,
                 amountInUsd: calculateUsdAmount(amount, price ?? 0),
-                isCollateral: ua.is_collateral,
+                isCollateral: !!ua.is_collateral,
             };
         });
 
@@ -179,7 +179,7 @@ export class PortfolioService {
             return {
                 symbol: position.symbol,
                 name: position.name,
-                walletBalance: quantity.toString(),
+                walletBalance: quantity,
                 amountInUsd: calculateUsdAmount(quantity, price ?? 0),
                 isCollateral: false,
             };

@@ -1,9 +1,9 @@
 export class TotalBalanceDto {
-    totalDeposit: string;
+    totalDeposit: number;
 }
 
 export class AllTimeReturnDto {
-    allTimeReturn: string;
+    allTimeReturn: number;
 }
 
 export class NetAPYDto {
@@ -11,8 +11,8 @@ export class NetAPYDto {
 }
 
 export class MyPortfolioResponseDto {
-    totalDeposit: string;
-    allTimeReturn: string;
+    totalDeposit: number;
+    allTimeReturn: number;
     netAPY: number;
 }
 
@@ -21,14 +21,14 @@ export class healthFactorDto {
 }
 
 export class LendBorrowAssetResponseDto {
-    suppliedAssets: string;
+    suppliedAssets: number;
     borrowedAssets: number;
     healthFactor: number;
 }
 
 export class MyAssetDto {
     assetsId: string;
-    amountInUsd: string;
+    amountInUsd: number;
     isCollateral: boolean;
 }
 
@@ -41,8 +41,8 @@ export class GetMyAssetsQueryDto {
 export class MyAssetItemDto {
     symbol: string;
     name: string;
-    walletBalance: string;
-    amountInUsd: string;
+    walletBalance: number;
+    amountInUsd: number;
     isCollateral: boolean;
 }
 
@@ -63,7 +63,7 @@ export class MyPositionCollateralDto {
 }
 
 export class MyPositionAmountInUsdDto {
-    amountInUsd: string;
+    amountInUsd: number;
 }
 
 export class MyPositionQueryDto {
@@ -77,8 +77,8 @@ export class MyPositionQueryDto {
 export class MyPositionItemDto {
     symbol: string;
     name: string;
-    walletBalance: string;
-    amountInUsd: string;
+    walletBalance: number;
+    amountInUsd: number;
     isCollateral: boolean;
 }
 

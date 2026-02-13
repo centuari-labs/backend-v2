@@ -12,7 +12,6 @@ import { Logger } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
 import { NatsService } from '../nats/nats.service';
 import type { OrderBookSnapshotDto } from './dto/orderbook-snapshot.dto';
-import type { MatchNotificationDto } from './dto/match-notification.dto';
 import type { OrderStatusUpdateDto } from './dto/order-status-update.dto';
 import type { OrderErrorDto } from './dto/order-error.dto';
 import type {
@@ -52,51 +51,50 @@ export class EventsGateway
   }
 
   private setupNatsSubscriptions() {
-    this.subscribeToOrderbookSnapshots();
-    this.subscribeToMatches();
+    this.subscribeToOrderCreates();
+    this.subscribeToOrderCancels();
     this.subscribeToOrderStatusUpdates();
-    this.subscribeToOrderErrors();
+    this.subscribeToErrors();
   }
 
-  private async subscribeToOrderbookSnapshots() {
+  private async subscribeToOrderCreates() {
     try {
-      await this.natsService.subscribe<OrderBookSnapshotDto>(
-        'orderbook.snapshot',
-        (data) => {
-          const roomKey = `orderbook:${data.loanToken}:${data.maturity}`;
-          
-          // Cache the snapshot
-          this.orderbookCache.set(roomKey, data);
-          
-          // Broadcast to room
-          this.server.to(roomKey).emit('orderbook-update', data);
-          
-          this.logger.debug(
-            `Broadcasted orderbook snapshot to room ${roomKey}`,
-          );
-        },
+      const subjects = [
+        'orders.lend.market',
+        'orders.lend.limit',
+        'orders.borrow.market',
+        'orders.borrow.limit',
+      ];
+
+      await Promise.all(
+        subjects.map((subject) =>
+          this.natsService.subscribe<Record<string, unknown>>(
+            subject,
+            (data) => {
+              this.server.emit(subject, data);
+              this.logger.debug(`Broadcasted ${subject} event`);
+            },
+          ),
+        ),
       );
-      this.logger.log('Subscribed to orderbook.snapshot');
+      this.logger.log('Subscribed to order create topics');
     } catch (error) {
-      this.logger.error('Failed to subscribe to orderbook.snapshot', error);
+      this.logger.error('Failed to subscribe to order create topics', error);
     }
   }
 
-  private async subscribeToMatches() {
+  private async subscribeToOrderCancels() {
     try {
-      await this.natsService.subscribe<MatchNotificationDto>(
-        'matches.created',
+      await this.natsService.subscribe<Record<string, unknown>>(
+        'orders.cancel',
         (data) => {
-          // Broadcast match notification to all relevant rooms
-          // You may want to extract loanToken/maturity from the order data
-          this.server.emit('match-created', data);
-          
-          this.logger.debug(`Broadcasted match for order ${data.orderId}`);
+          this.server.emit('orders.cancel', data);
+          this.logger.debug('Broadcasted orders.cancel event');
         },
       );
-      this.logger.log('Subscribed to matches.created');
+      this.logger.log('Subscribed to orders.cancel');
     } catch (error) {
-      this.logger.error('Failed to subscribe to matches.created', error);
+      this.logger.error('Failed to subscribe to orders.cancel', error);
     }
   }
 
@@ -120,10 +118,10 @@ export class EventsGateway
     }
   }
 
-  private async subscribeToOrderErrors() {
+  private async subscribeToErrors() {
     try {
       await this.natsService.subscribe<OrderErrorDto>(
-        'orders.error',
+        'errors',
         (data) => {
           // Broadcast to user-specific room if accountId exists
           if (data.accountId) {
@@ -136,9 +134,9 @@ export class EventsGateway
           );
         },
       );
-      this.logger.log('Subscribed to orders.error');
+      this.logger.log('Subscribed to errors');
     } catch (error) {
-      this.logger.error('Failed to subscribe to orders.error', error);
+      this.logger.error('Failed to subscribe to errors', error);
     }
   }
 

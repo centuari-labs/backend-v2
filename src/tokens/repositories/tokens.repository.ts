@@ -10,15 +10,24 @@ export class TokensRepository {
         private readonly tokensRepository: Repository<Token>,
     ) { }
 
-    async validateToken(tokenAddress: string): Promise<Token> {
-        const token = await this.tokensRepository.findOne({ where: { tokenAddress } });
-        if (!token) {
-            throw new Error("Token not found");
-        }
-        return token;
+    async validateToken(tokenAddress: string): Promise<Token | null> {
+        return this.tokensRepository.findOne({ where: { tokenAddress } });
+    }
+
+    /**
+     * Lookup a token by its asset id (primary key on the assets table).
+     */
+    async findByAssetId(assetId: string): Promise<Token | null> {
+        return this.tokensRepository.findOne({ where: { id: assetId } });
     }
 
     async getActiveTokens(tokenAddress?: string): Promise<Token[]> {
-        return this.tokensRepository.find({ where: { tokenAddress: ILike(`%${tokenAddress}%`) } });
+        if (tokenAddress) {
+            return this.tokensRepository.find({
+                where: { tokenAddress: ILike(`%${tokenAddress}%`) },
+            });
+        }
+
+        return this.tokensRepository.find();
     }
 }

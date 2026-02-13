@@ -20,6 +20,7 @@ describe("CoinGeckoProvider (integration)", () => {
         chainId: 84532,
         averageLTV: 0.75,
         coingeckoId: "usd-coin",
+        decimals: 6,
         createdAt: new Date(),
         updatedAt: new Date(),
         ...overrides,
@@ -42,6 +43,7 @@ describe("CoinGeckoProvider (integration)", () => {
                     tokenAddress: "0xeth1234567890abcdef1234567890abcdef12",
                     symbol: "ETH",
                     coingeckoId: "ethereum",
+                    decimals: 18,
                 }),
             ];
 

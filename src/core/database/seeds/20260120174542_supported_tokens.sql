@@ -23,31 +23,31 @@ SELECT
     collateral.id,
     loan.id,
     CASE collateral.symbol
-        WHEN 'BTC' THEN 0.75
-        WHEN 'ETH' THEN 0.75
-        WHEN 'XAUT' THEN 0.70
-        WHEN 'SLVon' THEN 0.70
-        WHEN 'NVDAon' THEN 0.60
-        WHEN 'AAPLon' THEN 0.60
-        WHEN 'TLTon' THEN 0.80
+        WHEN 'BTC' THEN 7500
+        WHEN 'ETH' THEN 7500
+        WHEN 'XAUT' THEN 7000
+        WHEN 'SLVon' THEN 7000
+        WHEN 'NVDAon' THEN 6000
+        WHEN 'AAPLon' THEN 6000
+        WHEN 'TLTon' THEN 8000
     END as ltv,
     CASE collateral.symbol
-        WHEN 'BTC' THEN 0.80
-        WHEN 'ETH' THEN 0.80
-        WHEN 'XAUT' THEN 0.75
-        WHEN 'SLVon' THEN 0.75
-        WHEN 'NVDAon' THEN 0.65
-        WHEN 'AAPLon' THEN 0.65
-        WHEN 'TLTon' THEN 0.85
+        WHEN 'BTC' THEN 8000
+        WHEN 'ETH' THEN 8000
+        WHEN 'XAUT' THEN 7500
+        WHEN 'SLVon' THEN 7500
+        WHEN 'NVDAon' THEN 6500
+        WHEN 'AAPLon' THEN 6500
+        WHEN 'TLTon' THEN 8500
     END as lt,
     CASE collateral.symbol
-        WHEN 'BTC' THEN 0.10
-        WHEN 'ETH' THEN 0.10
-        WHEN 'XAUT' THEN 0.10
-        WHEN 'SLVon' THEN 0.10
-        WHEN 'NVDAon' THEN 0.15
-        WHEN 'AAPLon' THEN 0.15
-        WHEN 'TLTon' THEN 0.05
+        WHEN 'BTC' THEN 1000
+        WHEN 'ETH' THEN 1000
+        WHEN 'XAUT' THEN 1000
+        WHEN 'SLVon' THEN 1000
+        WHEN 'NVDAon' THEN 1500
+        WHEN 'AAPLon' THEN 1500
+        WHEN 'TLTon' THEN 500
     END as lp
 FROM assets collateral
 CROSS JOIN assets loan

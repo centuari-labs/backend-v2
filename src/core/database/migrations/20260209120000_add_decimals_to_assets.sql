@@ -3,7 +3,7 @@
 
 -- +goose Up
 
-ALTER TABLE assets ADD COLUMN IF NOT EXISTS decimals INTEGER NULL;
+ALTER TABLE assets ADD COLUMN IF NOT EXISTS decimals INTEGER NOT NULL DEFAULT 18;
 
 -- +goose Down
 

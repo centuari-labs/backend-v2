@@ -60,6 +60,9 @@ export class Order {
     @Index()
     status: OrderStatus;
 
+    @Column({ name: "auto_rollover", type: "boolean", default: false })
+    autoRollover: boolean;
+
     @CreateDateColumn({ name: "created_at" })
     createdAt: Date;
 

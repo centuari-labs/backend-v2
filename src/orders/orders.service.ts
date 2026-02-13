@@ -1,6 +1,7 @@
 import {
     BadRequestException,
     ForbiddenException,
+    HttpStatus,
     Injectable,
     Logger,
     NotFoundException,
@@ -13,12 +14,16 @@ import {
     OrderSide,
     OrderStatus,
     OrderType,
+    SETTLEMENT_FEE_MAX_CAP_USD,
+    SETTLEMENT_FEE_RATE_BPS,
 } from "./constants/order.constants";
 import type { CreateBorrowLimitOrderDto } from "./dto/create-borrow-limit-order.dto";
 import type { CreateBorrowMarketOrderDto } from "./dto/create-borrow-market-order.dto";
 import type { CreateLendLimitOrderDto } from "./dto/create-lend-limit-order.dto";
 import type { CreateLendMarketOrderDto } from "./dto/create-lend-market-order.dto";
+import { OrderResponse } from "./dto/order-response.dto";
 import { Order } from "./entities/order.entity";
+import { toPercentage, humanToBaseUnits, calculateSettlementFee } from "../common/utils/number.utils";
 import { OrderRepository } from "./repositories/order.repository";
 
 @Injectable()
@@ -27,143 +32,143 @@ export class OrdersService {
 
     constructor(
         private readonly orderRepository: OrderRepository,
-        private readonly priceService: PriceService,
         private readonly tokensService: TokensService,
         private readonly natsService: NatsService,
+        private readonly priceService: PriceService,
     ) { }
-
-    //@todo : need to make sure to convert to token decimals
-    /**
-     * Get the current USD price for a token by address.
-     * Uses the in-memory price cache (populated by interval worker).
-     */
-    async getTokenPriceInUsd(tokenAddress: string): Promise<number | null> {
-        return this.priceService.getPrice(tokenAddress);
-    }
 
     async getOrCreateAccount(walletAddress: string, privyUserId: string): Promise<string> {
         const account = await this.orderRepository.getOrCreateAccount(walletAddress, privyUserId);
         return account.id;
     }
 
-    async getAssetId(tokenAddress: string): Promise<string> {
-        const assetId = await this.orderRepository.getAssetId(tokenAddress);
-        if (!assetId) {
-            throw new NotFoundException(`Asset for token ${tokenAddress} not found`);
-        }
-        return assetId.id;
-    }
-
     async createLendMarketOrder(
         dto: CreateLendMarketOrderDto,
         walletAddress: string,
         privyUserId: string,
-    ): Promise<Order> {
-        // Validate loan token exists
-        await this.tokensService.validateToken(dto.loanToken);
+    ): Promise<OrderResponse> {
         const accountId = await this.getOrCreateAccount(walletAddress, privyUserId);
-        const assetId = await this.getAssetId(dto.loanToken);
+        
+        await this.tokensService.validateTokenByAssetId(dto.assetId);
+        const decimals = await this.tokensService.getTokenDecimalsByAssetId(dto.assetId);
+        const quantityBaseUnits = humanToBaseUnits(dto.amount, decimals!);
+        const settlementFee = await this.computeSettlementFee(dto.assetId, dto.amount, decimals!);
 
         const order = this.orderRepository.create({
             accountId,
-            assetId,
+            assetId: dto.assetId,
             side: OrderSide.Lend,
             type: OrderType.Market,
-            quantity: dto.amount,
-            settlementFee: "0",
+            quantity: quantityBaseUnits,
+            settlementFee,
             status: OrderStatus.Open,
             rate: 0,
+            autoRollover: dto.autoRollover ?? false,
         });
+
+        //@todo : should also insert into order market table
 
         const savedOrder = await this.orderRepository.save(order);
 
         await this.publishOrderToNats(NATS_SUBJECTS.LEND_MARKET, savedOrder);
 
-        return savedOrder;
+        return this.mapToResponse(savedOrder, dto, walletAddress);
     }
 
     async createLendLimitOrder(
         dto: CreateLendLimitOrderDto,
         walletAddress: string,
         privyUserId: string,
-    ): Promise<Order> {
-        // Validate loan token exists
-        await this.tokensService.validateToken(dto.loanToken);
+    ): Promise<OrderResponse> {
         const accountId = await this.getOrCreateAccount(walletAddress, privyUserId);
-        const assetId = await this.getAssetId(dto.loanToken);
-
+        
+        await this.tokensService.validateTokenByAssetId(dto.assetId);
+        const decimals = await this.tokensService.getTokenDecimalsByAssetId(dto.assetId);
+        const quantityBaseUnits = humanToBaseUnits(dto.amount, decimals!);
+        const settlementFee = await this.computeSettlementFee(dto.assetId, dto.amount, decimals!);
         const order = this.orderRepository.create({
             accountId,
-            assetId,
+            assetId: dto.assetId,
             side: OrderSide.Lend,
             type: OrderType.Limit,
-            quantity: dto.amount,
-            settlementFee: "0",
+            quantity: quantityBaseUnits,
+            settlementFee,
             rate: dto.rate,
             status: OrderStatus.Open,
+            autoRollover: dto.autoRollover ?? false,
         });
 
         const savedOrder = await this.orderRepository.save(order);
 
         await this.publishOrderToNats(NATS_SUBJECTS.LEND_LIMIT, savedOrder);
 
-        return savedOrder;
+        return this.mapToResponse(savedOrder, dto, walletAddress);
     }
 
     async createBorrowMarketOrder(
         dto: CreateBorrowMarketOrderDto,
         walletAddress: string,
         privyUserId: string,
-    ): Promise<Order> {
-        // Validate loan token exists
-        await this.tokensService.validateToken(dto.loanToken);
+    ): Promise<OrderResponse> {
         const accountId = await this.getOrCreateAccount(walletAddress, privyUserId);
-        const assetId = await this.getAssetId(dto.loanToken);
+        await this.tokensService.validateTokenByAssetId(dto.assetId);
+
+        const decimals = await this.tokensService.getTokenDecimalsByAssetId(dto.assetId);
+        const quantityBaseUnits = humanToBaseUnits(dto.amount, decimals!);
+        const settlementFee = await this.computeSettlementFee(dto.assetId, dto.amount, decimals!);
+
+        //@todo : validate health factor
 
         const order = this.orderRepository.create({
             accountId,
-            assetId,
+            assetId: dto.assetId,
             side: OrderSide.Borrow,
             type: OrderType.Market,
-            quantity: dto.amount,
-            settlementFee: "0",
+            quantity: quantityBaseUnits,
+            settlementFee,
             status: OrderStatus.Open,
             rate: 0,
+            autoRollover: dto.autoRollover ?? false,
         });
 
         const savedOrder = await this.orderRepository.save(order);
 
         await this.publishOrderToNats(NATS_SUBJECTS.BORROW_MARKET, savedOrder);
 
-        return savedOrder;
+        return this.mapToResponse(savedOrder, dto, walletAddress);
     }
 
     async createBorrowLimitOrder(
         dto: CreateBorrowLimitOrderDto,
         walletAddress: string,
         privyUserId: string,
-    ): Promise<Order> {
-        // Validate loan token exists
-        await this.tokensService.validateToken(dto.loanToken);
+    ): Promise<OrderResponse> {
         const accountId = await this.getOrCreateAccount(walletAddress, privyUserId);
-        const assetId = await this.getAssetId(dto.loanToken);
+        await this.tokensService.validateTokenByAssetId(dto.assetId);
+
+        const decimals = await this.tokensService.getTokenDecimalsByAssetId(dto.assetId);
+        const quantityBaseUnits = humanToBaseUnits(dto.amount, decimals!);
+        const settlementFee = await this.computeSettlementFee(dto.assetId, dto.amount, decimals!);
+
+        //@todo : validate health factor
 
         const order = this.orderRepository.create({
             accountId,
-            assetId,
+            assetId: dto.assetId,
             side: OrderSide.Borrow,
             type: OrderType.Limit,
-            quantity: dto.amount,
-            settlementFee: "0",
+            quantity: quantityBaseUnits,
+            settlementFee,
             rate: dto.rate,
             status: OrderStatus.Open,
+            autoRollover: dto.autoRollover ?? false,
         });
 
         const savedOrder = await this.orderRepository.save(order);
 
         await this.publishOrderToNats(NATS_SUBJECTS.BORROW_LIMIT, savedOrder);
 
-        return savedOrder;
+        return this.mapToResponse(savedOrder, dto, walletAddress);
     }
 
     async cancelOrder(orderId: string, walletAddress: string): Promise<Order> {
@@ -207,9 +212,63 @@ export class OrdersService {
         return updatedOrder;
     }
 
+    private async computeSettlementFee(
+        assetId: string,
+        amountHuman: string,
+        decimals: number,
+    ): Promise<string> {
+        const price = await this.priceService.getPrice(assetId);
+        if (price == null || price <= 0) {
+            throw new BadRequestException("Price not available for this asset");
+        }
+
+        const amountNum = Number.parseFloat(amountHuman);
+        if (!Number.isFinite(amountNum) || amountNum <= 0) {
+            return "0";
+        }
+
+        const feeHuman = calculateSettlementFee(
+            amountNum,
+            price,
+            SETTLEMENT_FEE_RATE_BPS,
+            SETTLEMENT_FEE_MAX_CAP_USD,
+        );
+        // Ensure we do not lose precision when converting to base units
+        const feeAsString = feeHuman.toFixed(decimals);
+        return humanToBaseUnits(feeAsString, decimals);
+    }
+
+    private mapToResponse(
+        order: Order,
+        dto: CreateLendMarketOrderDto | CreateLendLimitOrderDto | CreateBorrowMarketOrderDto | CreateBorrowLimitOrderDto,
+        walletAddress: string,
+    ): OrderResponse {
+        return {
+            statusCode: HttpStatus.CREATED,
+            data: {
+                orderId: order.id,
+                walletAddress: walletAddress,
+                assetId: dto.assetId,
+                marketIds: dto.marketIds ?? [], //@todo : we should have keep the maturities and market ids into 1 object
+                maturities: [],
+                timestamp: new Date(order.createdAt).getTime(),
+                side: order.side,
+                type: order.type,
+                status: order.status,
+                originalAmount: dto.amount,
+                settlementFeeAmount: order.settlementFee,
+                // order.rate is stored as basis points in the DB; expose percentage in responses
+                rate: toPercentage(order.rate),
+                autoRollover: order.autoRollover,
+                createdAt: order.createdAt,
+                updatedAt: order.updatedAt,
+            },
+        };
+    }
+
     private async publishOrderToNats(
         subject: string,
-        order: Order,
+        order: Order, //@todo :should match with matching engine schema
     ): Promise<void> {
         try {
             await this.natsService.publish(subject, {

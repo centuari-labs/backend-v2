@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger, OnModuleInit } from "@nestjs/common";
-import { TokensService } from "../tokens/tokens.service";
 import { PRICE_PROVIDER, type IPriceProvider } from "./interfaces/price-provider.interface";
+import { TokensRepository } from "../tokens/repositories/tokens.repository";
 
 interface CacheEntry {
     price: number;
@@ -12,7 +12,7 @@ export class PriceService implements OnModuleInit {
     private readonly logger = new Logger(PriceService.name);
 
     /**
-     * In-memory cache: tokenAddress -> { price, updatedAt }
+     * In-memory cache: assetId (Token.id) -> { price, updatedAt }
      */
     private cache = new Map<string, CacheEntry>();
 
@@ -22,7 +22,7 @@ export class PriceService implements OnModuleInit {
     private initPromise: Promise<void> | null = null;
 
     constructor(
-        private readonly tokensService: TokensService,
+        private readonly tokensRepository: TokensRepository,
         @Inject(PRICE_PROVIDER) private readonly priceProvider: IPriceProvider,
     ) {}
 
@@ -31,12 +31,12 @@ export class PriceService implements OnModuleInit {
     }
 
     /**
-     * Get the current USD price for a token by address.
+     * Get the current USD price for a token by asset id.
      * Returns null if not found or cache not ready.
      * If cache is empty (cold start), triggers a fetch and awaits before returning.
      */
-    async getPrice(tokenAddress: string): Promise<number | null> {
-        const normalized = tokenAddress.toLowerCase();
+    async getPrice(assetId: string): Promise<number | null> {
+        const normalized = assetId.toLowerCase();
         const entry = this.cache.get(normalized);
 
         if (entry) {
@@ -60,7 +60,7 @@ export class PriceService implements OnModuleInit {
     }
 
     /**
-     * Get all cached prices: tokenAddress -> price
+     * Get all cached prices: assetId -> price
      */
     getPrices(): Record<string, number> {
         const result: Record<string, number> = {};
@@ -83,7 +83,7 @@ export class PriceService implements OnModuleInit {
      */
     async fetchAndUpdatePrices(): Promise<void> {
         try {
-            const tokens = await this.tokensService.getActiveTokens();
+            const tokens = await this.tokensRepository.getActiveTokens();
             if (tokens.length === 0) {
                 this.logger.warn("No tokens found, skipping price fetch");
                 return;
@@ -97,10 +97,10 @@ export class PriceService implements OnModuleInit {
             for (const token of tokens) {
                 const price = pricesBySymbol[token.symbol];
                 if (typeof price === "number") {
-                    const normalized = token.tokenAddress.toLowerCase();
-                    newCache.set(normalized, { price, updatedAt: now });
+                    const normalizedAssetId = token.id.toLowerCase();
+                    newCache.set(normalizedAssetId, { price, updatedAt: now });
                 } else {
-                    this.logger.debug(`No price for token ${token.symbol} (${token.tokenAddress})`);
+                    this.logger.debug(`No price for token ${token.symbol} (assetId: ${token.id}, address: ${token.tokenAddress})`);
                 }
             }
 

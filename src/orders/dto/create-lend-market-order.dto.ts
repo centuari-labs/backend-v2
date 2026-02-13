@@ -1,10 +1,11 @@
 import {
     ArrayMinSize,
     IsArray,
-    IsInt,
     IsNotEmpty,
     IsString,
-    Min,
+    IsBoolean,
+    IsOptional,
+    IsUUID,
 } from "class-validator";
 import {
     IsMinAmount,
@@ -14,7 +15,7 @@ import {
 export class CreateLendMarketOrderDto {
     @IsString()
     @IsNotEmpty()
-    loanToken: string;
+    assetId: string;
 
     @IsString()
     @IsNotEmpty()
@@ -24,11 +25,22 @@ export class CreateLendMarketOrderDto {
     @IsMinAmount(1, { message: "amount must be at least 1 USD" })
     amount: string;
 
+    /**
+     * List of market IDs (UUIDs) this order targets.
+     * Each ID references the `markets.id` column.
+     */
     @IsArray()
-    @IsInt({ each: true })
-    @Min(1, { each: true, message: "Maturity must be a positive integer" })
-    @ArrayMinSize(1, { message: "At least one maturity date is required" })
-    maturities: number[];
+    @IsString({ each: true })
+    @IsNotEmpty({ each: true })
+    @IsUUID(undefined, { each: true })
+    @ArrayMinSize(1, {
+        message: "At least one marketId is required",
+    })
+    marketIds: string[];
+
+    @IsOptional()
+    @IsBoolean()
+    autoRollover?: boolean;
 }
 
 

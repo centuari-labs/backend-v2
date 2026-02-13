@@ -1,45 +1,117 @@
-import { Injectable, BadRequestException } from "@nestjs/common";
-import { InjectRepository } from "@nestjs/typeorm";
-import { ILike, Repository } from "typeorm";
+import { BadRequestException, Injectable, Logger, OnModuleInit } from "@nestjs/common";
 import { Token } from "./entities/token.entity";
+import { TokensRepository } from "./repositories/tokens.repository";
 
 @Injectable()
-export class TokensService {
-    constructor(
-        @InjectRepository(Token)
-        private readonly tokenRepository: Repository<Token>,
-    ) {}
+export class TokensService implements OnModuleInit {
+    private readonly logger = new Logger(TokensService.name);
 
     /**
-     * Validates that a token address exists and is active in the database
+     * In-memory cache of tokens keyed by asset id (Token.id).
+     */
+    private cache = new Map<string, Token>();
+
+    /**
+     * Lazy initialization guard so concurrent callers share the same init promise.
+     */
+    private initPromise: Promise<void> | null = null;
+
+    constructor(
+        private readonly tokenRepository: TokensRepository,
+    ) { }
+
+    async onModuleInit(): Promise<void> {
+        // Eagerly warm the cache on startup. This can be changed to rely purely on
+        // lazy initialization if needed for startup performance.
+        await this.loadAllTokensIntoCache();
+    }
+
+    /**
+     * Load all active tokens from the database and populate the in-memory cache
+     * keyed by asset id (Token.id).
+     */
+    private async loadAllTokensIntoCache(): Promise<void> {
+        const tokens = await this.tokenRepository.getActiveTokens();
+
+        const newCache = new Map<string, Token>();
+        for (const token of tokens) {
+            const key = token.id.toLowerCase();
+            newCache.set(key, token);
+        }
+
+        this.cache = newCache;
+        this.logger.debug(`Token cache loaded with ${this.cache.size} assets`);
+    }
+
+    /**
+     * Ensure the cache has been initialized. If already populated, this is a no-op.
+     * If initialization is in progress, wait for it; otherwise start it.
+     */
+    private async ensureCacheInitialized(): Promise<void> {
+        if (this.cache.size > 0) {
+            return;
+        }
+
+        if (this.initPromise) {
+            await this.initPromise;
+            return;
+        }
+
+        this.initPromise = this.loadAllTokensIntoCache();
+        try {
+            await this.initPromise;
+        } finally {
+            this.initPromise = null;
+        }
+    }
+
+    /**
+     * Get a token from the in-memory cache using its asset id.
+     */
+    private getTokenFromCacheByAssetId(assetId: string): Token | null {
+        const key = assetId.toLowerCase();
+        return this.cache.get(key) ?? null;
+    }
+
+    /**
+     * Validate that a token exists by its asset id (Token.id) using the cache
+     * with a lazy DB fallback.
+     *
      * @throws BadRequestException if token is not supported
      */
-    async validateToken(address: string): Promise<Token> {
-        const token = await this.tokenRepository.findOne({
-            where: { tokenAddress: ILike(address) },
-        });
+    async validateTokenByAssetId(assetId: string): Promise<Token> {
+        await this.ensureCacheInitialized();
 
-        if (!token) {
-            throw new BadRequestException(`Token ${address} is not supported`);
+        const cached = this.getTokenFromCacheByAssetId(assetId);
+        if (cached) {
+            return cached;
         }
+
+        const token = await this.tokenRepository.findByAssetId(assetId);
+        if (!token) {
+            throw new BadRequestException(`Token ${assetId} is not supported`);
+        }
+
+        const key = token.id.toLowerCase();
+        this.cache.set(key, token);
 
         return token;
     }
 
     /**
-     * Get all active tokens
+     * Get token decimals by asset id (Token.id) using the cache-backed validator.
+     *
+     * @throws BadRequestException if token is not supported
      */
-    async getActiveTokens(): Promise<Token[]> {
-        return this.tokenRepository.find();
+    async getTokenDecimalsByAssetId(assetId: string): Promise<number | null> {
+        const token = await this.validateTokenByAssetId(assetId);
+        return token.decimals ?? null;
     }
 
     /**
-     * Check if a token is supported without throwing
+     * Convenience helper to retrieve a token by asset id.
      */
-    async isTokenSupported(address: string): Promise<boolean> {
-        const count = await this.tokenRepository.count({
-            where: { tokenAddress: ILike(address) },
-        });
-        return count > 0;
+    async getTokenByAssetId(assetId: string): Promise<Token> {
+        return this.validateTokenByAssetId(assetId);
     }
 }

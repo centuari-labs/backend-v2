@@ -3,7 +3,7 @@ import "dotenv/config";
 import { readdirSync, readFileSync } from "node:fs";
 import { Client } from "pg";
 
-async function runSeeds() {
+export async function runSeeds() {
     const client = new Client({ connectionString: process.env.DATABASE_URL });
     await client.connect();
 
@@ -35,7 +35,10 @@ async function runSeeds() {
     console.log("🎉 All seeds executed!");
 }
 
-runSeeds().catch((e) => {
-    console.error(e);
-    process.exit(1);
-});
+// Run when executed directly (e.g. pnpm db seed:run)
+if (process.argv[1]?.includes("run-seed")) {
+    runSeeds().catch((e) => {
+        console.error(e);
+        process.exit(1);
+    });
+}

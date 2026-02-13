@@ -2,8 +2,11 @@ import { NestFactory } from "@nestjs/core";
 import { AppModule } from "./app.module";
 import { AllExceptionsFilter } from "./common/filters/http-exception.filter";
 import { ResponseInterceptor } from "./common/interceptors/response.interceptor";
+import { runMigrations } from "./core/database/scripts/run-migration";
 
 async function bootstrap() {
+    await runMigrations();
+
     const app = await NestFactory.create(AppModule);
 
     app.useGlobalInterceptors(new ResponseInterceptor());

@@ -27,6 +27,7 @@ export class CreateBorrowMarketOrderDto {
     @IsMinAmount(1, { message: "amount must be at least 1 USD" })
     amount: string;
 
+    //@todo : should have been using market id, instead of maturity timestamps
     /**
      * List of market maturities as Unix timestamps (seconds).
      */

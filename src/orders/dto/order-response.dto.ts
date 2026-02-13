@@ -8,7 +8,7 @@ export interface OrderResponseData {
     /**
      * Maturities for the order as Unix timestamps (seconds).
      */
-    maturities: number[];
+    maturities: number[]; //@todo : should be maturities from market table
     timestamp: number;
     side: OrderSide;
     type: OrderType;

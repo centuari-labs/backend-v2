@@ -103,8 +103,7 @@ describe('OrdersService', () => {
         const lendLimitDto: CreateLendLimitOrderDto = {
             assetId: mockAssetId,
             amount: '1000',
-            // maturities are Unix timestamps (seconds)
-            maturities: [1704067200],
+            marketIds: ['550e8400-e29b-41d4-a716-446655440000'],
             rate: 500,
         };
 
@@ -129,6 +128,8 @@ describe('OrdersService', () => {
             expect(result.data.type).toBe(OrderType.Limit);
             expect(result.data.rate).toBe(5); // 500 basis points = 5%
             expect(result.data.autoRollover).toBe(false);
+            expect(result.data.marketIds).toEqual(lendLimitDto.marketIds);
+            expect(result.data.maturities).toEqual([]);
         });
 
         it('should compute and pass settlement fee based on price', async () => {
@@ -253,8 +254,7 @@ describe('OrdersService', () => {
         const lendMarketDto: CreateLendMarketOrderDto = {
             assetId: mockAssetId,
             amount: '1000',
-            // maturities are Unix timestamps (seconds)
-            maturities: [1704067200],
+            marketIds: ['550e8400-e29b-41d4-a716-446655440000'],
         };
 
         it('should create a lend market order with 0 rate', async () => {
@@ -278,6 +278,8 @@ describe('OrdersService', () => {
             expect(result.data.type).toBe(OrderType.Market);
             expect(result.data.rate).toBe(0);
             expect(result.data.autoRollover).toBe(false);
+            expect(result.data.marketIds).toEqual(lendMarketDto.marketIds);
+            expect(result.data.maturities).toEqual([]);
         });
 
         it('should compute and pass settlement fee for lend market orders', async () => {
@@ -331,8 +333,7 @@ describe('OrdersService', () => {
         const borrowLimitDto: CreateBorrowLimitOrderDto = {
             assetId: mockAssetId,
             amount: '5000',
-            // maturities are Unix timestamps (seconds)
-            maturities: [1704067200],
+            marketIds: ['550e8400-e29b-41d4-a716-446655440000'],
             rate: 750,
         };
 
@@ -358,6 +359,8 @@ describe('OrdersService', () => {
             expect(result.data.type).toBe(OrderType.Limit);
             expect(result.data.rate).toBe(7.5); // 750 basis points = 7.5%
             expect(result.data.autoRollover).toBe(false);
+            expect(result.data.marketIds).toEqual(borrowLimitDto.marketIds);
+            expect(result.data.maturities).toEqual([]);
         });
 
         it('should compute and pass settlement fee for borrow limit orders', async () => {
@@ -411,8 +414,7 @@ describe('OrdersService', () => {
         const borrowMarketDto: CreateBorrowMarketOrderDto = {
             assetId: mockAssetId,
             amount: '5000',
-            // maturities are Unix timestamps (seconds)
-            maturities: [1704067200],
+            marketIds: ['550e8400-e29b-41d4-a716-446655440000'],
         };
 
         it('should create a borrow market order with 0 rate', async () => {
@@ -436,6 +438,8 @@ describe('OrdersService', () => {
             expect(result.data.type).toBe(OrderType.Market);
             expect(result.data.rate).toBe(0);
             expect(result.data.autoRollover).toBe(false);
+            expect(result.data.marketIds).toEqual(borrowMarketDto.marketIds);
+            expect(result.data.maturities).toEqual([]);
         });
 
         it('should compute and pass settlement fee for borrow market orders', async () => {

@@ -1,18 +1,16 @@
 import {
     ArrayMinSize,
     IsArray,
-    IsInt,
     IsNotEmpty,
     IsString,
-    Min,
     IsBoolean,
     IsOptional,
+    IsUUID,
 } from "class-validator";
 import {
     IsMinAmount,
     IsPositiveNumericString,
 } from "../../common/validators/amount.validator";
-import { IsValidMaturities } from "../../common/validators/maturity.validator";
 
 export class CreateLendMarketOrderDto {
     @IsString()
@@ -27,24 +25,18 @@ export class CreateLendMarketOrderDto {
     @IsMinAmount(1, { message: "amount must be at least 1 USD" })
     amount: string;
 
-    //@todo : should have been using market id, instead of maturity timestamps
     /**
-     * List of market maturities as Unix timestamps (seconds).
+     * List of market IDs (UUIDs) this order targets.
+     * Each ID references the `markets.id` column.
      */
     @IsArray()
-    @IsInt({ each: true })
-    @Min(1, {
-        each: true,
-        message: "Maturity must be a positive Unix timestamp in seconds",
-    })
+    @IsString({ each: true })
+    @IsNotEmpty({ each: true })
+    @IsUUID(undefined, { each: true })
     @ArrayMinSize(1, {
-        message: "At least one maturity timestamp is required",
+        message: "At least one marketId is required",
     })
-    @IsValidMaturities({
-        message:
-            "Maturities must be on the 1st day of the next three calendar months (UTC).",
-    })
-    maturities: number[];
+    marketIds: string[];
 
     @IsOptional()
     @IsBoolean()

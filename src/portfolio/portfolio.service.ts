@@ -53,6 +53,8 @@ export class PortfolioService {
             totalNetAPY = sumAPY / netAPY.length;
         }
 
+        //@todo : need to return user's all time return
+        //@todo : need to return user's portofolio allocation percentages
         return {
             totalDeposit: totalBalanceUsd,
             netAPY: Number(totalNetAPY.toFixed(2)),
@@ -70,6 +72,7 @@ export class PortfolioService {
         const allPrices = this.priceService.getPrices();
         const priceMap = new Map<string, number>();
 
+        //@todo : no need to use this anymore, we can just get the price from the price service directly instead
         for (const asset of assets) {
             const price = allPrices[asset.id.toLowerCase()];
             if (price !== undefined) {
@@ -86,6 +89,7 @@ export class PortfolioService {
         for (const asset of suppliedAssets) {
             const price = priceMap.get(asset.asset_id);
             if (price !== undefined) {
+                //@todo : need to divide amount with the asset decimal first
                 suppliedAmountUsd += Number.parseFloat(asset.amount) * price;
             }
         }
@@ -93,10 +97,12 @@ export class PortfolioService {
         for (const asset of borrowedAssets) {
             const price = priceMap.get(asset.asset_id);
             if (price !== undefined) {
+                //@todo : need to divide amount with the asset decimal first
                 borrowedAmountUsd += Number.parseFloat(asset.amount) * price;
             }
         }
-
+        
+        //@todo : need to change into real health factor formula
         const healthFactorValue = borrowedAmountUsd > 0 ? (suppliedAmountUsd / borrowedAmountUsd) : 0;
 
         return {
@@ -125,6 +131,7 @@ export class PortfolioService {
         }
 
         const assetIds = userAssets.map((ua) => ua.asset_id);
+        //@todo : move this into repository
         const tokens = await this.tokenRepository
             .createQueryBuilder('token')
             .where('token.id IN (:...assetIds)', { assetIds })
@@ -137,7 +144,7 @@ export class PortfolioService {
             const token = tokenMap.get(ua.asset_id);
             const price = allPrices[ua.asset_id.toLowerCase()];
             const amount = Number.parseFloat(ua.amount);
-
+            //@todo : need to also return asset id, better use the same DTO for all asset type return
             return {
                 symbol: token?.symbol || "UNKNOWN",
                 name: token?.name || "Unknown Token",

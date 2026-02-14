@@ -32,7 +32,8 @@ export class PortfolioRepository extends Repository<Portfolio> {
             .getRawMany();
     }
 
-    //@TODO: find how to get net APR from user's lend position shares
+    //@todo : find how to get net APR from user's lend position shares
+    //@todo : change the function name into getUserNetAPR
     async getUserNetAPY(accountId: string): Promise<{ asset_id: string, net_apy: string }[]> {
         return this.dataSource.createQueryBuilder()
             .select('lp.asset_id', 'asset_id')
@@ -104,6 +105,8 @@ export class PortfolioRepository extends Repository<Portfolio> {
         const queries: string[] = [];
         const countQueries: string[] = [];
 
+        //@todo : use query builder instead of raw queries
+        //@todo : get rate base on the shares
         if (includeLend) {
             queries.push(`
                 SELECT 
@@ -127,6 +130,7 @@ export class PortfolioRepository extends Repository<Portfolio> {
             `);
         }
 
+        //@todo : get rate base on shares
         if (includeBorrow) {
             queries.push(`
                 SELECT 

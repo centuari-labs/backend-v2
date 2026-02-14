@@ -7,7 +7,7 @@ import { OrdersModule } from "./orders/orders.module";
 import { PriceModule } from "./price/price.module";
 import { TokensModule } from "./tokens/tokens.module";
 import { MarketModule } from "./market/market.module";
-import { AppController } from "./app.controller";
+import { PortfolioModule } from "./portfolio/portfolio.module";
 
 @Module({
     imports: [
@@ -25,6 +25,7 @@ import { AppController } from "./app.controller";
         PriceModule,
         TokensModule,
         MarketModule,
+        PortfolioModule,
     ],
     controllers: [AppController],
     providers: [],

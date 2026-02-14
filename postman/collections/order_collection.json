@@ -1,62 +1,10 @@
 {
   "info": {
-    "_postman_id": "3a1350ba-1f22-47a4-9197-ba5595a6df22",
-    "name": "Transaction",
+    "_postman_id": "7645ece5-af1f-4230-839e-c187da32c417",
+    "name": "Order",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
-    {
-      "name": "Market endpoint",
-      "id": "143d8eaf-c3cb-4191-b7fb-51ee59752d2c",
-      "request": {
-        "auth": {
-          "type": "bearer",
-          "bearer": [
-            {
-              "key": "token",
-              "value": "eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6IjJsR0pIc2VidkJPeHkxNWRUY2hkaTV2OU5xM2NvRVBsYlFDelFDbDlSeDAifQ.eyJzaWQiOiJjbWttdWR0cGswMzMzanUwYzA1cWZ1d2V2IiwiaXNzIjoicHJpdnkuaW8iLCJpYXQiOjE3NzAzNzUzMDIsImF1ZCI6ImNtZm1tb213dzAxNmZqbDBiZWU5aTJkczQiLCJzdWIiOiJkaWQ6cHJpdnk6Y21rM3ltN2gwMDI0Y2w4MGNuNXJzNjg0OSIsImV4cCI6MTc3MDM3ODkwMn0.zM8ObRnL9C6hNN4cLy-4Gwv7lrCeRBgyk126JjEvY7KOpSw5lYmLmRyd9Dy6b14iLkR8RsOvFCi4SURzd8eV1A",
-              "type": "string"
-            }
-          ]
-        },
-        "method": "GET",
-        "header": [],
-        "body": {
-          "mode": "raw",
-          "raw": "{ \n    \n}"
-        },
-        "url": {
-          "raw": "{{localhost}}market",
-          "host": [
-            "{{localhost}}market"
-          ],
-          "query": [
-            {
-              "key": "createdAt",
-              "value": "2024-01-10",
-              "description": "(Optional) filter for transactions created on or after date (YYYY-MM-DD)",
-              "uuid": "4963b6c7-7206-4ba1-99cf-ebc52da83c5b",
-              "disabled": true
-            },
-            {
-              "key": "toAccountID",
-              "value": "19",
-              "description": "(Optional) filter for the account that initiated the transaction",
-              "uuid": "8a17f523-bf37-402e-a031-cecf209c41e5",
-              "disabled": true
-            },
-            {
-              "key": "fromAccountID",
-              "value": "17",
-              "description": "(Optional) filter for the account that received the transaction",
-              "uuid": "37613ff4-1f60-4ddb-a3e3-2e890c5fc621",
-              "disabled": true
-            }
-          ]
-        }
-      },
-      "response": []
-    },
     {
       "name": "Lend limit order",
       "id": "ce244a08-5df7-4c26-8fc8-f6151115ff18",
@@ -220,14 +168,6 @@
         }
       },
       "response": []
-    }
-  ],
-  "variable": [
-    {
-      "id": "d1ad4874-4f34-4057-8ee6-eb25be7667a4",
-      "key": "localhost",
-      "value": "",
-      "type": "default"
     }
   ]
 }

@@ -61,9 +61,9 @@ export class OrderRepository extends Repository<Order> {
     }
 
     async findAccountByWallet(walletAddress: string): Promise<Account | null> {
-        return this.accountRepository.findOne({
-            where: { userWallet: walletAddress },
-        });
+        return this.accountRepository.createQueryBuilder("account")
+            .where("LOWER(account.user_wallet) = LOWER(:walletAddress)", { walletAddress })
+            .getOne();
     }
 
 }

@@ -1,0 +1,149 @@
+{
+  "info": {
+    "_postman_id": "8de26caf-4afa-49c0-9d02-6f7ef53c32c2",
+    "name": "Portfolio",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Lend borrow assets",
+      "id": "02b02422-1725-4614-8f00-dff8e3fe4648",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer DEV_TOKEN_0x71C7656EC7ab88b098defB751B7401B5f6d8976F",
+            "type": "text",
+            "uuid": "ec0c5921-7903-41e9-ab65-83318735f65d"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{base url}}portfolio/lend-borrow-assets",
+          "host": [
+            "{{base url}}portfolio"
+          ],
+          "path": [
+            "lend-borrow-assets"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "My portfolio",
+      "id": "d6da8678-a0a9-48c5-aded-d645b8e2188a",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer DEV_TOKEN_0x71C7656EC7ab88b098defB751B7401B5f6d8976F",
+            "type": "text",
+            "uuid": "950545a5-5309-4cad-a806-8f4d60c4fba2"
+          }
+        ],
+        "url": {
+          "raw": "{{base url}}portfolio/my-portfolio",
+          "host": [
+            "{{base url}}portfolio"
+          ],
+          "path": [
+            "my-portfolio"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "My position",
+      "id": "6dda96e8-7aaf-4e37-ada8-ebc298da0700",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer DEV_TOKEN_0x71C7656EC7ab88b098defB751B7401B5f6d8976F",
+            "type": "text",
+            "uuid": "ae8e12e1-270d-4c0e-a7d1-44fb9dfb8b49"
+          }
+        ],
+        "url": {
+          "raw": "{{base url}}portfolio/my-position?page=1&limit=10",
+          "host": [
+            "{{base url}}portfolio"
+          ],
+          "path": [
+            "my-position"
+          ],
+          "query": [
+            {
+              "key": "page",
+              "value": "1",
+              "type": "text",
+              "uuid": "365492b6-d51b-4355-9d21-0176f56daa93"
+            },
+            {
+              "key": "limit",
+              "value": "10",
+              "type": "text",
+              "uuid": "d1bb12d0-34a2-45e7-90b0-206e8c345aa7"
+            }
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "My assets",
+      "id": "37f07d0a-9f26-4b56-a5ec-35099955ea37",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer DEV_TOKEN_0x71C7656EC7ab88b098defB751B7401B5f6d8976F",
+            "type": "text",
+            "uuid": "da4295da-ccfd-4e8c-9a6a-570fe8576e85"
+          }
+        ],
+        "url": {
+          "raw": "{{base url}}portfolio/my-assets",
+          "host": [
+            "{{base url}}portfolio"
+          ],
+          "path": [
+            "my-assets"
+          ],
+          "query": [
+            {
+              "key": "page",
+              "value": "1",
+              "type": "text",
+              "uuid": "cea10486-3438-480a-b71e-83463f379c09",
+              "disabled": true
+            }
+          ]
+        }
+      },
+      "response": []
+    }
+  ],
+  "variable": [
+    {
+      "id": "5242a13e-b136-4a6a-ab6c-ebbb3d85c271",
+      "key": "base url",
+      "value": "",
+      "type": "default"
+    }
+  ]
+}

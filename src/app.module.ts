@@ -27,7 +27,7 @@ import { PortfolioModule } from "./portfolio/portfolio.module";
         MarketModule,
         PortfolioModule,
     ],
-    controllers: [],
+    controllers: [AppController],
     providers: [],
 })
 export class AppModule { }

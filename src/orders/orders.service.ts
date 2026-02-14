@@ -66,6 +66,8 @@ export class OrdersService {
             autoRollover: dto.autoRollover ?? false,
         });
 
+        //@todo : should also insert into order market table
+
         const savedOrder = await this.orderRepository.save(order);
 
         await this.publishOrderToNats(NATS_SUBJECTS.LEND_MARKET, savedOrder);
@@ -247,7 +249,8 @@ export class OrdersService {
                 orderId: order.id,
                 walletAddress: walletAddress,
                 assetId: dto.assetId,
-                maturities: dto.maturities,
+                marketIds: dto.marketIds ?? [], //@todo : we should have keep the maturities and market ids into 1 object
+                maturities: [],
                 timestamp: new Date(order.createdAt).getTime(),
                 side: order.side,
                 type: order.type,
@@ -265,7 +268,7 @@ export class OrdersService {
 
     private async publishOrderToNats(
         subject: string,
-        order: Order,
+        order: Order, //@todo :should match with matching engine schema
     ): Promise<void> {
         try {
             await this.natsService.publish(subject, {

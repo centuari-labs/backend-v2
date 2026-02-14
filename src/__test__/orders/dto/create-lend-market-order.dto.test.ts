@@ -1,17 +1,12 @@
 import { validate } from 'class-validator';
 import { plainToInstance } from 'class-transformer';
 import { CreateLendMarketOrderDto } from '../../../orders/dto/create-lend-market-order.dto';
-import { getAllowedMaturitiesUtcSeconds } from '../../../orders/utils/maturity.utils';
 
 describe('CreateLendMarketOrderDto', () => {
-    // Use a fixed reference \"now\" so maturity expectations are deterministic
-    const fixedNow = new Date(Date.UTC(2026, 1, 15, 0, 0, 0)); // 2026-02-15 UTC
-    const allowedMaturities = getAllowedMaturitiesUtcSeconds(fixedNow);
-
     const validDto = {
         assetId: 'b66a2641-3339-4a48-805c-6da248f33dee',
         amount: '1000',
-        maturities: [allowedMaturities[0]],
+        marketIds: ['550e8400-e29b-41d4-a716-446655440000'],
     };
 
     const createDto = (overrides: Partial<typeof validDto> = {}): CreateLendMarketOrderDto => {
@@ -100,64 +95,38 @@ describe('CreateLendMarketOrderDto', () => {
         });
     });
 
-    describe('maturities validation (Unix timestamps in seconds)', () => {
-        it('should accept single maturity timestamp within next three months on day 1', async () => {
-            const dto = createDto({ maturities: [allowedMaturities[0]] });
+    describe('marketIds validation (UUID array)', () => {
+        it('should accept a single valid marketId', async () => {
+            const dto = createDto({ marketIds: ['550e8400-e29b-41d4-a716-446655440000'] });
             const errors = await validate(dto);
-            const maturityErrors = errors.filter(e => e.property === 'maturities');
-            expect(maturityErrors).toHaveLength(0);
+            const marketIdErrors = errors.filter(e => e.property === 'marketIds');
+            expect(marketIdErrors).toHaveLength(0);
         });
 
-        it('should accept multiple maturity timestamps that are allowed first-of-month dates', async () => {
-            const dto = createDto({ maturities: allowedMaturities });
+        it('should accept multiple valid marketIds', async () => {
+            const dto = createDto({
+                marketIds: [
+                    '550e8400-e29b-41d4-a716-446655440000',
+                    '123e4567-e89b-12d3-a456-426614174000',
+                ],
+            });
             const errors = await validate(dto);
-            const maturityErrors = errors.filter(e => e.property === 'maturities');
-            expect(maturityErrors).toHaveLength(0);
+            const marketIdErrors = errors.filter(e => e.property === 'marketIds');
+            expect(marketIdErrors).toHaveLength(0);
         });
 
-        it('should reject empty maturities array', async () => {
-            const dto = createDto({ maturities: [] });
+        it('should reject empty marketIds array', async () => {
+            const dto = createDto({ marketIds: [] });
             const errors = await validate(dto);
-            const maturityErrors = errors.filter(e => e.property === 'maturities');
-            expect(maturityErrors.length).toBeGreaterThan(0);
+            const marketIdErrors = errors.filter(e => e.property === 'marketIds');
+            expect(marketIdErrors.length).toBeGreaterThan(0);
         });
 
-        it('should reject non-positive maturity timestamp values', async () => {
-            const dto = createDto({ maturities: [0] });
+        it('should reject non-UUID marketIds', async () => {
+            const dto = createDto({ marketIds: ['not-a-uuid'] as any });
             const errors = await validate(dto);
-            const maturityErrors = errors.filter(e => e.property === 'maturities');
-            expect(maturityErrors.length).toBeGreaterThan(0);
-        });
-
-        it('should reject negative maturity timestamp values', async () => {
-            const dto = createDto({ maturities: [-1704067200] });
-            const errors = await validate(dto);
-            const maturityErrors = errors.filter(e => e.property === 'maturities');
-            expect(maturityErrors.length).toBeGreaterThan(0);
-        });
-
-        it('should reject non-integer maturity timestamp values', async () => {
-            const dto = createDto({ maturities: [1704067200.5 as any] });
-            const errors = await validate(dto);
-            const maturityErrors = errors.filter(e => e.property === 'maturities');
-            expect(maturityErrors.length).toBeGreaterThan(0);
-        });
-
-        it('should reject maturities not on the 1st of a month', async () => {
-            // take first allowed and add one day (24h) in seconds
-            const invalid = allowedMaturities[0] + 24 * 60 * 60;
-            const dto = createDto({ maturities: [invalid] });
-            const errors = await validate(dto);
-            const maturityErrors = errors.filter(e => e.property === 'maturities');
-            expect(maturityErrors.length).toBeGreaterThan(0);
-        });
-
-        it('should reject maturities beyond the next three calendar months', async () => {
-            const beyond = allowedMaturities[2] + 31 * 24 * 60 * 60;
-            const dto = createDto({ maturities: [beyond] });
-            const errors = await validate(dto);
-            const maturityErrors = errors.filter(e => e.property === 'maturities');
-            expect(maturityErrors.length).toBeGreaterThan(0);
+            const marketIdErrors = errors.filter(e => e.property === 'marketIds');
+            expect(marketIdErrors.length).toBeGreaterThan(0);
         });
     });
 

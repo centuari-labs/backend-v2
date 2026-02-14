@@ -11,7 +11,6 @@ export class OrderRepository extends Repository<Order> {
     constructor(
         private dataSource: DataSource,
         @InjectRepository(Account) private accountRepository: Repository<Account>,
-        @InjectRepository(Token) private tokenRepository: Repository<Token>
     ) {
         super(Order, dataSource.createEntityManager());
     }

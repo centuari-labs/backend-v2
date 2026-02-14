@@ -176,4 +176,12 @@ export class PortfolioRepository extends Repository<Portfolio> {
             total: Number.parseInt(countResult[0]?.count || '0', 10)
         };
     }
+
+    async setAssetAsCollateral(accountId: string, assetIds: string[], isCollateral: boolean) {
+        return this.createQueryBuilder('portfolio')
+            .update({ isCollateral })
+            .where('portfolio.account_id = :accountId', { accountId })
+            .andWhere('portfolio.asset_id IN (:...assetIds)', { assetIds })
+            .execute();
+    }
 }

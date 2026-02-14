@@ -1,4 +1,4 @@
-import { Controller, Get, Query, UseGuards } from "@nestjs/common";
+import { Controller, Get, Query, UseGuards, Body, Put } from "@nestjs/common";
 import { PortfolioService } from "./portfolio.service";
 import {
     GetMyAssetsQueryDto,
@@ -7,6 +7,7 @@ import {
     LendBorrowAssetResponseDto,
     GetMyPositionResponseDto,
     MyPositionQueryDto,
+    SetAssetAsCollateralDto
 } from "./dto/portfolio.dto";
 import { AuthGuard } from "../common/guards/auth.guard";
 import { Wallet } from "../common/decorators/wallet.decorator";
@@ -40,5 +41,13 @@ export class PortfolioController {
         @Query() query: MyPositionQueryDto,
     ): Promise<GetMyPositionResponseDto> {
         return this.portfolioService.getMyPosition(wallet, query);
+    }
+
+    @Put("is-collateral")
+    async setAssetAsCollateral(
+        @Wallet() wallet: string,
+        @Body() body: SetAssetAsCollateralDto,
+    ): Promise<void> {
+        return this.portfolioService.setAssetAsCollateral(wallet, body);
     }
 }

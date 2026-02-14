@@ -3,7 +3,7 @@ import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
 import { Token } from "../tokens/entities/token.entity";
 import { PriceService } from "../price/price.service";
-import { MyPortfolioResponseDto, GetMyAssetsQueryDto, MyAssetsResponseDto, LendBorrowAssetResponseDto, GetMyPositionResponseDto, MyPositionQueryDto } from "./dto/portfolio.dto";
+import { MyPortfolioResponseDto, GetMyAssetsQueryDto, MyAssetsResponseDto, LendBorrowAssetResponseDto, GetMyPositionResponseDto, MyPositionQueryDto, SetAssetAsCollateralDto } from "./dto/portfolio.dto";
 import { PortfolioRepository } from "./repositories/portfolio.repository";
 import { OrderRepository } from "../orders/repositories/order.repository";
 import { calculateUsdAmount, createPaginatedResponse } from "./helpers/position.helpers";
@@ -101,7 +101,7 @@ export class PortfolioService {
                 borrowedAmountUsd += Number.parseFloat(asset.amount) * price;
             }
         }
-        
+
         //@todo : need to change into real health factor formula
         const healthFactorValue = borrowedAmountUsd > 0 ? (suppliedAmountUsd / borrowedAmountUsd) : 0;
 
@@ -192,6 +192,19 @@ export class PortfolioService {
         });
 
         return createPaginatedResponse(data, total, page, limit);
+    }
+
+    async setAssetAsCollateral(wallet: string, body: SetAssetAsCollateralDto): Promise<void> {
+        if (!body || !body.assetIds || !Array.isArray(body.assetIds) || body.assetIds.length === 0) {
+            throw new Error("Invalid request body: assetIds array is required");
+        }
+
+        const account = await this.orderRepository.findAccountByWallet(wallet);
+        if (!account) {
+            throw new NotFoundException("Account not found");
+        }
+
+        await this.portfolioRepository.setAssetAsCollateral(account.id, body.assetIds, body.isCollateral);
     }
 
 }

@@ -136,6 +136,40 @@
         }
       },
       "response": []
+    },
+    {
+      "name": "Set assets as collateral",
+      "id": "fb0dc2c0-5732-4448-ad1c-d5ce7b266f87",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer DEV_TOKEN_0x71C7656EC7ab88b098defB751B7401B5f6d8976F",
+            "type": "text",
+            "uuid": "ac5b2224-ea0b-4c8d-877f-e13ca2231de1"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"assetIds\": [\n        \"497f6eca-6276-4993-bfeb-53cbbbba6f08\",\n        \"550e8400-e29b-41d4-a716-446655440000\"\n    ],\n    \"isCollateral\": true\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{base url}}portfolio/is-collateral",
+          "host": [
+            "{{base url}}portfolio"
+          ],
+          "path": [
+            "is-collateral"
+          ]
+        }
+      },
+      "response": []
     }
   ],
   "variable": [

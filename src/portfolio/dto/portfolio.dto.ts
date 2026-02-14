@@ -89,3 +89,8 @@ export class GetMyPositionResponseDto {
     totalData: number;
     totalPages: number;
 }
+
+export class SetAssetAsCollateralDto {
+    assetIds: string[];
+    isCollateral: boolean;
+}

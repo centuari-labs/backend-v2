@@ -2,9 +2,9 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Injectable } from '@nestjs/common';
 import { DataSource, Repository } from 'typeorm';
 import { Order } from '../entities/order.entity';
+import { OrderMarket } from '../entities/order-market.entity';
 import { OrderSide, OrderStatus } from '../constants/order.constants';
 import { Account } from '../entities/account.entity';
-import { Token } from '../../tokens/entities/token.entity';
 
 @Injectable()
 export class OrderRepository extends Repository<Order> {
@@ -13,6 +13,25 @@ export class OrderRepository extends Repository<Order> {
         @InjectRepository(Account) private accountRepository: Repository<Account>,
     ) {
         super(Order, dataSource.createEntityManager());
+    }
+
+    /**
+     * Inserts one row into `orders` and one row per market into `order_markets` in a single transaction.
+     */
+    async saveOrderWithMarkets(order: Order, marketIds: string[]): Promise<Order> {
+        return this.dataSource.transaction(async (manager) => {
+            const orderRepo = manager.getRepository(Order);
+            const orderMarketRepo = manager.getRepository(OrderMarket);
+
+            const savedOrder = await orderRepo.save(order);
+            for (const marketId of marketIds) {
+                await orderMarketRepo.save({
+                    orderId: savedOrder.id,
+                    marketId,
+                });
+            }
+            return savedOrder;
+        });
     }
 
     async getOrCreateAccount(walletAddress: string, privyUserId: string): Promise<Account> {

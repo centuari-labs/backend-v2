@@ -68,9 +68,7 @@ export class OrdersService {
             autoRollover: dto.autoRollover ?? false,
         });
 
-        //@todo : should also insert into order market table
-
-        const savedOrder = await this.orderRepository.save(order);
+        const savedOrder = await this.orderRepository.saveOrderWithMarkets(order, dto.marketIds ?? []);
 
         await this.publishOrderToNats(NATS_SUBJECTS.LEND_MARKET, savedOrder);
 
@@ -100,7 +98,7 @@ export class OrdersService {
             autoRollover: dto.autoRollover ?? false,
         });
 
-        const savedOrder = await this.orderRepository.save(order);
+        const savedOrder = await this.orderRepository.saveOrderWithMarkets(order, dto.marketIds ?? []);
 
         await this.publishOrderToNats(NATS_SUBJECTS.LEND_LIMIT, savedOrder);
 
@@ -133,7 +131,7 @@ export class OrdersService {
             autoRollover: dto.autoRollover ?? false,
         });
 
-        const savedOrder = await this.orderRepository.save(order);
+        const savedOrder = await this.orderRepository.saveOrderWithMarkets(order, dto.marketIds ?? []);
 
         await this.publishOrderToNats(NATS_SUBJECTS.BORROW_MARKET, savedOrder);
 
@@ -166,7 +164,7 @@ export class OrdersService {
             autoRollover: dto.autoRollover ?? false,
         });
 
-        const savedOrder = await this.orderRepository.save(order);
+        const savedOrder = await this.orderRepository.saveOrderWithMarkets(order, dto.marketIds ?? []);
 
         await this.publishOrderToNats(NATS_SUBJECTS.BORROW_LIMIT, savedOrder);
 

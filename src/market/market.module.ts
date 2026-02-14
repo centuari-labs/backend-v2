@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { MarketController } from './market.controller';
 import { MarketService } from './market.service';
@@ -17,7 +17,7 @@ import { MarketWorker } from './market.worker';
         TokensModule,
         CoreModule,
         PriceModule,
-        OrdersModule,
+        forwardRef(() => OrdersModule),
     ],
     controllers: [MarketController],
     providers: [
@@ -25,7 +25,7 @@ import { MarketWorker } from './market.worker';
         MarketRepositories,
         MarketWorker,
     ],
-    exports: [MarketService],
+    exports: [MarketService, MarketRepositories],
 })
 export class MarketModule { }
 

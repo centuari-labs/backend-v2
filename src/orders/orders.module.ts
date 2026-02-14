@@ -1,8 +1,9 @@
-import { Module } from "@nestjs/common";
+import { Module, forwardRef } from "@nestjs/common";
 import { TypeOrmModule } from "@nestjs/typeorm";
 import { CoreModule } from "../core/core.module";
 import { PriceModule } from "../price/price.module";
 import { TokensModule } from "../tokens/tokens.module";
+import { MarketModule } from "../market/market.module";
 import { Order } from "./entities/order.entity";
 import { Account } from "./entities/account.entity";
 import { Token } from "../tokens/entities/token.entity";
@@ -16,6 +17,7 @@ import { OrderRepository } from "./repositories/order.repository";
         CoreModule,
         PriceModule,
         TokensModule,
+        forwardRef(() => MarketModule),
     ],
     controllers: [OrdersController],
     providers: [OrdersService, OrderRepository],

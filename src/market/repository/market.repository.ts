@@ -1,11 +1,20 @@
 import { Injectable } from "@nestjs/common";
-import { DataSource, Repository } from "typeorm";
+import { DataSource, In, Repository } from "typeorm";
 import { Market } from "../entities/market.entity";
 
 @Injectable()
 export class MarketRepositories extends Repository<Market> {
     constructor(private dataSource: DataSource) {
         super(Market, dataSource.createEntityManager());
+    }
+
+    async getMarketsByIds(marketIds: string[]): Promise<Market[]> {
+        if (marketIds.length === 0) {
+            return [];
+        }
+        return this.find({
+            where: { id: In(marketIds) },
+        });
     }
 
     async getTotalDepositUsd(): Promise<{ asset_id: string; total_amount: string }[]> {

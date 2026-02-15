@@ -99,8 +99,8 @@ BEGIN
     END IF;
 
     IF usdt_market_id IS NOT NULL THEN
-        INSERT INTO borrow_positions (id, account_id, asset_id, market_id, shares, original_shares, amount, original_debt, debt, created_at)
-        VALUES (gen_random_uuid(), test_account_id, usdt_id, usdt_market_id, 2000.0, 2000.0, 2000.0, 2000.0, 2000.0, now());
+        INSERT INTO borrow_positions (id, account_id, asset_id, market_id, amount, original_debt, debt, created_at)
+        VALUES (gen_random_uuid(), test_account_id, usdt_id, usdt_market_id, 2000.0, 2000.0, 2000.0, now());
     END IF;
 
     -- 8. Open Orders

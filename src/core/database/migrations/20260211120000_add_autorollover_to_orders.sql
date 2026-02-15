@@ -10,6 +10,3 @@ ALTER TABLE orders
 
 ALTER TABLE orders
     DROP COLUMN IF EXISTS autorollover;
-
-
---@todo : remove shares from lend and borrow positions table

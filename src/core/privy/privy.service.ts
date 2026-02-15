@@ -63,25 +63,6 @@ export class PrivyService {
         }
     }
 
-    async getUserInfo(accessToken: string, issuer: string, audience: string) {
-        try {
-            const verificationKey = await this.getVerificationKey();
-            const payload = await jose.jwtVerify(accessToken, verificationKey, {
-                issuer: issuer,
-                audience: audience,
-            });
-
-            // const user = await this.privy.getUser(userId);
-            // return user;
-        } catch (err) {
-            this.logger.error(
-                `Failed to fetch user info for userId: ${"a"}`,
-                err as any,
-            );
-            throw new Error("Failed to fetch user info");
-        }
-    }
-
     async getUser(userId: string) {
         try {
             return await this.privy.getUser(userId);

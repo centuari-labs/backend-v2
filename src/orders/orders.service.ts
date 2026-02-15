@@ -7,6 +7,7 @@ import {
     NotFoundException,
 } from "@nestjs/common";
 import { NatsService } from "../core/nats/nats.service";
+import { MarketRepositories } from "../market/repository/market.repository";
 import { PriceService } from "../price/price.service";
 import { TokensService } from "../tokens/tokens.service";
 import { NATS_SUBJECTS } from "./constants/nats-subjects.constants";
@@ -35,6 +36,7 @@ export class OrdersService {
         private readonly tokensService: TokensService,
         private readonly natsService: NatsService,
         private readonly priceService: PriceService,
+        private readonly marketRepository: MarketRepositories,
     ) { }
 
     async getOrCreateAccount(walletAddress: string, privyUserId: string): Promise<string> {
@@ -66,9 +68,7 @@ export class OrdersService {
             autoRollover: dto.autoRollover ?? false,
         });
 
-        //@todo : should also insert into order market table
-
-        const savedOrder = await this.orderRepository.save(order);
+        const savedOrder = await this.orderRepository.saveOrderWithMarkets(order, dto.marketIds ?? []);
 
         await this.publishOrderToNats(NATS_SUBJECTS.LEND_MARKET, savedOrder);
 
@@ -98,7 +98,7 @@ export class OrdersService {
             autoRollover: dto.autoRollover ?? false,
         });
 
-        const savedOrder = await this.orderRepository.save(order);
+        const savedOrder = await this.orderRepository.saveOrderWithMarkets(order, dto.marketIds ?? []);
 
         await this.publishOrderToNats(NATS_SUBJECTS.LEND_LIMIT, savedOrder);
 
@@ -131,7 +131,7 @@ export class OrdersService {
             autoRollover: dto.autoRollover ?? false,
         });
 
-        const savedOrder = await this.orderRepository.save(order);
+        const savedOrder = await this.orderRepository.saveOrderWithMarkets(order, dto.marketIds ?? []);
 
         await this.publishOrderToNats(NATS_SUBJECTS.BORROW_MARKET, savedOrder);
 
@@ -164,7 +164,7 @@ export class OrdersService {
             autoRollover: dto.autoRollover ?? false,
         });
 
-        const savedOrder = await this.orderRepository.save(order);
+        const savedOrder = await this.orderRepository.saveOrderWithMarkets(order, dto.marketIds ?? []);
 
         await this.publishOrderToNats(NATS_SUBJECTS.BORROW_LIMIT, savedOrder);
 
@@ -238,19 +238,31 @@ export class OrdersService {
         return humanToBaseUnits(feeAsString, decimals);
     }
 
-    private mapToResponse(
+    private async mapToResponse(
         order: Order,
         dto: CreateLendMarketOrderDto | CreateLendLimitOrderDto | CreateBorrowMarketOrderDto | CreateBorrowLimitOrderDto,
         walletAddress: string,
-    ): OrderResponse {
+    ): Promise<OrderResponse> {
+        const marketEntities = await this.marketRepository.getMarketsByIds(dto.marketIds ?? []);
+        const maturityByMarketId = new Map<string, number>();
+        for (const market of marketEntities) {
+            const maturityUnix = market.maturity
+                ? Math.floor(market.maturity.getTime() / 1000)
+                : 0;
+            maturityByMarketId.set(market.id, maturityUnix);
+        }
+        const markets = (dto.marketIds ?? []).map((marketId) => ({
+            marketId,
+            maturity: maturityByMarketId.get(marketId) ?? 0,
+        }));
+
         return {
             statusCode: HttpStatus.CREATED,
             data: {
                 orderId: order.id,
                 walletAddress: walletAddress,
                 assetId: dto.assetId,
-                marketIds: dto.marketIds ?? [], //@todo : we should have keep the maturities and market ids into 1 object
-                maturities: [],
+                markets,
                 timestamp: new Date(order.createdAt).getTime(),
                 side: order.side,
                 type: order.type,

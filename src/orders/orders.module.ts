@@ -1,9 +1,11 @@
-import { Module } from "@nestjs/common";
+import { Module, forwardRef } from "@nestjs/common";
 import { TypeOrmModule } from "@nestjs/typeorm";
 import { CoreModule } from "../core/core.module";
 import { PriceModule } from "../price/price.module";
 import { TokensModule } from "../tokens/tokens.module";
+import { MarketModule } from "../market/market.module";
 import { Order } from "./entities/order.entity";
+import { OrderMarket } from "./entities/order-market.entity";
 import { Account } from "./entities/account.entity";
 import { Token } from "../tokens/entities/token.entity";
 import { Market } from "../market/entities/market.entity";
@@ -14,10 +16,11 @@ import { OrdersWorker } from "./orders.worker";
 
 @Module({
     imports: [
-        TypeOrmModule.forFeature([Order, Account, Token, Market]),
+        TypeOrmModule.forFeature([Order, OrderMarket, Account, Token]),
         CoreModule,
         PriceModule,
         TokensModule,
+        forwardRef(() => MarketModule),
     ],
     controllers: [OrdersController],
     providers: [OrdersService, OrderRepository, OrdersWorker],

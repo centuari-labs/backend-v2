@@ -10,4 +10,3 @@ ALTER TABLE orders
 
 ALTER TABLE orders
     DROP COLUMN IF EXISTS autorollover;
-

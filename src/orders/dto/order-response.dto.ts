@@ -6,15 +6,19 @@ export interface OrderResponseData {
     walletAddress: string;
     assetId: string;
     /**
-     * Market IDs associated with this order.
-     * Each ID references the `markets.id` column.
+     * Markets associated with this order.
+     * Each entry links to a market (`markets.id`) and its maturity.
      */
-    marketIds: string[]; //@todo : we should have keep market ids and maturities into 1 object
-    /**
-     * Maturities for the order as Unix timestamps (seconds),
-     * derived from the associated markets in the same order as `marketIds`.
-     */
-    maturities: number[];
+    markets: {
+        /**
+         * ID of the market (`markets.id`).
+         */
+        marketId: string;
+        /**
+         * Maturity for this market as a Unix timestamp in seconds.
+         */
+        maturity: number;
+    }[];
     timestamp: number;
     side: OrderSide;
     type: OrderType;

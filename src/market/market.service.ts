@@ -69,6 +69,10 @@ export class MarketService {
                     symbol: asset.symbol,
                     decimals: asset.decimals ?? null,
                 },
+                markets: {
+                    market_id: this.marketRepository.getMarketId(asset.id),
+                    maturity: new Date().toISOString(),
+                },
                 // rates in DB are stored as basis points; convert to human percentage for responses
                 borrow_rate: toPercentage(rates.borrow),
                 lend_rate: toPercentage(rates.lend),

@@ -14,13 +14,26 @@ import { NatsService } from "../nats/nats.service";
 import { type UserPositionsDto } from "./dto/user.dto";
 import { Order } from "src/orders/entities/order.entity";
 import { OrderStatus } from "src/orders/constants/order.constants";
+import { toPercentage } from "src/common/utils/number.utils";
+import type {
+    OrderbookUpdateDto,
+    SubscribeOrderbookDto,
+} from "./dto/orderbook.dto";
+
+interface OrderbookSnapshotMessage {
+    loanToken: string;
+    maturity: number;
+    lend: { price: number; apr: string; amount: string } | null;
+    borrow: { price: number; apr: string; amount: string } | null;
+    timestamp: number;
+}
 
 const websocketCorsOrigin =
     process.env.NODE_ENV === "production"
         ? (process.env.WS_CORS_ORIGINS ?? "")
-            .split(",")
-            .map((origin) => origin.trim())
-            .filter((origin) => origin.length > 0)
+              .split(",")
+              .map((origin) => origin.trim())
+              .filter((origin) => origin.length > 0)
         : "*";
 
 @WebSocketGateway({
@@ -36,7 +49,7 @@ export class EventsGateway
 
     private readonly logger = new Logger(EventsGateway.name);
     private isNatsSubscribed = false;
-    private orderbookCache = new Map<string, Record<string, unknown>>();
+    private orderbookCache = new Map<string, OrderbookUpdateDto>();
 
     constructor(private readonly natsService: NatsService) {}
 
@@ -56,46 +69,102 @@ export class EventsGateway
     private setupNatsSubscriptions() {
         if (this.isNatsSubscribed) return;
 
-        this.natsService.subscribe<Order[]>("orders.>", (orders, subject) => {
-            for (const order of orders) {
-                if (order.status === OrderStatus.Filled) {
-                    this.server
-                        .to(`user:${order.accountId}`)
-                        .emit("active-positions", { order, subject });
-                }
+        // Subscribe to order status updates for position tracking
+        this.natsService
+            .subscribe<Order[]>("orders.>", (orders, subject) => {
+                for (const order of orders) {
+                    if (order.status === OrderStatus.Filled) {
+                        this.server
+                            .to(`user:${order.accountId}`)
+                            .emit("active-positions", { order, subject });
+                    }
 
-                if (
-                    (order.status === OrderStatus.Open ||
-                        order.status === OrderStatus.PartiallyFilled) &&
-                    subject.includes(".limit")
-                ) {
-                    this.server
-                        .to(`user:${order.accountId}`)
-                        .emit("open-positions", { order, subject });
+                    if (
+                        (order.status === OrderStatus.Open ||
+                            order.status === OrderStatus.PartiallyFilled) &&
+                        subject.includes(".limit")
+                    ) {
+                        this.server
+                            .to(`user:${order.accountId}`)
+                            .emit("open-positions", { order, subject });
+                    }
                 }
-            }
-        });
+            })
+            .catch((err) =>
+                this.logger.error("Failed to subscribe to orders.>", err),
+            );
 
-        this.natsService.subscribe<Record<string, unknown>>('orders.*', (data, subject) => {
-            this.orderbookCache.set(subject, data);
-            this.server.emit("orderbook-update", { data, subject });
-        });
+        // Subscribe to orderbook snapshots from matching engine
+        this.natsService
+            .subscribe<OrderbookSnapshotMessage>(
+                "orderbook.snapshot",
+                (data) => {
+                    const room = `orderbook:${data.loanToken}:${data.maturity}`;
+
+                    const update: OrderbookUpdateDto = {
+                        loanToken: data.loanToken,
+                        maturity: data.maturity,
+                        lend: data.lend
+                            ? {
+                                  price: toPercentage(data.lend.price),
+                                  apr: data.lend.apr,
+                                  amount: data.lend.amount,
+                              }
+                            : null,
+                        borrow: data.borrow
+                            ? {
+                                  price: toPercentage(data.borrow.price),
+                                  apr: data.borrow.apr,
+                                  amount: data.borrow.amount,
+                              }
+                            : null,
+                        timestamp: data.timestamp,
+                    };
+
+                    this.orderbookCache.set(room, update);
+                    this.server.to(room).emit("orderbook-update", update);
+                },
+            )
+            .catch((err) =>
+                this.logger.error(
+                    "Failed to subscribe to orderbook.snapshot",
+                    err,
+                ),
+            );
 
         this.isNatsSubscribed = true;
-        this.logger.log("Subscribed to NATS orders topics");
+        this.logger.log("Subscribed to NATS topics");
     }
 
-    @SubscribeMessage("orderbook")
-    handleSubscribeOrderbook(@ConnectedSocket() client: Socket) {
-        this.logger.log(`Client ${client.id} subscribed to orderbook`);
+    @SubscribeMessage("subscribe-orderbook")
+    handleSubscribeOrderbook(
+        @ConnectedSocket() client: Socket,
+        @MessageBody() body: SubscribeOrderbookDto,
+    ) {
+        const room = `orderbook:${body.loanToken}:${body.maturity}`;
+        client.join(room);
+        this.logger.log(`Client ${client.id} joined ${room}`);
 
-        for (const [subject, data] of this.orderbookCache.entries()) {
-            client.emit("orderbook-update", { data, subject });
+        const cached = this.orderbookCache.get(room);
+        if (cached) {
+            client.emit("orderbook-update", cached);
         }
 
-        return { success: true, message: "Subscribed to orderbook" };
+        return { success: true, room };
     }
 
+    @SubscribeMessage("unsubscribe-orderbook")
+    handleUnsubscribeOrderbook(
+        @ConnectedSocket() client: Socket,
+        @MessageBody() body: SubscribeOrderbookDto,
+    ) {
+        const room = `orderbook:${body.loanToken}:${body.maturity}`;
+        client.leave(room);
+        this.logger.log(`Client ${client.id} left ${room}`);
+        return { success: true, room };
+    }
+
+    // TODO - active position need to be calculated from SC
     @SubscribeMessage("active-positions")
     handleActivePosition(
         @ConnectedSocket() client: Socket,

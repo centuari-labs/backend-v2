@@ -9,6 +9,7 @@ import { PriceModule } from "./price/price.module";
 import { TokensModule } from "./tokens/tokens.module";
 import { MarketModule } from "./market/market.module";
 import { PortfolioModule } from "./portfolio/portfolio.module";
+import { EventsGateway } from "./core/websocket/websocket.gateway";
 
 @Module({
     imports: [
@@ -32,6 +33,6 @@ import { PortfolioModule } from "./portfolio/portfolio.module";
         PortfolioModule,
     ],
     controllers: [],
-    providers: [],
+    providers: [EventsGateway],
 })
 export class AppModule { }

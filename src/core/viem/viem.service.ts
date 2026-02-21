@@ -146,7 +146,7 @@ export class ViemService implements OnModuleInit {
     async readContract<T = any>(
         chainId: number,
         address: string,
-        abi: any[],
+        abi: readonly any[],
         functionName: string,
         args: any[] = []
     ): Promise<T> {
@@ -176,7 +176,7 @@ export class ViemService implements OnModuleInit {
         chainId: number,
         privateKey: string,
         address: string,
-        abi: any[],
+        abi: readonly any[],
         functionName: string,
         args: any[] = [],
         options: ViemWriteContractOptions = {}

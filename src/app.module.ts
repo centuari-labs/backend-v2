@@ -9,6 +9,7 @@ import { PriceModule } from "./price/price.module";
 import { TokensModule } from "./tokens/tokens.module";
 import { MarketModule } from "./market/market.module";
 import { PortfolioModule } from "./portfolio/portfolio.module";
+import { FaucetModule } from "./faucet/faucet.module";
 
 @Module({
     imports: [
@@ -30,6 +31,7 @@ import { PortfolioModule } from "./portfolio/portfolio.module";
         TokensModule,
         MarketModule,
         PortfolioModule,
+        FaucetModule,
     ],
     controllers: [],
     providers: [],

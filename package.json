@@ -88,7 +88,8 @@
             "node_modules/(?!jose)"
         ],
         "moduleNameMapper": {
-            "^@/(.*)$": "<rootDir>/src/$1"
+            "^@/(.*)$": "<rootDir>/src/$1",
+            "^src/(.*)$": "<rootDir>/src/$1"
         },
         "collectCoverageFrom": [
             "src/**/*.(t|j)s"

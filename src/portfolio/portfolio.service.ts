@@ -7,6 +7,7 @@ import { MyPortfolioResponseDto, GetMyAssetsQueryDto, MyAssetsResponseDto, LendB
 import { PortfolioRepository } from "./repositories/portfolio.repository";
 import { OrderRepository } from "../orders/repositories/order.repository";
 import { calculateUsdAmount, createPaginatedResponse } from "./helpers/position.helpers";
+import { humanToBaseUnits } from "../common/utils/number.utils";
 import {
     computeHealthFactor,
     formatHealthFactorResponse,
@@ -137,7 +138,7 @@ export class PortfolioService {
             const ltvBps = token?.averageLTV != null ? Number(token.averageLTV) : 0;
             collateralPositions.push({
                 assetId: row.asset_id,
-                amountBaseUnits: row.amount,
+                amountBaseUnits: humanToBaseUnits(row.amount, decimals),
                 decimals,
                 priceUsd,
                 ltvBps,
@@ -151,7 +152,7 @@ export class PortfolioService {
             const priceUsd = priceMap.get(row.asset_id) ?? 0;
             debtPositions.push({
                 assetId: row.asset_id,
-                amountBaseUnits: row.amount,
+                amountBaseUnits: humanToBaseUnits(row.amount, decimals),
                 decimals,
                 priceUsd,
             });
@@ -214,6 +215,7 @@ export class PortfolioService {
                 walletBalance: amount,
                 amountInUsd: calculateUsdAmount(amount, price ?? 0),
                 isCollateral: !!ua.is_collateral,
+                imageUrl: token?.imageUrl ?? null,
             };
         });
 

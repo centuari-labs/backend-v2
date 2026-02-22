@@ -20,6 +20,7 @@ describe("CoinGeckoProvider (integration)", () => {
         averageLTV: 0.75,
         coingeckoId: "usd-coin",
         decimals: 6,
+        imageUrl: "https://example.com/image.png",
         createdAt: new Date(),
         updatedAt: new Date(),
         ...overrides,
@@ -43,6 +44,7 @@ describe("CoinGeckoProvider (integration)", () => {
                     symbol: "ETH",
                     coingeckoId: "ethereum",
                     decimals: 18,
+                    imageUrl: "https://example.com/image.png",
                 }),
             ];
 

@@ -60,14 +60,14 @@
           },
           {
             "key": "Authorization",
-            "value": "Bearer eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6IjJsR0pIc2VidkJPeHkxNWRUY2hkaTV2OU5xM2NvRVBsYlFDelFDbDlSeDAifQ.eyJzaWQiOiJjbWttdWR0cGswMzMzanUwYzA1cWZ1d2V2IiwiaXNzIjoicHJpdnkuaW8iLCJpYXQiOjE3NzA1NTg2MTgsImF1ZCI6ImNtZm1tb213dzAxNmZqbDBiZWU5aTJkczQiLCJzdWIiOiJkaWQ6cHJpdnk6Y21rM3ltN2gwMDI0Y2w4MGNuNXJzNjg0OSIsImV4cCI6MTc3MDU2MjIxOH0.wJR4R0Wl6fY05G1qlS34FcZjF0dls24i5g0D-zzHxCKeXpRdJYGSJd5Ch8v1_E2GnMBztML_J3HZ_9AxugDqPA",
+            "value": "Bearer DEV_TOKEN_0x71C7656EC7ab88b098defB751B7401B5f6d8976F",
             "type": "text",
             "uuid": "5d5fea6d-615e-41d9-9c1f-b107c77f19f9"
           }
         ],
         "body": {
           "mode": "raw",
-          "raw": "{\n    \"assetId\": \"b66a2641-3339-4a48-805c-6da248f33dee\",\n    \"amount\": \"100\"\n  }",
+          "raw": "{\n    \"loanToken\": \"0x036CbD53842c5426634e7929541eC2318f3dCF7e\",\n    \"amount\": \"100\"\n  }",
           "options": {
             "raw": {
               "language": "json"

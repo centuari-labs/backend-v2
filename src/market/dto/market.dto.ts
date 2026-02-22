@@ -7,6 +7,7 @@ export class MarketItemDto {
         name: string;
         symbol: string;
         decimals?: number | null;
+        imageUrl?: string | null;
     };
     /**
      * Borrow rate expressed as a percentage (e.g. 5 = 5%).

@@ -7,7 +7,8 @@ import {
     LendBorrowAssetResponseDto,
     GetMyPositionResponseDto,
     MyPositionQueryDto,
-    SetAssetAsCollateralDto
+    SetAssetAsCollateralDto,
+    MyHealthFactorResponseDto,
 } from "./dto/portfolio.dto";
 import { AuthGuard } from "../common/guards/auth.guard";
 import { Wallet } from "../common/decorators/wallet.decorator";
@@ -33,6 +34,11 @@ export class PortfolioController {
     @Get("lend-borrow-assets")
     async getLendAndBorrowAssets(@Wallet() wallet: string): Promise<LendBorrowAssetResponseDto> {
         return this.portfolioService.getLendBorrowAssets(wallet);
+    }
+
+    @Get("my-health-factor")
+    async getMyHealthFactor(@Wallet() wallet: string): Promise<MyHealthFactorResponseDto> {
+        return this.portfolioService.getMyHealthFactor(wallet);
     }
 
     @Get("my-position")

@@ -41,6 +41,7 @@ describe('PortfolioService', () => {
             getUserNetAPY: jest.fn(),
             getUserSuppliedAssets: jest.fn(),
             getUserBorrowedAssets: jest.fn(),
+            getUserCollateralAssets: jest.fn(),
             getUserAssets: jest.fn(),
             getUserPositions: jest.fn(),
         };
@@ -516,46 +517,55 @@ describe('PortfolioService', () => {
             expect(result.data[0].isCollateral).toBe(false);
         });
         describe('getLendBorrowAssets', () => {
-            it('should return aggregated USD values and formatted health factor', async () => {
+            it('should return collateral/debt USD and weighted-LTV health factor', async () => {
                 orderRepositoryMock.findAccountByWallet.mockResolvedValue({ id: mockAccountId });
-                tokenRepositoryMock.find.mockResolvedValue(mockTokens as any);
+                const tokensWithDecimals = mockTokens.map((t) => ({
+                    ...t,
+                    decimals: t.id === 'token-uuid-001' ? 18 : t.id === 'token-uuid-002' ? 8 : 6,
+                    averageLTV: 7500, // 75% in basis points
+                }));
+                tokenRepositoryMock.find.mockResolvedValue(tokensWithDecimals as any);
                 priceServiceMock.getPrices.mockReturnValue({
-                    '0xeth': 3000,
-                    '0xbtc': 50000,
+                    'token-uuid-001': 3000,
+                    'token-uuid-002': 50000,
                 });
 
-                portfolioRepositoryMock.getUserSuppliedAssets.mockResolvedValue([
-                    { asset_id: 'token-uuid-001', amount: '2' }, // 2 ETH = 6000 USD
+                // Collateral: 2 ETH (base 2e18); debt: 0.1 BTC (base 1e7 for 8 decimals)
+                portfolioRepositoryMock.getUserCollateralAssets.mockResolvedValue([
+                    { asset_id: 'token-uuid-001', amount: '2000000000000000000' },
                 ]);
                 portfolioRepositoryMock.getUserBorrowedAssets.mockResolvedValue([
-                    { asset_id: 'token-uuid-002', amount: '0.1' }, // 0.1 BTC = 5000 USD
+                    { asset_id: 'token-uuid-002', amount: '10000000' },
                 ]);
 
                 const result = await service.getLendBorrowAssets(mockWalletAddress);
 
-                expect(result.suppliedAssets).toBe("6000.00");
-                expect(result.borrowedAssets).toBe(5000);
-                // HF = 6000 / 5000 = 1.2
-                expect(result.healthFactor).toBe(1.2);
+                expect(result.suppliedAssets).toBe(6000); // 2 * 3000
+                expect(result.borrowedAssets).toBe(5000);  // 0.1 * 50000
+                // HF = ((6000 - 5000) * 0.75) / 5000 = 0.15
+                expect(result.healthFactor).toBe(0.15);
             });
 
             it('should handle zero borrowed amount correctly', async () => {
                 orderRepositoryMock.findAccountByWallet.mockResolvedValue({ id: mockAccountId });
-                tokenRepositoryMock.find.mockResolvedValue(mockTokens as any);
-                const prices = {};
-                mockTokens.forEach(t => prices[t.tokenAddress.toLowerCase()] = 3000);
-                priceServiceMock.getPrices.mockReturnValue(prices);
+                const tokensWithDecimals = mockTokens.map((t) => ({
+                    ...t,
+                    decimals: 18,
+                    averageLTV: 7500,
+                }));
+                tokenRepositoryMock.find.mockResolvedValue(tokensWithDecimals as any);
+                priceServiceMock.getPrices.mockReturnValue({ 'token-uuid-001': 3000 });
 
-                portfolioRepositoryMock.getUserSuppliedAssets.mockResolvedValue([
-                    { asset_id: 'token-uuid-001', amount: '1' },
+                portfolioRepositoryMock.getUserCollateralAssets.mockResolvedValue([
+                    { asset_id: 'token-uuid-001', amount: '1000000000000000000' },
                 ]);
                 portfolioRepositoryMock.getUserBorrowedAssets.mockResolvedValue([]);
 
                 const result = await service.getLendBorrowAssets(mockWalletAddress);
 
-                expect(result.suppliedAssets).toBe("3000.00");
+                expect(result.suppliedAssets).toBe(3000);
                 expect(result.borrowedAssets).toBe(0);
-                expect(result.healthFactor).toBe(0);
+                expect(result.healthFactor).toBe(0); // no debt -> formatted as 0 in response
             });
 
             it('should throw NotFoundException for non-existent account', async () => {
@@ -563,6 +573,31 @@ describe('PortfolioService', () => {
 
                 await expect(service.getLendBorrowAssets(mockWalletAddress))
                     .rejects.toThrow("Account not found");
+            });
+        });
+
+        describe('getMyHealthFactor', () => {
+            it('should return formatted health factor for account', async () => {
+                orderRepositoryMock.findAccountByWallet.mockResolvedValue({ id: mockAccountId });
+                const tokensWithDecimals = mockTokens.map((t) => ({
+                    ...t,
+                    decimals: 18,
+                    averageLTV: 7500,
+                }));
+                tokenRepositoryMock.find.mockResolvedValue(tokensWithDecimals as any);
+                priceServiceMock.getPrices.mockReturnValue({ 'token-uuid-001': 3000 });
+
+                portfolioRepositoryMock.getUserCollateralAssets.mockResolvedValue([
+                    { asset_id: 'token-uuid-001', amount: '1000000000000000000' },
+                ]);
+                portfolioRepositoryMock.getUserBorrowedAssets.mockResolvedValue([]);
+
+                const result = await service.getMyHealthFactor(mockWalletAddress);
+
+                expect(result.collateralUsd).toBe(3000);
+                expect(result.debtUsd).toBe(0);
+                expect(result.weightedLtv).toBe(0.75);
+                expect(result.healthFactor).toBe(Number.POSITIVE_INFINITY);
             });
         });
     });

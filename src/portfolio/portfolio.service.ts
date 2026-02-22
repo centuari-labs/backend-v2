@@ -3,10 +3,17 @@ import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
 import { Token } from "../tokens/entities/token.entity";
 import { PriceService } from "../price/price.service";
-import { MyPortfolioResponseDto, GetMyAssetsQueryDto, MyAssetsResponseDto, LendBorrowAssetResponseDto, GetMyPositionResponseDto, MyPositionQueryDto, SetAssetAsCollateralDto } from "./dto/portfolio.dto";
+import { MyPortfolioResponseDto, GetMyAssetsQueryDto, MyAssetsResponseDto, LendBorrowAssetResponseDto, GetMyPositionResponseDto, MyPositionQueryDto, SetAssetAsCollateralDto, MyHealthFactorResponseDto } from "./dto/portfolio.dto";
 import { PortfolioRepository } from "./repositories/portfolio.repository";
 import { OrderRepository } from "../orders/repositories/order.repository";
 import { calculateUsdAmount, createPaginatedResponse } from "./helpers/position.helpers";
+import {
+    computeHealthFactor,
+    formatHealthFactorResponse,
+    type CollateralPositionInput,
+    type DebtPositionInput,
+    type HealthFactorResult,
+} from "./helpers/health-factor.helpers";
 
 @Injectable()
 export class PortfolioService {
@@ -68,48 +75,104 @@ export class PortfolioService {
             throw new NotFoundException("Account not found");
         }
 
-        const assets = await this.tokenRepository.find();
-        const allPrices = this.priceService.getPrices();
-        const priceMap = new Map<string, number>();
-
-        //@todo : no need to use this anymore, we can just get the price from the price service directly instead
-        for (const asset of assets) {
-            const price = allPrices[asset.id.toLowerCase()];
-            if (price !== undefined) {
-                priceMap.set(asset.id, price);
-            }
-        }
-
-        let suppliedAmountUsd = 0;
-        let borrowedAmountUsd = 0;
-
-        const suppliedAssets = await this.portfolioRepository.getUserSuppliedAssets(account.id);
-        const borrowedAssets = await this.portfolioRepository.getUserBorrowedAssets(account.id);
-
-        for (const asset of suppliedAssets) {
-            const price = priceMap.get(asset.asset_id);
-            if (price !== undefined) {
-                //@todo : need to divide amount with the asset decimal first
-                suppliedAmountUsd += Number.parseFloat(asset.amount) * price;
-            }
-        }
-
-        for (const asset of borrowedAssets) {
-            const price = priceMap.get(asset.asset_id);
-            if (price !== undefined) {
-                //@todo : need to divide amount with the asset decimal first
-                borrowedAmountUsd += Number.parseFloat(asset.amount) * price;
-            }
-        }
-
-        //@todo : need to change into real health factor formula
-        const healthFactorValue = borrowedAmountUsd > 0 ? (suppliedAmountUsd / borrowedAmountUsd) : 0;
-
+        const result = await this.getHealthFactorForAccount(account.id);
+        const formatted = formatHealthFactorResponse(result);
         return {
-            suppliedAssets: suppliedAmountUsd,
-            borrowedAssets: borrowedAmountUsd,
-            healthFactor: healthFactorValue,
+            suppliedAssets: formatted.collateralUsd, //@todo : change this to supplied lend assets
+            borrowedAssets: formatted.debtUsd, //@todo : change this to total borrowed assets
+            healthFactor: Number.isFinite(formatted.healthFactor) ? formatted.healthFactor : 0,
         };
+    }
+
+    /**
+     * Returns health factor for the given account, optionally including a prospective extra debt position.
+     * Used by GET my-health-factor and by borrow order validation.
+     */
+    async getHealthFactorForAccount(
+        accountId: string,
+        additionalDebt?: { assetId: string; amountBaseUnits: string },
+    ): Promise<HealthFactorResult> {
+        const { collateralPositions, debtPositions, additionalDebtPositions } =
+            await this.buildHealthFactorInputs(accountId, additionalDebt);
+        return computeHealthFactor(collateralPositions, debtPositions, additionalDebtPositions);
+    }
+
+    async getMyHealthFactor(wallet: string): Promise<MyHealthFactorResponseDto> {
+        const account = await this.orderRepository.findAccountByWallet(wallet);
+        if (!account) {
+            throw new NotFoundException("Account not found");
+        }
+
+        const result = await this.getHealthFactorForAccount(account.id);
+        return formatHealthFactorResponse(result);
+    }
+
+    private async buildHealthFactorInputs(
+        accountId: string,
+        additionalDebt?: { assetId: string; amountBaseUnits: string },
+    ): Promise<{
+        collateralPositions: CollateralPositionInput[];
+        debtPositions: DebtPositionInput[];
+        additionalDebtPositions?: DebtPositionInput[];
+    }> {
+        const [collateralRows, debtRows, tokens, allPrices] = await Promise.all([
+            this.portfolioRepository.getUserCollateralAssets(accountId),
+            this.portfolioRepository.getUserBorrowedAssets(accountId),
+            this.tokenRepository.find(),
+            Promise.resolve(this.priceService.getPrices()),
+        ]);
+
+        const tokenMap = new Map(tokens.map((t) => [t.id, t]));
+        const priceMap = new Map<string, number>();
+        for (const t of tokens) {
+            const p = allPrices[t.id.toLowerCase()];
+            if (p !== undefined) priceMap.set(t.id, p);
+        }
+
+        const collateralPositions: CollateralPositionInput[] = [];
+        for (const row of collateralRows) {
+            const token = tokenMap.get(row.asset_id);
+            const decimals = token?.decimals ?? 0;
+            const priceUsd = priceMap.get(row.asset_id) ?? 0;
+            const ltvBps = token?.averageLTV != null ? Number(token.averageLTV) : 0;
+            collateralPositions.push({
+                assetId: row.asset_id,
+                amountBaseUnits: row.amount,
+                decimals,
+                priceUsd,
+                ltvBps,
+            });
+        }
+
+        const debtPositions: DebtPositionInput[] = [];
+        for (const row of debtRows) {
+            const token = tokenMap.get(row.asset_id);
+            const decimals = token?.decimals ?? 0;
+            const priceUsd = priceMap.get(row.asset_id) ?? 0;
+            debtPositions.push({
+                assetId: row.asset_id,
+                amountBaseUnits: row.amount,
+                decimals,
+                priceUsd,
+            });
+        }
+
+        let additionalDebtPositions: DebtPositionInput[] | undefined;
+        if (additionalDebt) {
+            const token = tokenMap.get(additionalDebt.assetId);
+            const decimals = token?.decimals ?? 0;
+            const priceUsd = priceMap.get(additionalDebt.assetId) ?? 0;
+            additionalDebtPositions = [
+                {
+                    assetId: additionalDebt.assetId,
+                    amountBaseUnits: additionalDebt.amountBaseUnits,
+                    decimals,
+                    priceUsd,
+                },
+            ];
+        }
+
+        return { collateralPositions, debtPositions, additionalDebtPositions };
     }
 
     async getMyAssets(wallet: string, query: GetMyAssetsQueryDto): Promise<MyAssetsResponseDto> {

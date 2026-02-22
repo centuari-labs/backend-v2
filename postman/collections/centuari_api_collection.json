@@ -1,0 +1,547 @@
+{
+  "info": {
+    "_postman_id": "00000000-0000-0000-0000-000000000000",
+    "name": "Centuari API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Order",
+      "item": [
+        {
+          "name": "Lend limit order",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"assetId\": \"b66a2641-3339-4a48-805c-6da248f33dee\",\n  \"amount\": \"100\",\n  \"marketIds\": [\n    \"00000000-0000-0000-0000-000000000001\"\n  ],\n  \"rate\": 550,\n  \"autoRollover\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/orders/lend/limit",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orders",
+                "lend",
+                "limit"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "201 Created",
+              "status": "Created",
+              "code": 201,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"statusCode\": 201,\n  \"data\": {\n    \"orderId\": \"11111111-2222-3333-4444-555555555555\",\n    \"walletAddress\": \"0x1234567890abcdef1234567890abcdef12345678\",\n    \"assetId\": \"b66a2641-3339-4a48-805c-6da248f33dee\",\n    \"markets\": [\n      {\n        \"marketId\": \"00000000-0000-0000-0000-000000000001\",\n        \"maturity\": 1737052800\n      }\n    ],\n    \"timestamp\": 1736966400,\n    \"side\": \"LEND\",\n    \"type\": \"LIMIT\",\n    \"status\": \"OPEN\",\n    \"originalAmount\": \"100\",\n    \"settlementFeeAmount\": \"0.5\",\n    \"autoRollover\": false,\n    \"rate\": 5,\n    \"createdAt\": \"2025-01-15T10:00:00.000Z\",\n    \"updatedAt\": \"2025-01-15T10:00:00.000Z\"\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Lend market order",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"assetId\": \"b66a2641-3339-4a48-805c-6da248f33dee\",\n  \"amount\": \"100\",\n  \"marketIds\": [\n    \"00000000-0000-0000-0000-000000000001\"\n  ],\n  \"autoRollover\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/orders/lend/market",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orders",
+                "lend",
+                "market"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "201 Created",
+              "status": "Created",
+              "code": 201,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"statusCode\": 201,\n  \"data\": {\n    \"orderId\": \"22222222-3333-4444-5555-666666666666\",\n    \"walletAddress\": \"0x1234567890abcdef1234567890abcdef12345678\",\n    \"assetId\": \"b66a2641-3339-4a48-805c-6da248f33dee\",\n    \"markets\": [\n      {\n        \"marketId\": \"00000000-0000-0000-0000-000000000001\",\n        \"maturity\": 1737052800\n      }\n    ],\n    \"timestamp\": 1736966400,\n    \"side\": \"LEND\",\n    \"type\": \"MARKET\",\n    \"status\": \"OPEN\",\n    \"originalAmount\": \"100\",\n    \"settlementFeeAmount\": \"0.5\",\n    \"autoRollover\": false,\n    \"rate\": 4.5,\n    \"createdAt\": \"2025-01-15T10:05:00.000Z\",\n    \"updatedAt\": \"2025-01-15T10:05:00.000Z\"\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Borrow limit order",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"assetId\": \"b66a2641-3339-4a48-805c-6da248f33dee\",\n  \"amount\": \"10\",\n  \"marketIds\": [\n    \"00000000-0000-0000-0000-000000000001\"\n  ],\n  \"rate\": 250,\n  \"autoRollover\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/orders/borrow/limit",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orders",
+                "borrow",
+                "limit"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "201 Created",
+              "status": "Created",
+              "code": 201,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"statusCode\": 201,\n  \"data\": {\n    \"orderId\": \"33333333-4444-5555-6666-777777777777\",\n    \"walletAddress\": \"0xabcdefabcdefabcdefabcdefabcdefabcdefabcd\",\n    \"assetId\": \"b66a2641-3339-4a48-805c-6da248f33dee\",\n    \"markets\": [\n      {\n        \"marketId\": \"00000000-0000-0000-0000-000000000001\",\n        \"maturity\": 1737052800\n      }\n    ],\n    \"timestamp\": 1736966400,\n    \"side\": \"BORROW\",\n    \"type\": \"LIMIT\",\n    \"status\": \"OPEN\",\n    \"originalAmount\": \"10\",\n    \"settlementFeeAmount\": \"0.1\",\n    \"autoRollover\": false,\n    \"rate\": 2.5,\n    \"createdAt\": \"2025-01-15T10:10:00.000Z\",\n    \"updatedAt\": \"2025-01-15T10:10:00.000Z\"\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Borrow market order",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"assetId\": \"b66a2641-3339-4a48-805c-6da248f33dee\",\n  \"amount\": \"10\",\n  \"marketIds\": [\n    \"00000000-0000-0000-0000-000000000001\"\n  ],\n  \"autoRollover\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/orders/borrow/market",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orders",
+                "borrow",
+                "market"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "201 Created",
+              "status": "Created",
+              "code": 201,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"statusCode\": 201,\n  \"data\": {\n    \"orderId\": \"44444444-5555-6666-7777-888888888888\",\n    \"walletAddress\": \"0xabcdefabcdefabcdefabcdefabcdefabcdefabcd\",\n    \"assetId\": \"b66a2641-3339-4a48-805c-6da248f33dee\",\n    \"markets\": [\n      {\n        \"marketId\": \"00000000-0000-0000-0000-000000000001\",\n        \"maturity\": 1737052800\n      }\n    ],\n    \"timestamp\": 1736966400,\n    \"side\": \"BORROW\",\n    \"type\": \"MARKET\",\n    \"status\": \"OPEN\",\n    \"originalAmount\": \"10\",\n    \"settlementFeeAmount\": \"0.1\",\n    \"autoRollover\": false,\n    \"rate\": 2.0,\n    \"createdAt\": \"2025-01-15T10:15:00.000Z\",\n    \"updatedAt\": \"2025-01-15T10:15:00.000Z\"\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Cancel order",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/orders/{{orderId}}/cancel",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orders",
+                "{{orderId}}",
+                "cancel"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"statusCode\": 200,\n  \"data\": {\n    \"orderId\": \"11111111-2222-3333-4444-555555555555\",\n    \"walletAddress\": \"0x1234567890abcdef1234567890abcdef12345678\",\n    \"assetId\": \"b66a2641-3339-4a48-805c-6da248f33dee\",\n    \"markets\": [\n      {\n        \"marketId\": \"00000000-0000-0000-0000-000000000001\",\n        \"maturity\": 1737052800\n      }\n    ],\n    \"timestamp\": 1736966400,\n    \"side\": \"LEND\",\n    \"type\": \"LIMIT\",\n    \"status\": \"CANCELLED\",\n    \"originalAmount\": \"100\",\n    \"settlementFeeAmount\": \"0.5\",\n    \"autoRollover\": false,\n    \"rate\": 5,\n    \"createdAt\": \"2025-01-15T10:00:00.000Z\",\n    \"updatedAt\": \"2025-01-15T10:20:00.000Z\"\n  }\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Portfolio",
+      "item": [
+        {
+          "name": "Lend borrow assets",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/portfolio/lend-borrow-assets",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "portfolio",
+                "lend-borrow-assets"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"suppliedAssets\": 3,\n  \"borrowedAssets\": 1,\n  \"healthFactor\": 1.8\n}"
+            }
+          ]
+        },
+        {
+          "name": "My portfolio",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/portfolio/my-portfolio",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "portfolio",
+                "my-portfolio"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"totalDeposit\": 12500.5,\n  \"allTimeReturn\": 320.75,\n  \"netAPY\": 4.2\n}"
+            }
+          ]
+        },
+        {
+          "name": "My position",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/portfolio/my-position?page=1&limit=10&type=LEND",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "portfolio",
+                "my-position"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                },
+                {
+                  "key": "type",
+                  "value": "LEND"
+                }
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": [\n    {\n      \"symbol\": \"USDC\",\n      \"name\": \"USD Coin\",\n      \"walletBalance\": 1000,\n      \"amountInUsd\": 1000,\n      \"isCollateral\": true\n    },\n    {\n      \"symbol\": \"ETH\",\n      \"name\": \"Ethereum\",\n      \"walletBalance\": 2.5,\n      \"amountInUsd\": 6500,\n      \"isCollateral\": false\n    }\n  ],\n  \"page\": 1,\n  \"limit\": 10,\n  \"totalData\": 2,\n  \"totalPages\": 1\n}"
+            }
+          ]
+        },
+        {
+          "name": "My assets",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/portfolio/my-assets",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "portfolio",
+                "my-assets"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "disabled": true
+                }
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": [\n    {\n      \"symbol\": \"USDC\",\n      \"name\": \"USD Coin\",\n      \"walletBalance\": 1500,\n      \"amountInUsd\": 1500,\n      \"isCollateral\": true\n    },\n    {\n      \"symbol\": \"ETH\",\n      \"name\": \"Ethereum\",\n      \"walletBalance\": 1.2,\n      \"amountInUsd\": 3120,\n      \"isCollateral\": false\n    }\n  ],\n  \"page\": 1,\n  \"limit\": 10,\n  \"totalData\": 2,\n  \"totalPages\": 1\n}"
+            }
+          ]
+        },
+        {
+          "name": "Set assets as collateral",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"assetIds\": [\n    \"497f6eca-6276-4993-bfeb-53cbbbba6f08\",\n    \"550e8400-e29b-41d4-a716-446655440000\"\n  ],\n  \"isCollateral\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/portfolio/is-collateral",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "portfolio",
+                "is-collateral"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "204 No Content",
+              "status": "No Content",
+              "code": 204,
+              "_postman_previewlanguage": "json",
+              "header": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Market",
+      "item": [
+        {
+          "name": "Market endpoint",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/market",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "market"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"total_deposit\": \"1000000.00\",\n  \"active_loans\": \"250000.00\",\n  \"markets\": [\n    {\n      \"asset\": {\n        \"id\": \"b66a2641-3339-4a48-805c-6da248f33dee\",\n        \"name\": \"USD Coin\",\n        \"symbol\": \"USDC\",\n        \"decimals\": 6\n      },\n      \"borrow_rate\": 5.2,\n      \"lend_rate\": 4.1,\n      \"collateral_factor\": 75\n    },\n    {\n      \"asset\": {\n        \"id\": \"00000000-0000-0000-0000-000000000002\",\n        \"name\": \"Ethereum\",\n        \"symbol\": \"ETH\",\n        \"decimals\": 18\n      },\n      \"borrow_rate\": 7.5,\n      \"lend_rate\": 5.8,\n      \"collateral_factor\": 70\n    }\n  ]\n}"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "",
+      "type": "default"
+    },
+    {
+      "key": "authToken",
+      "value": "",
+      "type": "default"
+    },
+    {
+      "key": "orderId",
+      "value": "",
+      "type": "default"
+    }
+  ]
+}

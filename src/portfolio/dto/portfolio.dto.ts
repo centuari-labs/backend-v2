@@ -26,6 +26,14 @@ export class LendBorrowAssetResponseDto {
     healthFactor: number;
 }
 
+export class MyHealthFactorResponseDto {
+    collateralUsd: number;
+    debtUsd: number;
+    weightedLtv: number;
+    /** Health factor; may be Infinity when there is no debt. */
+    healthFactor: number;
+}
+
 export class MyAssetDto {
     assetsId: string;
     amountInUsd: number;

@@ -67,6 +67,18 @@ export class PortfolioRepository extends Repository<Portfolio> {
             .getRawMany();
     }
 
+    /** Collateral-only positions: portfolio rows where is_collateral = true, amounts in base units. */
+    async getUserCollateralAssets(accountId: string): Promise<{ asset_id: string; amount: string }[]> {
+        return this.createQueryBuilder("portfolio")
+            .select("portfolio.asset_id", "asset_id")
+            .addSelect("SUM(portfolio.amount)", "amount")
+            .where("portfolio.account_id = :accountId", { accountId })
+            .andWhere("portfolio.is_collateral = :isCollateral", { isCollateral: true })
+            .andWhere("portfolio.amount > 0")
+            .groupBy("portfolio.asset_id")
+            .getRawMany();
+    }
+
 
     async getUserAssets(
         accountId: string,

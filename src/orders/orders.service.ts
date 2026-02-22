@@ -26,6 +26,10 @@ import { OrderResponse } from "./dto/order-response.dto";
 import { Order } from "./entities/order.entity";
 import { toPercentage, humanToBaseUnits, calculateSettlementFee } from "../common/utils/number.utils";
 import { OrderRepository } from "./repositories/order.repository";
+import { PortfolioService } from "../portfolio/portfolio.service";
+import { HEALTH_FACTOR_NO_DEBT } from "../portfolio/helpers/health-factor.helpers";
+
+const MIN_HEALTH_FACTOR = 1;
 
 @Injectable()
 export class OrdersService {
@@ -37,6 +41,7 @@ export class OrdersService {
         private readonly natsService: NatsService,
         private readonly priceService: PriceService,
         private readonly marketRepository: MarketRepositories,
+        private readonly portfolioService: PortfolioService,
     ) { }
 
     async getOrCreateAccount(walletAddress: string, privyUserId: string): Promise<string> {
@@ -117,7 +122,19 @@ export class OrdersService {
         const quantityBaseUnits = humanToBaseUnits(dto.amount, decimals!);
         const settlementFee = await this.computeSettlementFee(dto.assetId, dto.amount, decimals!);
 
-        //@todo : validate health factor
+        const hfResult = await this.portfolioService.getHealthFactorForAccount(accountId, {
+            assetId: dto.assetId,
+            amountBaseUnits: quantityBaseUnits,
+        });
+        if (
+            hfResult.healthFactor !== HEALTH_FACTOR_NO_DEBT &&
+            Number.isFinite(hfResult.healthFactor) &&
+            hfResult.healthFactor < MIN_HEALTH_FACTOR
+        ) {
+            throw new BadRequestException(
+                "Borrow would reduce health factor below 1; position not allowed.",
+            );
+        }
 
         const order = this.orderRepository.create({
             accountId,
@@ -150,7 +167,19 @@ export class OrdersService {
         const quantityBaseUnits = humanToBaseUnits(dto.amount, decimals!);
         const settlementFee = await this.computeSettlementFee(dto.assetId, dto.amount, decimals!);
 
-        //@todo : validate health factor
+        const hfResult = await this.portfolioService.getHealthFactorForAccount(accountId, {
+            assetId: dto.assetId,
+            amountBaseUnits: quantityBaseUnits,
+        });
+        if (
+            hfResult.healthFactor !== HEALTH_FACTOR_NO_DEBT &&
+            Number.isFinite(hfResult.healthFactor) &&
+            hfResult.healthFactor < MIN_HEALTH_FACTOR
+        ) {
+            throw new BadRequestException(
+                "Borrow would reduce health factor below 1; position not allowed.",
+            );
+        }
 
         const order = this.orderRepository.create({
             accountId,

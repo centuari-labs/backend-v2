@@ -77,7 +77,7 @@ export class NatsService implements OnModuleInit, OnModuleDestroy {
      // Subscribe to a NATS subject
     async subscribe<T>(
         subject: string,
-        callback: (data: T) => void | Promise<void>,
+        callback: (data: T, subject: string) => void | Promise<void>,
     ): Promise<void> {
         if (!this.connection) {
             throw new Error("NATS connection not established");
@@ -91,7 +91,7 @@ export class NatsService implements OnModuleInit, OnModuleDestroy {
                     const data = JSON.parse(
                         new TextDecoder().decode(msg.data),
                     ) as T;
-                    await callback(data);
+                    await callback(data, msg.subject);
                 } catch (error) {
                     this.logger.error(
                         `Error processing message from ${subject}: ${error.message}`,

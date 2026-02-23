@@ -28,6 +28,7 @@ import { toPercentage, humanToBaseUnits, calculateSettlementFee } from "../commo
 import { OrderRepository } from "./repositories/order.repository";
 import { PortfolioService } from "../portfolio/portfolio.service";
 import { HEALTH_FACTOR_NO_DEBT } from "../portfolio/helpers/health-factor.helpers";
+import { orderSchema, MatchingEngineOrder } from "./matching-engine/order.schema";
 
 const MIN_HEALTH_FACTOR = 1;
 
@@ -75,7 +76,8 @@ export class OrdersService {
 
         const savedOrder = await this.orderRepository.saveOrderWithMarkets(order, dto.marketIds ?? []);
 
-        await this.publishOrderToNats(NATS_SUBJECTS.LEND_MARKET, savedOrder);
+        const engineOrder = await this.buildMatchingEngineOrder(savedOrder, dto, walletAddress);
+        await this.publishOrderToNats(NATS_SUBJECTS.LEND_MARKET, engineOrder);
 
         return this.mapToResponse(savedOrder, dto, walletAddress);
     }
@@ -105,7 +107,8 @@ export class OrdersService {
 
         const savedOrder = await this.orderRepository.saveOrderWithMarkets(order, dto.marketIds ?? []);
 
-        await this.publishOrderToNats(NATS_SUBJECTS.LEND_LIMIT, savedOrder);
+        const engineOrder = await this.buildMatchingEngineOrder(savedOrder, dto, walletAddress);
+        await this.publishOrderToNats(NATS_SUBJECTS.LEND_LIMIT, engineOrder);
 
         return this.mapToResponse(savedOrder, dto, walletAddress);
     }
@@ -150,7 +153,8 @@ export class OrdersService {
 
         const savedOrder = await this.orderRepository.saveOrderWithMarkets(order, dto.marketIds ?? []);
 
-        await this.publishOrderToNats(NATS_SUBJECTS.BORROW_MARKET, savedOrder);
+        const engineOrder = await this.buildMatchingEngineOrder(savedOrder, dto, walletAddress);
+        await this.publishOrderToNats(NATS_SUBJECTS.BORROW_MARKET, engineOrder);
 
         return this.mapToResponse(savedOrder, dto, walletAddress);
     }
@@ -195,7 +199,8 @@ export class OrdersService {
 
         const savedOrder = await this.orderRepository.saveOrderWithMarkets(order, dto.marketIds ?? []);
 
-        await this.publishOrderToNats(NATS_SUBJECTS.BORROW_LIMIT, savedOrder);
+        const engineOrder = await this.buildMatchingEngineOrder(savedOrder, dto, walletAddress);
+        await this.publishOrderToNats(NATS_SUBJECTS.BORROW_LIMIT, engineOrder);
 
         return this.mapToResponse(savedOrder, dto, walletAddress);
     }
@@ -307,9 +312,57 @@ export class OrdersService {
         };
     }
 
+    private async buildMatchingEngineOrder(
+        order: Order,
+        dto: CreateLendMarketOrderDto | CreateLendLimitOrderDto | CreateBorrowMarketOrderDto | CreateBorrowLimitOrderDto,
+        walletAddress: string,
+    ): Promise<MatchingEngineOrder> {
+        const token = await this.tokensService.getTokenByAssetId(order.assetId);
+        const loanToken = token.tokenAddress;
+
+        const marketEntities = await this.marketRepository.getMarketsByIds(dto.marketIds ?? []);
+        const maturityByMarketId = new Map<string, number>();
+        for (const market of marketEntities) {
+            const maturityUnix = market.maturity
+                ? Math.floor(market.maturity.getTime() / 1000)
+                : 0;
+            maturityByMarketId.set(market.id, maturityUnix);
+        }
+        const markets = (dto.marketIds ?? []).map((marketId) => ({
+            marketId,
+            maturity: maturityByMarketId.get(marketId) ?? 0,
+        }));
+
+        const quantity = BigInt(order.quantity);
+        const filledQuantity = BigInt(order.filledQuantity);
+        const remaining = quantity - filledQuantity;
+
+        const basePayload: any = {
+            orderId: order.id,
+            walletAddress,
+            loanToken,
+            markets,
+            timestamp: new Date(order.createdAt).getTime(),
+            side: order.side,
+            type: order.type,
+            status: order.status,
+            originalAmount: order.quantity,
+            remainingAmount: remaining >= 0n ? remaining.toString() : "0",
+            settlementFeeAmount: order.settlementFee,
+            remainingSettlementFeeAmount: order.settlementFee,
+        };
+
+        if (order.type === OrderType.Limit) {
+            basePayload.rate = Number(order.rate);
+        }
+
+        const parsed = orderSchema.parse(basePayload);
+        return parsed;
+    }
+
     private async publishOrderToNats(
         subject: string,
-        order: Order, //@todo :should match with matching engine schema
+        order: MatchingEngineOrder,
     ): Promise<void> {
         try {
             await this.natsService.publish(subject, {
@@ -317,7 +370,7 @@ export class OrdersService {
                 timestamp: new Date().toISOString(),
                 data: order,
             });
-            this.logger.debug(`Published order ${order.id} to ${subject}`);
+            this.logger.debug(`Published order ${order.orderId} to ${subject}`);
         } catch (error) {
             this.logger.error(
                 `Failed to publish order ${order.id} to NATS: ${error.message}`,

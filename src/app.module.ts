@@ -1,4 +1,5 @@
 import { Module } from "@nestjs/common";
+import { ConfigModule } from "@nestjs/config";
 import { ScheduleModule } from "@nestjs/schedule";
 import { TypeOrmModule } from "@nestjs/typeorm";
 import { AuthModule } from "./auth/auth.module";
@@ -8,9 +9,14 @@ import { PriceModule } from "./price/price.module";
 import { TokensModule } from "./tokens/tokens.module";
 import { MarketModule } from "./market/market.module";
 import { PortfolioModule } from "./portfolio/portfolio.module";
+import { FaucetModule } from "./faucet/faucet.module";
+import { EventsGateway } from "./core/websocket/websocket.gateway";
 
 @Module({
     imports: [
+        ConfigModule.forRoot({
+            isGlobal: true,
+        }),
         ScheduleModule.forRoot(),
         TypeOrmModule.forRoot({
             type: "postgres",
@@ -26,8 +32,9 @@ import { PortfolioModule } from "./portfolio/portfolio.module";
         TokensModule,
         MarketModule,
         PortfolioModule,
+        FaucetModule,
     ],
     controllers: [],
-    providers: [],
+    providers: [EventsGateway],
 })
 export class AppModule { }

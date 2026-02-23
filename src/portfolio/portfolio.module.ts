@@ -1,4 +1,4 @@
-import { Module } from "@nestjs/common";
+import { Module, forwardRef } from "@nestjs/common";
 import { TypeOrmModule } from "@nestjs/typeorm";
 import { PortfolioController } from "./portfolio.controller";
 import { PortfolioService } from "./portfolio.service";
@@ -14,7 +14,7 @@ import { TokensModule } from "../tokens/tokens.module";
     imports: [
         TypeOrmModule.forFeature([Portfolio, Token]),
         CoreModule,
-        OrdersModule,
+        forwardRef(() => OrdersModule),
         PriceModule,
         TokensModule,
     ],

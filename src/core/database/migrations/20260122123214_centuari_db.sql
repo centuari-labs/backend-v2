@@ -166,6 +166,7 @@ CREATE TABLE IF NOT EXISTS matches (
     taker_fee NUMERIC NOT NULL,
     lender_settlement_fee NUMERIC NOT NULL,
     borrower_settlement_fee NUMERIC NOT NULL,
+    maturity TIMESTAMP NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
 

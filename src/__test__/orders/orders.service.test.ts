@@ -13,6 +13,7 @@ import { CreateLendMarketOrderDto } from '../../orders/dto/create-lend-market-or
 import { CreateBorrowLimitOrderDto } from '../../orders/dto/create-borrow-limit-order.dto';
 import { CreateBorrowMarketOrderDto } from '../../orders/dto/create-borrow-market-order.dto';
 import { OrderRepository } from '../../orders/repositories/order.repository';
+import { PortfolioService } from '../../portfolio/portfolio.service';
 
 describe('OrdersService', () => {
     let service: OrdersService;
@@ -20,6 +21,7 @@ describe('OrdersService', () => {
     let tokensService: jest.Mocked<TokensService>;
     let natsService: jest.Mocked<NatsService>;
     let priceService: { getPrice: jest.MockedFunction<PriceService["getPrice"]> };
+    let portfolioService: jest.Mocked<PortfolioService>;
 
     const mockWalletAddress = '0xLender1234567890abcdef1234567890abcdef12';
     const mockPrivyUserId = 'did:privy:mock-user-id';
@@ -77,6 +79,10 @@ describe('OrdersService', () => {
             ]),
         };
 
+        const mockPortfolioService = {
+            getHealthFactorForAccount: jest.fn().mockResolvedValue({ healthFactor: 2 }),
+        };
+
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 OrdersService,
@@ -100,6 +106,10 @@ describe('OrdersService', () => {
                     provide: NatsService,
                     useValue: mockNatsService,
                 },
+                {
+                    provide: PortfolioService,
+                    useValue: mockPortfolioService,
+                },
             ],
         }).compile();
 
@@ -107,6 +117,7 @@ describe('OrdersService', () => {
         orderRepository = module.get(OrderRepository) as jest.Mocked<OrderRepository>;
         tokensService = module.get(TokensService);
         natsService = module.get(NatsService);
+        portfolioService = module.get(PortfolioService) as jest.Mocked<PortfolioService>;
         priceService = {
             getPrice: module.get(PriceService).getPrice as any,
         };
@@ -440,6 +451,23 @@ describe('OrdersService', () => {
                 expect.anything(),
             );
         });
+
+        it('should throw BadRequestException when borrow would reduce health factor below 1', async () => {
+            tokensService.validateTokenByAssetId.mockResolvedValue({} as any);
+            tokensService.getTokenDecimalsByAssetId.mockResolvedValue(6);
+            orderRepository.getOrCreateAccount.mockResolvedValue({ id: mockAccountId } as any);
+            portfolioService.getHealthFactorForAccount.mockResolvedValueOnce({
+                healthFactor: 0.8,
+                collateralUsd: 1000,
+                debtUsd: 500,
+                weightedLtvDecimal: 0.75,
+            });
+
+            await expect(
+                service.createBorrowLimitOrder(borrowLimitDto, mockWalletAddress, mockPrivyUserId),
+            ).rejects.toThrow('Borrow would reduce health factor below 1; position not allowed.');
+            expect(orderRepository.saveOrderWithMarkets).not.toHaveBeenCalled();
+        });
     });
 
     describe('createBorrowMarketOrder', () => {
@@ -524,6 +552,23 @@ describe('OrdersService', () => {
                 'orders.borrow.market',
                 expect.anything(),
             );
+        });
+
+        it('should throw BadRequestException when borrow would reduce health factor below 1', async () => {
+            tokensService.validateTokenByAssetId.mockResolvedValue({} as any);
+            tokensService.getTokenDecimalsByAssetId.mockResolvedValue(6);
+            orderRepository.getOrCreateAccount.mockResolvedValue({ id: mockAccountId } as any);
+            portfolioService.getHealthFactorForAccount.mockResolvedValueOnce({
+                healthFactor: 0.5,
+                collateralUsd: 500,
+                debtUsd: 1000,
+                weightedLtvDecimal: 0.75,
+            });
+
+            await expect(
+                service.createBorrowMarketOrder(borrowMarketDto, mockWalletAddress, mockPrivyUserId),
+            ).rejects.toThrow('Borrow would reduce health factor below 1; position not allowed.');
+            expect(orderRepository.saveOrderWithMarkets).not.toHaveBeenCalled();
         });
     });
 

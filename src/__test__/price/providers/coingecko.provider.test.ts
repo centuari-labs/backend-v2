@@ -27,6 +27,7 @@ describe("CoinGeckoProvider", () => {
         averageLTV: 0.75,
         coingeckoId: "usd-coin",
         decimals: 6,
+        imageUrl: null,
         createdAt: new Date(),
         updatedAt: new Date(),
         ...overrides,

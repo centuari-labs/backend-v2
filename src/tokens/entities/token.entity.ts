@@ -30,6 +30,9 @@ export class Token {
     @Column({ type: "int", nullable: true })
     decimals: number | null;
 
+    @Column({ name: "image_url", type: "text", nullable: true })
+    imageUrl: string | null;
+
     @CreateDateColumn({ name: "created_at" })
     createdAt: Date;
 

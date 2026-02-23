@@ -17,7 +17,7 @@ import { OrdersWorker } from "./orders.worker";
 
 @Module({
     imports: [
-        TypeOrmModule.forFeature([Order, OrderMarket, Account, Token]),
+        TypeOrmModule.forFeature([Order, OrderMarket, Account, Token, Market]),
         CoreModule,
         PriceModule,
         TokensModule,

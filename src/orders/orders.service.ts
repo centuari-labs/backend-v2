@@ -106,7 +106,7 @@ export class OrdersService {
             dto,
             walletAddress,
         );
-        await this.publishOrderToNats(NATS_SUBJECTS.LEND_MARKET, engineOrder);
+        await this.publishOrderToNats(NATS_SUBJECTS.LEND_MARKET, engineOrder, accountId);
 
         return this.mapToResponse(savedOrder, dto, walletAddress);
     }
@@ -153,7 +153,7 @@ export class OrdersService {
             dto,
             walletAddress,
         );
-        await this.publishOrderToNats(NATS_SUBJECTS.LEND_LIMIT, engineOrder);
+        await this.publishOrderToNats(NATS_SUBJECTS.LEND_LIMIT, engineOrder, accountId);
 
         return this.mapToResponse(savedOrder, dto, walletAddress);
     }
@@ -218,7 +218,7 @@ export class OrdersService {
             dto,
             walletAddress,
         );
-        await this.publishOrderToNats(NATS_SUBJECTS.BORROW_MARKET, engineOrder);
+        await this.publishOrderToNats(NATS_SUBJECTS.BORROW_MARKET, engineOrder, accountId);
 
         return this.mapToResponse(savedOrder, dto, walletAddress);
     }
@@ -283,7 +283,7 @@ export class OrdersService {
             dto,
             walletAddress,
         );
-        await this.publishOrderToNats(NATS_SUBJECTS.BORROW_LIMIT, engineOrder);
+        await this.publishOrderToNats(NATS_SUBJECTS.BORROW_LIMIT, engineOrder, accountId);
 
         return this.mapToResponse(savedOrder, dto, walletAddress);
     }
@@ -459,12 +459,14 @@ export class OrdersService {
     private async publishOrderToNats(
         subject: string,
         order: MatchingEngineOrder,
+        accountId: string,
     ): Promise<void> {
         try {
             await this.natsService.publish(subject, {
                 event: subject,
                 timestamp: new Date().toISOString(),
                 data: order,
+                accountId,
             });
             this.logger.debug(`Published order ${order.orderId} to ${subject}`);
         } catch (error) {

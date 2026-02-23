@@ -38,7 +38,7 @@ export class MarketRepositories extends Repository<Market> {
     async getMarketId(marketId: string): Promise<string | undefined> {
         return this.dataSource.createQueryBuilder()
             .select('market.id', 'id')
-            .from('market', 'market')
+            .from('markets', 'market')
             .where('market.id = :marketId', { marketId })
             .getRawOne();
     }

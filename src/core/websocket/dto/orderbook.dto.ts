@@ -5,14 +5,14 @@ export interface OrderbookSideDto {
 }
 
 export interface OrderbookUpdateDto {
-    loanToken: string;
-    maturity: number;
+    assetId: string;
+    marketId: string;
     lend: OrderbookSideDto | null;
     borrow: OrderbookSideDto | null;
     timestamp: number;
 }
 
 export interface SubscribeOrderbookDto {
-    loanToken: string;
-    maturity: number;
+    assetId: string;
+    marketId: string;
 }

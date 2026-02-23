@@ -21,8 +21,8 @@ import type {
 } from "./dto/orderbook.dto";
 
 interface OrderbookSnapshotMessage {
-    loanToken: string;
-    maturity: number;
+    assetId: string;
+    marketId: string;
     lend: { price: number; apr: string; amount: string } | null;
     borrow: { price: number; apr: string; amount: string } | null;
     timestamp: number;
@@ -99,11 +99,11 @@ export class EventsGateway
             .subscribe<OrderbookSnapshotMessage>(
                 "orderbook.snapshot",
                 (data) => {
-                    const room = `orderbook:${data.loanToken}:${data.maturity}`;
+                    const room = `orderbook:${data.assetId}:${data.marketId}`;
 
                     const update: OrderbookUpdateDto = {
-                        loanToken: data.loanToken,
-                        maturity: data.maturity,
+                        assetId: data.assetId,
+                        marketId: data.marketId,
                         lend: data.lend
                             ? {
                                   price: toPercentage(data.lend.price),
@@ -141,7 +141,7 @@ export class EventsGateway
         @ConnectedSocket() client: Socket,
         @MessageBody() body: SubscribeOrderbookDto,
     ) {
-        const room = `orderbook:${body.loanToken}:${body.maturity}`;
+        const room = `orderbook:${body.assetId}:${body.marketId}`;
         client.join(room);
         this.logger.log(`Client ${client.id} joined ${room}`);
 
@@ -158,7 +158,7 @@ export class EventsGateway
         @ConnectedSocket() client: Socket,
         @MessageBody() body: SubscribeOrderbookDto,
     ) {
-        const room = `orderbook:${body.loanToken}:${body.maturity}`;
+        const room = `orderbook:${body.assetId}:${body.marketId}`;
         client.leave(room);
         this.logger.log(`Client ${client.id} left ${room}`);
         return { success: true, room };

@@ -85,32 +85,32 @@ describe('EventsGateway', () => {
     });
 
     it('should allow client to subscribe to orderbook room', () => {
-      const subscribeData = { loanToken: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', maturity: 1234567890 };
+      const subscribeData = { assetId: '550e8400-e29b-41d4-a716-446655440001', marketId: '550e8400-e29b-41d4-a716-446655440010' };
       const result = gateway.handleSubscribeOrderbook(mockClient, subscribeData);
 
-      expect(mockClient.join).toHaveBeenCalledWith('orderbook:0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48:1234567890');
+      expect(mockClient.join).toHaveBeenCalledWith('orderbook:550e8400-e29b-41d4-a716-446655440001:550e8400-e29b-41d4-a716-446655440010');
       expect(result).toEqual({
         success: true,
-        room: 'orderbook:0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48:1234567890',
+        room: 'orderbook:550e8400-e29b-41d4-a716-446655440001:550e8400-e29b-41d4-a716-446655440010',
       });
     });
 
     it('should allow client to unsubscribe from orderbook room', () => {
-      const unsubscribeData = { loanToken: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', maturity: 1234567890 };
+      const unsubscribeData = { assetId: '550e8400-e29b-41d4-a716-446655440001', marketId: '550e8400-e29b-41d4-a716-446655440010' };
       const result = gateway.handleUnsubscribeOrderbook(mockClient, unsubscribeData);
 
-      expect(mockClient.leave).toHaveBeenCalledWith('orderbook:0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48:1234567890');
+      expect(mockClient.leave).toHaveBeenCalledWith('orderbook:550e8400-e29b-41d4-a716-446655440001:550e8400-e29b-41d4-a716-446655440010');
       expect(result).toEqual({
         success: true,
-        room: 'orderbook:0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48:1234567890',
+        room: 'orderbook:550e8400-e29b-41d4-a716-446655440001:550e8400-e29b-41d4-a716-446655440010',
       });
     });
 
     it('should send cached snapshot when client subscribes', () => {
       // Simulate an orderbook snapshot arriving from NATS (price in basis points)
       const natsSnapshot = {
-        loanToken: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
-        maturity: 1234567890,
+        assetId: '550e8400-e29b-41d4-a716-446655440001',
+        marketId: '550e8400-e29b-41d4-a716-446655440010',
         lend: { price: 500, apr: '-', amount: '1000000' },
         borrow: null,
         timestamp: 1704067200000,
@@ -121,13 +121,13 @@ describe('EventsGateway', () => {
       orderbookCallback!(natsSnapshot, 'orderbook.snapshot');
 
       // Now subscribe a client
-      const subscribeData = { loanToken: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', maturity: 1234567890 };
+      const subscribeData = { assetId: '550e8400-e29b-41d4-a716-446655440001', marketId: '550e8400-e29b-41d4-a716-446655440010' };
       gateway.handleSubscribeOrderbook(mockClient, subscribeData);
 
       // Should emit cached snapshot with price converted to percentage (500 bp = 5%)
       expect(mockClient.emit).toHaveBeenCalledWith('orderbook-update', {
-        loanToken: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
-        maturity: 1234567890,
+        assetId: '550e8400-e29b-41d4-a716-446655440001',
+        marketId: '550e8400-e29b-41d4-a716-446655440010',
         lend: { price: 5, apr: '-', amount: '1000000' },
         borrow: null,
         timestamp: 1704067200000,
@@ -135,7 +135,7 @@ describe('EventsGateway', () => {
     });
 
     it('should not send cached snapshot if none exists', () => {
-      const subscribeData = { loanToken: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', maturity: 9999999999 };
+      const subscribeData = { assetId: '550e8400-e29b-41d4-a716-446655440001', marketId: '550e8400-e29b-41d4-a716-446655440099' };
       gateway.handleSubscribeOrderbook(mockClient, subscribeData);
 
       expect(mockClient.emit).not.toHaveBeenCalled();
@@ -174,8 +174,8 @@ describe('EventsGateway', () => {
     describe('Orderbook Snapshot Broadcasting', () => {
       it('should broadcast transformed orderbook snapshot to appropriate room', () => {
         const natsSnapshot = {
-          loanToken: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
-          maturity: 1234567890,
+          assetId: '550e8400-e29b-41d4-a716-446655440001',
+          marketId: '550e8400-e29b-41d4-a716-446655440010',
           lend: { price: 500, apr: '-', amount: '1000000' },
           borrow: { price: 750, apr: '-', amount: '500000' },
           timestamp: 1704067200000,
@@ -185,10 +185,10 @@ describe('EventsGateway', () => {
         expect(orderbookCallback).toBeDefined();
         orderbookCallback!(natsSnapshot, 'orderbook.snapshot');
 
-        expect(mockServer.to).toHaveBeenCalledWith('orderbook:0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48:1234567890');
+        expect(mockServer.to).toHaveBeenCalledWith('orderbook:550e8400-e29b-41d4-a716-446655440001:550e8400-e29b-41d4-a716-446655440010');
         expect(mockServer.emit).toHaveBeenCalledWith('orderbook-update', {
-          loanToken: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
-          maturity: 1234567890,
+          assetId: '550e8400-e29b-41d4-a716-446655440001',
+          marketId: '550e8400-e29b-41d4-a716-446655440010',
           lend: { price: 5, apr: '-', amount: '1000000' },
           borrow: { price: 7.5, apr: '-', amount: '500000' },
           timestamp: 1704067200000,
@@ -197,8 +197,8 @@ describe('EventsGateway', () => {
 
       it('should handle null sides in snapshot', () => {
         const natsSnapshot = {
-          loanToken: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
-          maturity: 1234567890,
+          assetId: '550e8400-e29b-41d4-a716-446655440001',
+          marketId: '550e8400-e29b-41d4-a716-446655440010',
           lend: null,
           borrow: null,
           timestamp: 1704067200000,
@@ -207,10 +207,10 @@ describe('EventsGateway', () => {
         const orderbookCallback = natsCallbacks.get('orderbook.snapshot');
         orderbookCallback!(natsSnapshot, 'orderbook.snapshot');
 
-        expect(mockServer.to).toHaveBeenCalledWith('orderbook:0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48:1234567890');
+        expect(mockServer.to).toHaveBeenCalledWith('orderbook:550e8400-e29b-41d4-a716-446655440001:550e8400-e29b-41d4-a716-446655440010');
         expect(mockServer.emit).toHaveBeenCalledWith('orderbook-update', {
-          loanToken: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
-          maturity: 1234567890,
+          assetId: '550e8400-e29b-41d4-a716-446655440001',
+          marketId: '550e8400-e29b-41d4-a716-446655440010',
           lend: null,
           borrow: null,
           timestamp: 1704067200000,
@@ -219,16 +219,16 @@ describe('EventsGateway', () => {
 
       it('should update cache when new snapshot arrives', () => {
         const oldSnapshot = {
-          loanToken: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
-          maturity: 1234567890,
+          assetId: '550e8400-e29b-41d4-a716-446655440001',
+          marketId: '550e8400-e29b-41d4-a716-446655440010',
           lend: { price: 500, apr: '-', amount: '1000000' },
           borrow: null,
           timestamp: 1704067200000,
         };
 
         const newSnapshot = {
-          loanToken: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
-          maturity: 1234567890,
+          assetId: '550e8400-e29b-41d4-a716-446655440001',
+          marketId: '550e8400-e29b-41d4-a716-446655440010',
           lend: { price: 600, apr: '-', amount: '2000000' },
           borrow: { price: 800, apr: '-', amount: '500000' },
           timestamp: 1704067300000,
@@ -240,12 +240,12 @@ describe('EventsGateway', () => {
 
         // Subscribe and verify we get the latest snapshot
         gateway.handleSubscribeOrderbook(mockClient, {
-          loanToken: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
-          maturity: 1234567890,
+          assetId: '550e8400-e29b-41d4-a716-446655440001',
+          marketId: '550e8400-e29b-41d4-a716-446655440010',
         });
         expect(mockClient.emit).toHaveBeenCalledWith('orderbook-update', {
-          loanToken: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
-          maturity: 1234567890,
+          assetId: '550e8400-e29b-41d4-a716-446655440001',
+          marketId: '550e8400-e29b-41d4-a716-446655440010',
           lend: { price: 6, apr: '-', amount: '2000000' },
           borrow: { price: 8, apr: '-', amount: '500000' },
           timestamp: 1704067300000,
@@ -261,32 +261,32 @@ describe('EventsGateway', () => {
 
     it('should handle multiple orderbook subscriptions', () => {
       gateway.handleSubscribeOrderbook(mockClient, {
-        loanToken: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
-        maturity: 1234567890,
+        assetId: '550e8400-e29b-41d4-a716-446655440001',
+        marketId: '550e8400-e29b-41d4-a716-446655440010',
       });
 
       gateway.handleSubscribeOrderbook(mockClient, {
-        loanToken: '0x6B175474E89094C44Da98b954EedeAC495271d0F',
-        maturity: 9876543210,
+        assetId: '550e8400-e29b-41d4-a716-446655440002',
+        marketId: '550e8400-e29b-41d4-a716-446655440020',
       });
 
       expect(mockClient.join).toHaveBeenCalledTimes(2);
-      expect(mockClient.join).toHaveBeenCalledWith('orderbook:0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48:1234567890');
-      expect(mockClient.join).toHaveBeenCalledWith('orderbook:0x6B175474E89094C44Da98b954EedeAC495271d0F:9876543210');
+      expect(mockClient.join).toHaveBeenCalledWith('orderbook:550e8400-e29b-41d4-a716-446655440001:550e8400-e29b-41d4-a716-446655440010');
+      expect(mockClient.join).toHaveBeenCalledWith('orderbook:550e8400-e29b-41d4-a716-446655440002:550e8400-e29b-41d4-a716-446655440020');
     });
 
     it('should broadcast to correct rooms for different tokens', () => {
       const snapshot1 = {
-        loanToken: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
-        maturity: 1234567890,
+        assetId: '550e8400-e29b-41d4-a716-446655440001',
+        marketId: '550e8400-e29b-41d4-a716-446655440010',
         lend: null,
         borrow: null,
         timestamp: 1704067200000,
       };
 
       const snapshot2 = {
-        loanToken: '0x6B175474E89094C44Da98b954EedeAC495271d0F',
-        maturity: 9876543210,
+        assetId: '550e8400-e29b-41d4-a716-446655440002',
+        marketId: '550e8400-e29b-41d4-a716-446655440020',
         lend: null,
         borrow: null,
         timestamp: 1704067200000,
@@ -295,10 +295,10 @@ describe('EventsGateway', () => {
       const orderbookCallback = natsCallbacks.get('orderbook.snapshot');
 
       orderbookCallback!(snapshot1, 'orderbook.snapshot');
-      expect(mockServer.to).toHaveBeenCalledWith('orderbook:0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48:1234567890');
+      expect(mockServer.to).toHaveBeenCalledWith('orderbook:550e8400-e29b-41d4-a716-446655440001:550e8400-e29b-41d4-a716-446655440010');
 
       orderbookCallback!(snapshot2, 'orderbook.snapshot');
-      expect(mockServer.to).toHaveBeenCalledWith('orderbook:0x6B175474E89094C44Da98b954EedeAC495271d0F:9876543210');
+      expect(mockServer.to).toHaveBeenCalledWith('orderbook:550e8400-e29b-41d4-a716-446655440002:550e8400-e29b-41d4-a716-446655440020');
     });
   });
 
@@ -309,16 +309,16 @@ describe('EventsGateway', () => {
 
     it('should maintain separate cache entries for different orderbooks', () => {
       const snapshot1 = {
-        loanToken: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
-        maturity: 1234567890,
+        assetId: '550e8400-e29b-41d4-a716-446655440001',
+        marketId: '550e8400-e29b-41d4-a716-446655440010',
         lend: { price: 500, apr: '-', amount: '1000000' },
         borrow: null,
         timestamp: 1704067200000,
       };
 
       const snapshot2 = {
-        loanToken: '0x6B175474E89094C44Da98b954EedeAC495271d0F',
-        maturity: 9876543210,
+        assetId: '550e8400-e29b-41d4-a716-446655440002',
+        marketId: '550e8400-e29b-41d4-a716-446655440020',
         lend: null,
         borrow: { price: 300, apr: '-', amount: '2000000' },
         timestamp: 1704067300000,
@@ -331,12 +331,12 @@ describe('EventsGateway', () => {
 
       // Subscribe to first orderbook
       gateway.handleSubscribeOrderbook(mockClient, {
-        loanToken: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
-        maturity: 1234567890,
+        assetId: '550e8400-e29b-41d4-a716-446655440001',
+        marketId: '550e8400-e29b-41d4-a716-446655440010',
       });
       expect(mockClient.emit).toHaveBeenCalledWith('orderbook-update', {
-        loanToken: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
-        maturity: 1234567890,
+        assetId: '550e8400-e29b-41d4-a716-446655440001',
+        marketId: '550e8400-e29b-41d4-a716-446655440010',
         lend: { price: 5, apr: '-', amount: '1000000' },
         borrow: null,
         timestamp: 1704067200000,
@@ -345,12 +345,12 @@ describe('EventsGateway', () => {
       // Subscribe to second orderbook
       mockClient.emit.mockClear();
       gateway.handleSubscribeOrderbook(mockClient, {
-        loanToken: '0x6B175474E89094C44Da98b954EedeAC495271d0F',
-        maturity: 9876543210,
+        assetId: '550e8400-e29b-41d4-a716-446655440002',
+        marketId: '550e8400-e29b-41d4-a716-446655440020',
       });
       expect(mockClient.emit).toHaveBeenCalledWith('orderbook-update', {
-        loanToken: '0x6B175474E89094C44Da98b954EedeAC495271d0F',
-        maturity: 9876543210,
+        assetId: '550e8400-e29b-41d4-a716-446655440002',
+        marketId: '550e8400-e29b-41d4-a716-446655440020',
         lend: null,
         borrow: { price: 3, apr: '-', amount: '2000000' },
         timestamp: 1704067300000,

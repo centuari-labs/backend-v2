@@ -269,7 +269,8 @@ export class OrdersWorker implements OnModuleInit {
     }
 
     private getRandomType(): OrderType {
-        return Math.random() < 0.5 ? OrderType.Market : OrderType.Limit;
+        // Only generate limit orders so every order has a non-zero rate (APR)
+        return OrderType.Limit;
     }
 
     private getRandomRate(): number {

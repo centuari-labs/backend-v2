@@ -18,6 +18,7 @@ describe("TokensService", () => {
         decimals: 6,
         averageLTV: 0.75,
         coingeckoId: "usd-coin",
+        imageUrl: null,
         createdAt: new Date(),
         updatedAt: new Date(),
     };

@@ -67,7 +67,7 @@
         ],
         "body": {
           "mode": "raw",
-          "raw": "{\n    \"loanToken\": \"0x036CbD53842c5426634e7929541eC2318f3dCF7e\",\n    \"amount\": \"100\"\n  }",
+          "raw": "{\n    \"assetId\": \"b66a2641-3339-4a48-805c-6da248f33dee\",\n    \"amount\": \"100\"\n  }",
           "options": {
             "raw": {
               "language": "json"

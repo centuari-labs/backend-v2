@@ -3,13 +3,13 @@ import { Interval } from "@nestjs/schedule";
 import { InjectRepository } from "@nestjs/typeorm";
 import { DataSource, Repository } from "typeorm";
 import { OrderSide, OrderStatus, OrderType } from "./constants/order.constants";
-import { NATS_SUBJECTS } from "./constants/nats-subjects.constants";
 import { Order } from "./entities/order.entity";
 import { OrderRepository } from "./repositories/order.repository";
 import { OrdersService } from "./orders.service";
 import { Market } from "../market/entities/market.entity";
 import { Token } from "../tokens/entities/token.entity";
 import { NatsService } from "../core/nats/nats.service";
+import { EventsGateway } from "../core/websocket/websocket.gateway";
 
 const INSERT_INTERVAL_MS = Number.parseInt("5000", 10);
 const PARTIAL_FILL_INTERVAL_MS = Number.parseInt("180000", 10);
@@ -69,6 +69,7 @@ export class OrdersWorker implements OnModuleInit {
         private readonly ordersService: OrdersService,
         private readonly dataSource: DataSource,
         private readonly natsService: NatsService,
+        private readonly eventsGateway: EventsGateway,
     ) {}
 
     async onModuleInit(): Promise<void> {
@@ -244,9 +245,11 @@ export class OrdersWorker implements OnModuleInit {
         if (!this.isEnabled) return;
 
         try {
-            // Prefer partially filled orders, fall back to open
+            // Prefer partially filled orders, fall back to open.
+            // Only pick orders that have order_markets rows (old/stale orders may lack them).
             let order = await this.orderRepository
                 .createQueryBuilder("order")
+                .innerJoin("order_markets", "om", "om.order_id = order.id")
                 .where("order.status = :status", {
                     status: OrderStatus.PartiallyFilled,
                 })
@@ -256,6 +259,7 @@ export class OrdersWorker implements OnModuleInit {
             if (!order) {
                 order = await this.orderRepository
                     .createQueryBuilder("order")
+                    .innerJoin("order_markets", "om", "om.order_id = order.id")
                     .where("order.status = :status", {
                         status: OrderStatus.Open,
                     })
@@ -290,13 +294,6 @@ export class OrdersWorker implements OnModuleInit {
                 .where("om.order_id = :orderId", { orderId: order.id })
                 .getRawOne();
 
-            if (!orderMarket) {
-                this.logger.debug(
-                    `No order_market for order ${order.id}, skipping fill.`,
-                );
-                return;
-            }
-
             // Get market maturity
             const market = await this.marketRepository.findOne({
                 where: { id: marketId },
@@ -323,41 +320,24 @@ export class OrdersWorker implements OnModuleInit {
                 });
 
                 // 2. Create counterparty order (FILLED immediately)
-                const counterpartyOrderResult = await manager
-                    .createQueryBuilder()
-                    .insert()
-                    .into("orders")
-                    .values({
-                        account_id: counterpartyAccount.id,
-                        asset_id: order!.assetId,
-                        side: counterpartySide,
-                        type: OrderType.Limit,
-                        rate: order!.rate,
-                        quantity: quantity.toString(),
-                        filled_quantity: quantity.toString(),
-                        settlement_fee: "0",
-                        filled_settlement_fee: "0",
-                        status: OrderStatus.Filled,
-                    })
-                    .returning("id")
-                    .execute();
-
-                const counterpartyOrderId =
-                    counterpartyOrderResult.generatedMaps[0]?.id ??
-                    counterpartyOrderResult.raw[0]?.id;
+                const counterpartyOrder = manager.getRepository(Order).create({
+                    accountId: counterpartyAccount.id,
+                    assetId: order!.assetId,
+                    side: counterpartySide,
+                    type: OrderType.Limit,
+                    rate: order!.rate,
+                    quantity: quantity.toString(),
+                    filledQuantity: quantity.toString(),
+                    settlementFee: "0",
+                    filledSettlementFee: "0",
+                    status: OrderStatus.Filled,
+                });
+                const savedCounterparty = await manager
+                    .getRepository(Order)
+                    .save(counterpartyOrder);
+                const counterpartyOrderId = savedCounterparty.id;
 
                 // 3. Create order_market for counterparty
-                await manager
-                    .createQueryBuilder()
-                    .insert()
-                    .into("order_markets")
-                    .values({
-                        order_id: counterpartyOrderId,
-                        market_id: marketId,
-                    })
-                    .execute();
-
-                // 4. Create match record
                 const lendOrderId = isLend ? order!.id : counterpartyOrderId;
                 const borrowOrderId = isLend ? counterpartyOrderId : order!.id;
                 const lenderAccountId = isLend
@@ -367,67 +347,80 @@ export class OrdersWorker implements OnModuleInit {
                     ? counterpartyAccount.id
                     : order!.accountId;
 
-                await manager
-                    .createQueryBuilder()
-                    .insert()
-                    .into("matches")
-                    .values({
-                        lend_order_market_id: lendOrderId,
-                        borrow_order_market_id: borrowOrderId,
-                        asset_id: order!.assetId,
-                        lender_account_id: lenderAccountId,
-                        borrower_account_id: borrowerAccountId,
-                        match_amount: quantity.toString(),
-                        rate: order!.rate,
-                        is_borrower_taker: !isLend,
-                        maker_fee: 0,
-                        taker_fee: 0,
-                        lender_settlement_fee: 0,
-                        borrower_settlement_fee: 0,
+                await manager.query(
+                    `INSERT INTO order_markets (order_id, market_id) VALUES ($1, $2)`,
+                    [counterpartyOrderId, marketId],
+                );
+
+                // 4. Create match record
+                await manager.query(
+                    `INSERT INTO matches (
+                        lend_order_market_id, borrow_order_market_id,
+                        asset_id, lender_account_id, borrower_account_id,
+                        match_amount, rate, is_borrower_taker,
+                        maker_fee, taker_fee,
+                        lender_settlement_fee, borrower_settlement_fee,
+                        maturity
+                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+                    [
+                        lendOrderId,
+                        borrowOrderId,
+                        order!.assetId,
+                        lenderAccountId,
+                        borrowerAccountId,
+                        quantity.toString(),
+                        order!.rate,
+                        !isLend,
+                        0,
+                        0,
+                        0,
+                        0,
                         maturity,
-                    })
-                    .execute();
+                    ],
+                );
 
                 // 5. Create lend position
-                await manager
-                    .createQueryBuilder()
-                    .insert()
-                    .into("lend_positions")
-                    .values({
-                        account_id: lenderAccountId,
-                        asset_id: order!.assetId,
-                        market_id: marketId,
-                        shares: quantity.toString(),
-                        original_shares: quantity.toString(),
-                        amount: quantity.toString(),
-                    })
-                    .execute();
+                await manager.query(
+                    `INSERT INTO lend_positions (account_id, asset_id, market_id, shares, original_shares, amount)
+                     VALUES ($1, $2, $3, $4, $5, $6)`,
+                    [
+                        lenderAccountId,
+                        order!.assetId,
+                        marketId,
+                        quantity.toString(),
+                        quantity.toString(),
+                        quantity.toString(),
+                    ],
+                );
 
                 // 6. Create borrow position
-                await manager
-                    .createQueryBuilder()
-                    .insert()
-                    .into("borrow_positions")
-                    .values({
-                        account_id: borrowerAccountId,
-                        asset_id: order!.assetId,
-                        market_id: marketId,
-                        amount: quantity.toString(),
-                        original_debt: quantity.toString(),
-                        debt: quantity.toString(),
-                    })
-                    .execute();
+                await manager.query(
+                    `INSERT INTO borrow_positions (account_id, asset_id, market_id, amount, original_debt, debt)
+                     VALUES ($1, $2, $3, $4, $5, $6)`,
+                    [
+                        borrowerAccountId,
+                        order!.assetId,
+                        marketId,
+                        quantity.toString(),
+                        quantity.toString(),
+                        quantity.toString(),
+                    ],
+                );
             });
 
-            // Publish match event for recent trades (after transaction commits)
-            if (this.natsService.isConnected() && entry.tokenAddress) {
-                await this.natsService.publish(NATS_SUBJECTS.MATCH_CREATED, {
+            // Broadcast recent trade directly to WebSocket clients
+            if (entry.tokenAddress) {
+                const trade = {
                     loanToken: entry.tokenAddress,
-                    side: isLend ? "BORROW" : "LEND",
+                    side: (isLend ? "BORROW" : "LEND") as "LEND" | "BORROW",
                     amount: quantity.toString(),
                     rate: order.rate,
                     timestamp: Date.now(),
-                });
+                };
+                this.eventsGateway.handleMatchCreated(trade);
+                this.logger.log(
+                    `Broadcast recent-trade for ${entry.tokenAddress}`,
+                );
             }
 
             this.logger.log(

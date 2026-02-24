@@ -389,7 +389,7 @@ export class EventsGateway
 
     // ─── Recent Trades ────────────────────────────────────────────────
 
-    private handleMatchCreated(trade: RecentTradeDto) {
+    public handleMatchCreated(trade: RecentTradeDto) {
         const room = `recent-trades:${trade.loanToken}`;
         const cached = this.recentTradesCache.get(room) ?? [];
         cached.unshift(trade);
@@ -397,6 +397,12 @@ export class EventsGateway
             cached.length = this.maxRecentTrades;
         }
         this.recentTradesCache.set(room, cached);
+
+        const socketsInRoom = this.server.sockets.adapter.rooms.get(room);
+        this.logger.log(
+            `recent-trade → room=${room}, clients=${socketsInRoom?.size ?? 0}, trade=${JSON.stringify(trade)}`,
+        );
+
         this.server.to(room).emit("recent-trade", trade);
     }
 

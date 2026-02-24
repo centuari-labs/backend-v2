@@ -3,10 +3,13 @@ import { Interval } from "@nestjs/schedule";
 import { InjectRepository } from "@nestjs/typeorm";
 import { DataSource, Repository } from "typeorm";
 import { OrderSide, OrderStatus, OrderType } from "./constants/order.constants";
+import { NATS_SUBJECTS } from "./constants/nats-subjects.constants";
 import { Order } from "./entities/order.entity";
 import { OrderRepository } from "./repositories/order.repository";
 import { OrdersService } from "./orders.service";
 import { Market } from "../market/entities/market.entity";
+import { Token } from "../tokens/entities/token.entity";
+import { NatsService } from "../core/nats/nats.service";
 
 const INSERT_INTERVAL_MS = Number.parseInt("5000", 10);
 const PARTIAL_FILL_INTERVAL_MS = Number.parseInt("180000", 10);
@@ -54,14 +57,18 @@ export class OrdersWorker implements OnModuleInit {
     private assetMarketCache: Array<{
         assetId: string;
         marketIds: string[];
+        tokenAddress: string;
     }> = [];
 
     constructor(
         private readonly orderRepository: OrderRepository,
         @InjectRepository(Market)
         private readonly marketRepository: Repository<Market>,
+        @InjectRepository(Token)
+        private readonly tokenRepository: Repository<Token>,
         private readonly ordersService: OrdersService,
         private readonly dataSource: DataSource,
+        private readonly natsService: NatsService,
     ) {}
 
     async onModuleInit(): Promise<void> {
@@ -88,15 +95,24 @@ export class OrdersWorker implements OnModuleInit {
 
         try {
             const markets = await this.marketRepository.find();
-            const grouped = new Map<string, string[]>();
+            const tokens = await this.tokenRepository.find();
+            const tokenAddressMap = new Map<string, string>();
+            for (const t of tokens) {
+                tokenAddressMap.set(t.id, t.tokenAddress);
+            }
 
+            const grouped = new Map<string, string[]>();
             for (const m of markets) {
                 const arr = grouped.get(m.assetId) ?? [];
                 arr.push(m.id);
                 grouped.set(m.assetId, arr);
             }
             this.assetMarketCache = Array.from(grouped.entries()).map(
-                ([assetId, marketIds]) => ({ assetId, marketIds }),
+                ([assetId, marketIds]) => ({
+                    assetId,
+                    marketIds,
+                    tokenAddress: tokenAddressMap.get(assetId) ?? "",
+                }),
             );
             this.logger.debug(
                 `Asset/market cache refreshed: ${this.assetMarketCache.length} assets with markets.`,
@@ -402,6 +418,17 @@ export class OrdersWorker implements OnModuleInit {
                     })
                     .execute();
             });
+
+            // Publish match event for recent trades (after transaction commits)
+            if (this.natsService.isConnected() && entry.tokenAddress) {
+                await this.natsService.publish(NATS_SUBJECTS.MATCH_CREATED, {
+                    loanToken: entry.tokenAddress,
+                    side: isLend ? "BORROW" : "LEND",
+                    amount: quantity.toString(),
+                    rate: order.rate,
+                    timestamp: Date.now(),
+                });
+            }
 
             this.logger.log(
                 `Filled order ${order.id} (${order.side} ${quantity} of asset ${order.assetId})`,

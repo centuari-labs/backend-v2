@@ -1,12 +1,10 @@
 import { Injectable } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
 import { MarketResponseDto } from './dto/market.dto';
-import { Token } from '../tokens/entities/token.entity';
 import { PriceService } from '../price/price.service';
 
 import { OrderRepository } from '../orders/repositories/order.repository';
 import { MarketRepositories } from './repository/market.repository';
+import { TokensRepository } from '../tokens/repositories/tokens.repository';
 import { toPercentage } from '../common/utils/number.utils';
 
 @Injectable()
@@ -14,13 +12,12 @@ export class MarketService {
     constructor(
         private readonly orderRepository: OrderRepository,
         private readonly marketRepository: MarketRepositories,
-        @InjectRepository(Token)
-        private readonly tokenRepository: Repository<Token>,
+        private readonly tokensRepository: TokensRepository,
         private readonly priceService: PriceService,
     ) { }
 
     async getMarketSnapshot(): Promise<MarketResponseDto> {
-        const assets = await this.tokenRepository.find();
+        const assets = await this.tokensRepository.findLoanTokens();
 
         const rateMap = await this.orderRepository.getBestRates();
 

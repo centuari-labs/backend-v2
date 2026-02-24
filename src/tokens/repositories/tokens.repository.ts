@@ -30,4 +30,11 @@ export class TokensRepository {
 
         return this.tokensRepository.find();
     }
+
+    /**
+     * Return all tokens that are loan tokens (is_loan_token = true).
+     */
+    async findLoanTokens(): Promise<Token[]> {
+        return this.tokensRepository.find({ where: { isLoanToken: true } });
+    }
 }

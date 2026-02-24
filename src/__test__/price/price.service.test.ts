@@ -38,7 +38,7 @@ describe("PriceService", () => {
         chainId: 84532,
         averageLTV: 0.75,
         coingeckoId: "usd-coin",
-        imageUrl: null,
+        imageUrl: "https://example.com/image.png",
         createdAt: new Date(),
         updatedAt: new Date(),
     };
@@ -51,6 +51,7 @@ describe("PriceService", () => {
         name: "Ethereum",
         coingeckoId: "ethereum",
         decimals: 18,
+        imageUrl: "https://example.com/image.png",
     };
 
     beforeEach(async () => {

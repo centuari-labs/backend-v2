@@ -228,6 +228,7 @@ export class PortfolioService {
                 walletBalance: amount,
                 amountInUsd: calculateUsdAmount(amount, price ?? 0),
                 isCollateral: !!ua.is_collateral,
+                imageUrl: token?.imageUrl ?? null,
             };
         });
 

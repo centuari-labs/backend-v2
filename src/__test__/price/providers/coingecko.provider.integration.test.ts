@@ -44,6 +44,7 @@ describe("CoinGeckoProvider (integration)", () => {
                     symbol: "ETH",
                     coingeckoId: "ethereum",
                     decimals: 18,
+                    imageUrl: "https://example.com/image.png",
                 }),
             ];
 

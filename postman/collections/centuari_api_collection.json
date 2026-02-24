@@ -10,6 +10,7 @@
       "item": [
         {
           "name": "Lend limit order",
+          "id": "66dcdc9f-ba6a-4963-9e04-fab19025ffc1",
           "request": {
             "method": "POST",
             "header": [
@@ -47,6 +48,7 @@
           },
           "response": [
             {
+              "id": "6f67fe11-1e91-485d-88a0-bd1a34bd2719",
               "name": "201 Created",
               "status": "Created",
               "code": 201,
@@ -57,12 +59,14 @@
                   "value": "application/json"
                 }
               ],
+              "cookie": [],
               "body": "{\n  \"statusCode\": 201,\n  \"data\": {\n    \"orderId\": \"11111111-2222-3333-4444-555555555555\",\n    \"walletAddress\": \"0x1234567890abcdef1234567890abcdef12345678\",\n    \"assetId\": \"b66a2641-3339-4a48-805c-6da248f33dee\",\n    \"markets\": [\n      {\n        \"marketId\": \"00000000-0000-0000-0000-000000000001\",\n        \"maturity\": 1737052800\n      }\n    ],\n    \"timestamp\": 1736966400,\n    \"side\": \"LEND\",\n    \"type\": \"LIMIT\",\n    \"status\": \"OPEN\",\n    \"originalAmount\": \"100\",\n    \"settlementFeeAmount\": \"0.5\",\n    \"autoRollover\": false,\n    \"rate\": 5,\n    \"createdAt\": \"2025-01-15T10:00:00.000Z\",\n    \"updatedAt\": \"2025-01-15T10:00:00.000Z\"\n  }\n}"
             }
           ]
         },
         {
           "name": "Lend market order",
+          "id": "7d530de3-031f-4f22-b6e8-8d180370a6fc",
           "request": {
             "method": "POST",
             "header": [
@@ -100,6 +104,7 @@
           },
           "response": [
             {
+              "id": "dc5631fb-0f2e-4f9a-985f-e1a34c032b17",
               "name": "201 Created",
               "status": "Created",
               "code": 201,
@@ -110,12 +115,14 @@
                   "value": "application/json"
                 }
               ],
+              "cookie": [],
               "body": "{\n  \"statusCode\": 201,\n  \"data\": {\n    \"orderId\": \"22222222-3333-4444-5555-666666666666\",\n    \"walletAddress\": \"0x1234567890abcdef1234567890abcdef12345678\",\n    \"assetId\": \"b66a2641-3339-4a48-805c-6da248f33dee\",\n    \"markets\": [\n      {\n        \"marketId\": \"00000000-0000-0000-0000-000000000001\",\n        \"maturity\": 1737052800\n      }\n    ],\n    \"timestamp\": 1736966400,\n    \"side\": \"LEND\",\n    \"type\": \"MARKET\",\n    \"status\": \"OPEN\",\n    \"originalAmount\": \"100\",\n    \"settlementFeeAmount\": \"0.5\",\n    \"autoRollover\": false,\n    \"rate\": 4.5,\n    \"createdAt\": \"2025-01-15T10:05:00.000Z\",\n    \"updatedAt\": \"2025-01-15T10:05:00.000Z\"\n  }\n}"
             }
           ]
         },
         {
           "name": "Borrow limit order",
+          "id": "988e3190-2156-497e-820a-76bdbc17cd43",
           "request": {
             "method": "POST",
             "header": [
@@ -153,6 +160,7 @@
           },
           "response": [
             {
+              "id": "65573451-36aa-4d08-a034-da18a7debdcd",
               "name": "201 Created",
               "status": "Created",
               "code": 201,
@@ -163,12 +171,14 @@
                   "value": "application/json"
                 }
               ],
+              "cookie": [],
               "body": "{\n  \"statusCode\": 201,\n  \"data\": {\n    \"orderId\": \"33333333-4444-5555-6666-777777777777\",\n    \"walletAddress\": \"0xabcdefabcdefabcdefabcdefabcdefabcdefabcd\",\n    \"assetId\": \"b66a2641-3339-4a48-805c-6da248f33dee\",\n    \"markets\": [\n      {\n        \"marketId\": \"00000000-0000-0000-0000-000000000001\",\n        \"maturity\": 1737052800\n      }\n    ],\n    \"timestamp\": 1736966400,\n    \"side\": \"BORROW\",\n    \"type\": \"LIMIT\",\n    \"status\": \"OPEN\",\n    \"originalAmount\": \"10\",\n    \"settlementFeeAmount\": \"0.1\",\n    \"autoRollover\": false,\n    \"rate\": 2.5,\n    \"createdAt\": \"2025-01-15T10:10:00.000Z\",\n    \"updatedAt\": \"2025-01-15T10:10:00.000Z\"\n  }\n}"
             }
           ]
         },
         {
           "name": "Borrow market order",
+          "id": "9fb6bc6c-8c3a-4f36-a4f6-8b7620a98869",
           "request": {
             "method": "POST",
             "header": [
@@ -206,6 +216,7 @@
           },
           "response": [
             {
+              "id": "d26b73fc-c349-484c-98cb-76009a24b54a",
               "name": "201 Created",
               "status": "Created",
               "code": 201,
@@ -216,12 +227,14 @@
                   "value": "application/json"
                 }
               ],
+              "cookie": [],
               "body": "{\n  \"statusCode\": 201,\n  \"data\": {\n    \"orderId\": \"44444444-5555-6666-7777-888888888888\",\n    \"walletAddress\": \"0xabcdefabcdefabcdefabcdefabcdefabcdefabcd\",\n    \"assetId\": \"b66a2641-3339-4a48-805c-6da248f33dee\",\n    \"markets\": [\n      {\n        \"marketId\": \"00000000-0000-0000-0000-000000000001\",\n        \"maturity\": 1737052800\n      }\n    ],\n    \"timestamp\": 1736966400,\n    \"side\": \"BORROW\",\n    \"type\": \"MARKET\",\n    \"status\": \"OPEN\",\n    \"originalAmount\": \"10\",\n    \"settlementFeeAmount\": \"0.1\",\n    \"autoRollover\": false,\n    \"rate\": 2.0,\n    \"createdAt\": \"2025-01-15T10:15:00.000Z\",\n    \"updatedAt\": \"2025-01-15T10:15:00.000Z\"\n  }\n}"
             }
           ]
         },
         {
           "name": "Cancel order",
+          "id": "80773a59-0708-4f50-b2ca-3745805c6f4a",
           "request": {
             "method": "PATCH",
             "header": [
@@ -245,6 +258,7 @@
           },
           "response": [
             {
+              "id": "a3a6c453-cc2b-4718-bf2c-07f86b085878",
               "name": "200 OK",
               "status": "OK",
               "code": 200,
@@ -255,17 +269,20 @@
                   "value": "application/json"
                 }
               ],
+              "cookie": [],
               "body": "{\n  \"statusCode\": 200,\n  \"data\": {\n    \"orderId\": \"11111111-2222-3333-4444-555555555555\",\n    \"walletAddress\": \"0x1234567890abcdef1234567890abcdef12345678\",\n    \"assetId\": \"b66a2641-3339-4a48-805c-6da248f33dee\",\n    \"markets\": [\n      {\n        \"marketId\": \"00000000-0000-0000-0000-000000000001\",\n        \"maturity\": 1737052800\n      }\n    ],\n    \"timestamp\": 1736966400,\n    \"side\": \"LEND\",\n    \"type\": \"LIMIT\",\n    \"status\": \"CANCELLED\",\n    \"originalAmount\": \"100\",\n    \"settlementFeeAmount\": \"0.5\",\n    \"autoRollover\": false,\n    \"rate\": 5,\n    \"createdAt\": \"2025-01-15T10:00:00.000Z\",\n    \"updatedAt\": \"2025-01-15T10:20:00.000Z\"\n  }\n}"
             }
           ]
         }
-      ]
+      ],
+      "id": "e5019f31-3a21-4b9e-8559-8a5539d46122"
     },
     {
       "name": "Portfolio",
       "item": [
         {
           "name": "Lend borrow assets",
+          "id": "12140dcd-1da8-4425-983d-e100dbd1da23",
           "request": {
             "method": "GET",
             "header": [
@@ -288,6 +305,7 @@
           },
           "response": [
             {
+              "id": "a5ef4d1f-a084-4fae-ae99-3c6d3d654b1a",
               "name": "200 OK",
               "status": "OK",
               "code": 200,
@@ -298,12 +316,14 @@
                   "value": "application/json"
                 }
               ],
+              "cookie": [],
               "body": "{\n  \"suppliedAssets\": 3,\n  \"borrowedAssets\": 1,\n  \"healthFactor\": 1.8\n}"
             }
           ]
         },
         {
           "name": "My portfolio",
+          "id": "423c195e-7894-4ea8-b670-214e1308f243",
           "request": {
             "method": "GET",
             "header": [
@@ -326,6 +346,7 @@
           },
           "response": [
             {
+              "id": "5b999c3b-afbb-4e5d-a9f2-e652922d660f",
               "name": "200 OK",
               "status": "OK",
               "code": 200,
@@ -336,12 +357,14 @@
                   "value": "application/json"
                 }
               ],
+              "cookie": [],
               "body": "{\n  \"totalDeposit\": 12500.5,\n  \"allTimeReturn\": 320.75,\n  \"netAPY\": 4.2\n}"
             }
           ]
         },
         {
           "name": "My position",
+          "id": "d5d0d422-0042-4d2a-bea5-7e14aab89c85",
           "request": {
             "method": "GET",
             "header": [
@@ -378,6 +401,7 @@
           },
           "response": [
             {
+              "id": "a0988b24-3066-402d-ad74-d1ec9e2839f1",
               "name": "200 OK",
               "status": "OK",
               "code": 200,
@@ -388,12 +412,14 @@
                   "value": "application/json"
                 }
               ],
+              "cookie": [],
               "body": "{\n  \"data\": [\n    {\n      \"symbol\": \"USDC\",\n      \"name\": \"USD Coin\",\n      \"walletBalance\": 1000,\n      \"amountInUsd\": 1000,\n      \"isCollateral\": true\n    },\n    {\n      \"symbol\": \"ETH\",\n      \"name\": \"Ethereum\",\n      \"walletBalance\": 2.5,\n      \"amountInUsd\": 6500,\n      \"isCollateral\": false\n    }\n  ],\n  \"page\": 1,\n  \"limit\": 10,\n  \"totalData\": 2,\n  \"totalPages\": 1\n}"
             }
           ]
         },
         {
           "name": "My assets",
+          "id": "9b471595-5e04-443e-8092-9f0ca8510ac6",
           "request": {
             "method": "GET",
             "header": [
@@ -428,6 +454,7 @@
           },
           "response": [
             {
+              "id": "b2d2848e-9960-447c-a95f-357aa2d8b41c",
               "name": "200 OK",
               "status": "OK",
               "code": 200,
@@ -438,12 +465,14 @@
                   "value": "application/json"
                 }
               ],
-              "body": "{\n  \"data\": [\n    {\n      \"symbol\": \"USDC\",\n      \"name\": \"USD Coin\",\n      \"walletBalance\": 1500,\n      \"amountInUsd\": 1500,\n      \"isCollateral\": true\n    },\n    {\n      \"symbol\": \"ETH\",\n      \"name\": \"Ethereum\",\n      \"walletBalance\": 1.2,\n      \"amountInUsd\": 3120,\n      \"isCollateral\": false\n    }\n  ],\n  \"page\": 1,\n  \"limit\": 10,\n  \"totalData\": 2,\n  \"totalPages\": 1\n}"
+              "cookie": [],
+              "body": "{\n  \"data\": {\n    \"data\": [\n      {\n        \"symbol\": \"BTC\",\n        \"name\": \"Bitcoin\",\n        \"walletBalance\": 0.5,\n        \"amountInUsd\": 32291.5,\n        \"isCollateral\": true,\n        \"imageUrl\": \"/tokens/btc.svg\"\n      },\n      {\n        \"symbol\": \"ETH\",\n        \"name\": \"Ethereum\",\n        \"walletBalance\": 5,\n        \"amountInUsd\": 9280.3,\n        \"isCollateral\": true,\n        \"imageUrl\": \"/tokens/eth.svg\"\n      },\n      {\n        \"symbol\": \"USDC\",\n        \"name\": \"USD Coin\",\n        \"walletBalance\": 50000,\n        \"amountInUsd\": 49995,\n        \"isCollateral\": false,\n        \"imageUrl\": \"/tokens/usdc.svg\"\n      }\n    ],\n    \"page\": 1,\n    \"limit\": 10,\n    \"totalData\": 3,\n    \"totalPages\": 1\n  }\n}"
             }
           ]
         },
         {
           "name": "Set assets as collateral",
+          "id": "6ca51f2e-9cc5-4290-9a19-604ed0cea1a1",
           "request": {
             "method": "PUT",
             "header": [
@@ -480,21 +509,25 @@
           },
           "response": [
             {
+              "id": "2159cd51-6ed2-4175-b873-1d7da05c2aea",
               "name": "204 No Content",
               "status": "No Content",
               "code": 204,
               "_postman_previewlanguage": "json",
-              "header": []
+              "header": [],
+              "cookie": []
             }
           ]
         }
-      ]
+      ],
+      "id": "d2b486c3-15c6-4ef8-bceb-14b14477c640"
     },
     {
       "name": "Market",
       "item": [
         {
           "name": "Market endpoint",
+          "id": "b186deff-a9d4-470d-9360-0093f1c959f2",
           "request": {
             "method": "GET",
             "header": [],
@@ -510,6 +543,7 @@
           },
           "response": [
             {
+              "id": "9a504cf9-6770-4e1e-b5ad-438d855ab056",
               "name": "200 OK",
               "status": "OK",
               "code": 200,
@@ -520,25 +554,30 @@
                   "value": "application/json"
                 }
               ],
-              "body": "{\n  \"total_deposit\": \"1000000.00\",\n  \"active_loans\": \"250000.00\",\n  \"markets\": [\n    {\n      \"asset\": {\n        \"id\": \"b66a2641-3339-4a48-805c-6da248f33dee\",\n        \"name\": \"USD Coin\",\n        \"symbol\": \"USDC\",\n        \"decimals\": 6\n      },\n      \"borrow_rate\": 5.2,\n      \"lend_rate\": 4.1,\n      \"collateral_factor\": 75\n    },\n    {\n      \"asset\": {\n        \"id\": \"00000000-0000-0000-0000-000000000002\",\n        \"name\": \"Ethereum\",\n        \"symbol\": \"ETH\",\n        \"decimals\": 18\n      },\n      \"borrow_rate\": 7.5,\n      \"lend_rate\": 5.8,\n      \"collateral_factor\": 70\n    }\n  ]\n}"
+              "cookie": [],
+              "body": "{\n \"total_deposit\": \"91498.10\",\n    \"active_loans\": \"9999.00\",\n    \"markets\": [\n      {\n        \"asset\": {\n          \"id\": \"3ed4880b-950f-4a6b-8e47-3f3814eca106\",\n          \"name\": \"Bitcoin\",\n          \"symbol\": \"BTC\",\n          \"decimals\": 8,\n          \"imageUrl\": \"/tokens/btc.svg\"\n        },\n        \"markets\": {\n          \"market_id\": {},\n          \"maturity\": \"2026-02-23T17:45:02.626Z\"\n        },\n        \"borrow_rate\": 0,\n        \"lend_rate\": 0,\n        \"collateral_factor\": 0\n      },\n      {\n        \"asset\": {\n          \"id\": \"d1e9ccb9-8ec0-4cd1-9413-a0ee4a720b7b\",\n          \"name\": \"Apple (Ondo Tokenized)\",\n          \"symbol\": \"AAPLon\",\n          \"decimals\": 18,\n          \"imageUrl\": \"/tokens/aaplon.svg\"\n        },\n        \"markets\": {\n          \"market_id\": {},\n          \"maturity\": \"2026-02-23T17:45:02.626Z\"\n        },\n        \"borrow_rate\": 0,\n        \"lend_rate\": 0,\n        \"collateral_factor\": 0\n      },\n      {\n        \"asset\": {\n          \"id\": \"fa83fb88-fdc9-4cf9-9b58-f39fdd2d71a1\",\n          \"name\": \"iShares Silver Trust (Ondo Tokenized)\",\n          \"symbol\": \"SLVon\",\n          \"decimals\": 18,\n          \"imageUrl\": \"/tokens/slvon.svg\"\n        },\n        \"markets\": {\n          \"market_id\": {},\n          \"maturity\": \"2026-02-23T17:45:02.626Z\"\n        },\n        \"borrow_rate\": 0,\n        \"lend_rate\": 0,\n        \"collateral_factor\": 0\n      },\n      {\n        \"asset\": {\n          \"id\": \"2c50c426-80f0-4ace-a9f0-3fe055039bc3\",\n          \"name\": \"iShares 20+ Year Treasury Bond ETF (Ondo Tokenized)\",\n          \"symbol\": \"TLTon\",\n          \"decimals\": 18,\n          \"imageUrl\": \"/tokens/tltlon.svg\"\n        },\n        \"markets\": {\n          \"market_id\": {},\n          \"maturity\": \"2026-02-23T17:45:02.626Z\"\n        },\n        \"borrow_rate\": 0,\n        \"lend_rate\": 0,\n        \"collateral_factor\": 0\n      },\n      {\n        \"asset\": {\n          \"id\": \"2b459171-b1a5-4f9f-ba88-945062ce976f\",\n          \"name\": \"NVIDIA (Ondo Tokenized)\",\n          \"symbol\": \"NVDAon\",\n          \"decimals\": 18,\n          \"imageUrl\": \"/tokens/nvdaon.svg\"\n        },\n        \"markets\": {\n          \"market_id\": {},\n          \"maturity\": \"2026-02-23T17:45:02.627Z\"\n        },\n        \"borrow_rate\": 0,\n        \"lend_rate\": 0,\n        \"collateral_factor\": 0\n      },\n      {\n        \"asset\": {\n          \"id\": \"5bb09b6d-5096-4e51-a8f6-96ac913dba72\",\n          \"name\": \"Tether Gold\",\n          \"symbol\": \"XAUT\",\n          \"decimals\": 6,\n          \"imageUrl\": \"/tokens/xaut.svg\"\n        },\n        \"markets\": {\n          \"market_id\": {},\n          \"maturity\": \"2026-02-23T17:45:02.627Z\"\n        },\n        \"borrow_rate\": 0,\n        \"lend_rate\": 0,\n        \"collateral_factor\": 0\n      },\n      {\n        \"asset\": {\n          \"id\": \"1fed639c-a7d0-4eaf-885c-6e82b077a7d7\",\n          \"name\": \"Ethereum\",\n          \"symbol\": \"ETH\",\n          \"decimals\": 18,\n          \"imageUrl\": \"/tokens/eth.svg\"\n        },\n        \"markets\": {\n          \"market_id\": {},\n          \"maturity\": \"2026-02-23T17:45:02.627Z\"\n        },\n        \"borrow_rate\": 0,\n        \"lend_rate\": 0,\n        \"collateral_factor\": 0\n      },\n      {\n        \"asset\": {\n          \"id\": \"4489f5dc-dbc2-4151-bebb-c590bdede1b2\",\n          \"name\": \"USD Coin\",\n          \"symbol\": \"USDC\",\n          \"decimals\": 6,\n          \"imageUrl\": \"/tokens/usdc.svg\"\n        },\n        \"markets\": {\n          \"market_id\": {},\n          \"maturity\": \"2026-02-23T17:45:02.627Z\"\n        },\n        \"borrow_rate\": 0.049,\n        \"lend_rate\": 0,\n        \"collateral_factor\": 70\n      },\n      {\n        \"asset\": {\n          \"id\": \"5c6f4739-162e-4fee-b53a-d9e329796b05\",\n          \"name\": \"Indonesian Rupiah\",\n          \"symbol\": \"IDRX\",\n          \"decimals\": 18,\n          \"imageUrl\": \"/tokens/idrx.svg\"\n        },\n        \"markets\": {\n          \"market_id\": {},\n          \"maturity\": \"2026-02-23T17:45:02.627Z\"\n        },\n        \"borrow_rate\": 0,\n        \"lend_rate\": 0,\n        \"collateral_factor\": 70\n      },\n      {\n        \"asset\": {\n          \"id\": \"d791b198-569f-4081-862c-d53cfc9ced07\",\n          \"name\": \"Tether USD\",\n          \"symbol\": \"USDT\",\n          \"decimals\": 6,\n          \"imageUrl\": \"/tokens/usdt.svg\"\n        },\n        \"markets\": {\n          \"market_id\": {},\n          \"maturity\": \"2026-02-23T17:45:02.627Z\"\n        },\n        \"borrow_rate\": 0,\n        \"lend_rate\": 0,\n        \"collateral_factor\": 70\n      },\n      {\n        \"asset\": {\n          \"id\": \"bee86e40-575b-42da-ad4a-d2660b32e770\",\n          \"name\": \"StraitsX SGD\",\n          \"symbol\": \"XSGD\",\n          \"decimals\": 6,\n          \"imageUrl\": \"/tokens/xsgd.svg\"\n        },\n        \"markets\": {\n          \"market_id\": {},\n          \"maturity\": \"2026-02-23T17:45:02.627Z\"\n        },\n        \"borrow_rate\": 0,\n        \"lend_rate\": 0,\n        \"collateral_factor\": 70\n      }\n    ]\n  }\n}"
             }
           ]
         }
-      ]
+      ],
+      "id": "59f9f17f-80f5-4ce2-b5d9-2ff0fd9b1ef9"
     }
   ],
   "variable": [
     {
+      "id": "3c21c559-2606-4387-9b05-a55afebb1f66",
       "key": "baseUrl",
       "value": "",
       "type": "default"
     },
     {
+      "id": "f4a7b47d-3123-4ddc-8822-2f9b700cb6fe",
       "key": "authToken",
       "value": "",
       "type": "default"
     },
     {
+      "id": "832e7dc4-985e-4951-bceb-132b3d78df22",
       "key": "orderId",
       "value": "",
       "type": "default"

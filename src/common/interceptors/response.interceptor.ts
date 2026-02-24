@@ -13,10 +13,24 @@ import { map } from "rxjs/operators";
 export class ResponseInterceptor implements NestInterceptor {
     intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
         return next.handle().pipe(
-            map((data) => ({
-                statusCode: context.switchToHttp().getResponse().statusCode,
-                data,
-            })),
+            map((result) => {
+                const statusCode = context.switchToHttp().getResponse().statusCode;
+
+                // Detect paginated structural responses to prevent data.data antipattern
+                if (result && typeof result === "object" && "data" in result && "page" in result) {
+                    const { data, ...meta } = result;
+                    return {
+                        statusCode,
+                        data,
+                        meta,
+                    };
+                }
+
+                return {
+                    statusCode,
+                    data: result,
+                };
+            }),
         );
     }
 }

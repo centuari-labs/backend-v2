@@ -38,6 +38,7 @@ describe('OrdersService', () => {
         quantity: '1000',
         filledQuantity: '0',
         settlementFee: '0',
+        filledSettlementFee: null,
         side: OrderSide.Lend,
         type: OrderType.Limit,
         status: OrderStatus.Open,

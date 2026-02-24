@@ -68,7 +68,8 @@ export class MarketService {
                     name: asset.name,
                     symbol: asset.symbol,
                     decimals: asset.decimals ?? null,
-                    //@todo : should return image url of the asset
+                    image_url: asset.imageUrl ?? null,
+                    token_address: asset.tokenAddress,
                 },
                 markets: { //@todo : should return the earliest market id of maturity available of the assets
                     market_id: this.marketRepository.getMarketId(asset.id),

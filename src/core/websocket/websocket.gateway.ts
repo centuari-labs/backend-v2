@@ -12,20 +12,70 @@ import { Logger } from "@nestjs/common";
 import { Server, Socket } from "socket.io";
 import { NatsService } from "../nats/nats.service";
 import { type UserPositionsDto } from "./dto/user.dto";
-import { Order } from "src/orders/entities/order.entity";
-import { OrderStatus } from "src/orders/constants/order.constants";
+import {
+    OrderSide,
+    OrderStatus,
+    OrderType,
+} from "src/orders/constants/order.constants";
 import { toPercentage } from "src/common/utils/number.utils";
 import type {
+    OrderbookLevel,
     OrderbookUpdateDto,
     SubscribeOrderbookDto,
 } from "./dto/orderbook.dto";
 
-interface OrderbookSnapshotMessage {
-    loanToken: string;
-    maturity: number;
-    lend: { price: number; apr: string; amount: string } | null;
-    borrow: { price: number; apr: string; amount: string } | null;
+/** Shape of order creation messages published by backend-v2 to NATS */
+interface OrderCreationEnvelope {
+    event: string;
+    timestamp: string;
+    data: {
+        orderId: string;
+        walletAddress: string;
+        loanToken: string;
+        markets: Array<{ marketId: string; maturity: number }>;
+        side: OrderSide;
+        type: OrderType;
+        status: OrderStatus;
+        originalAmount: string;
+        remainingAmount: string;
+        settlementFeeAmount: string;
+        rate?: number;
+    };
+    accountId: string;
+}
+
+/** Shape of cancel messages published by backend-v2 to NATS */
+interface OrderCancelEnvelope {
+    event: string;
+    timestamp: string;
+    data: {
+        orderId: string;
+        walletAddress: string;
+    };
+}
+
+/** Shape of status updates published by matching engine directly */
+interface OrderStatusMessage {
+    orderId: string;
+    status: string;
+    remainingAmount: string;
     timestamp: number;
+}
+
+/** In-memory tracked order state */
+interface TrackedOrder {
+    orderId: string;
+    loanToken: string;
+    side: OrderSide;
+    type: OrderType;
+    rate: number;
+    remainingAmount: string;
+    originalAmount: string;
+    accountId: string;
+    status: OrderStatus;
+    walletAddress: string;
+    markets: Array<{ marketId: string; maturity: number }>;
+    settlementFeeAmount: string;
 }
 
 const websocketCorsOrigin =
@@ -49,13 +99,22 @@ export class EventsGateway
 
     private readonly logger = new Logger(EventsGateway.name);
     private isNatsSubscribed = false;
+
+    /** In-memory order state indexed by orderId */
+    private orderState = new Map<string, TrackedOrder>();
+
+    /** Cached aggregated orderbook per loanToken room */
     private orderbookCache = new Map<string, OrderbookUpdateDto>();
 
     constructor(private readonly natsService: NatsService) {}
 
     afterInit(_server: Server) {
         this.logger.log("WebSocket Gateway initialized");
-        this.setupNatsSubscriptions();
+        return this.setupNatsSubscriptions().catch((err) =>
+            this.logger.error(
+                `Failed to set up NATS subscriptions: ${(err as Error).message}`,
+            ),
+        );
     }
 
     handleConnection(client: Socket) {
@@ -66,74 +125,204 @@ export class EventsGateway
         this.logger.log(`Client disconnected: ${client.id}`);
     }
 
-    private setupNatsSubscriptions() {
+    private async setupNatsSubscriptions(): Promise<void> {
         if (this.isNatsSubscribed) return;
 
-        // Subscribe to order status updates for position tracking
-        this.natsService
-            .subscribe<Order[]>("orders.>", (orders, subject) => {
-                for (const order of orders) {
-                    if (order.status === OrderStatus.Filled) {
-                        this.server
-                            .to(`user:${order.accountId}`)
-                            .emit("active-positions", { order, subject });
-                    }
+        // Wait for NATS connection — afterInit can fire before NatsService.onModuleInit completes
+        const maxRetries = 10;
+        const retryDelayMs = 1000;
 
-                    if (
-                        (order.status === OrderStatus.Open ||
-                            order.status === OrderStatus.PartiallyFilled) &&
-                        subject.includes(".limit")
-                    ) {
-                        this.server
-                            .to(`user:${order.accountId}`)
-                            .emit("open-positions", { order, subject });
-                    }
+        for (let attempt = 1; attempt <= maxRetries; attempt++) {
+            if (this.natsService.isConnected()) break;
+            this.logger.log(
+                `Waiting for NATS connection (attempt ${attempt}/${maxRetries})...`,
+            );
+            await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
+        }
+
+        if (!this.natsService.isConnected()) {
+            this.logger.error(
+                "NATS connection not available after retries. Subscriptions not set up.",
+            );
+            return;
+        }
+
+        await this.natsService.subscribe(
+            "orders.>",
+            (data: unknown, subject: string) => {
+                try {
+                    this.handleOrdersMessage(data, subject);
+                } catch (err) {
+                    this.logger.error(
+                        `Error handling NATS message on ${subject}: ${(err as Error).message}`,
+                    );
                 }
-            })
-            .catch((err) =>
-                this.logger.error("Failed to subscribe to orders.>", err),
-            );
-
-        // Subscribe to orderbook snapshots from matching engine
-        this.natsService
-            .subscribe<OrderbookSnapshotMessage>(
-                "orderbook.snapshot",
-                (data) => {
-                    const room = `orderbook:${data.loanToken}:${data.maturity}`;
-
-                    const update: OrderbookUpdateDto = {
-                        loanToken: data.loanToken,
-                        maturity: data.maturity,
-                        lend: data.lend
-                            ? {
-                                  price: toPercentage(data.lend.price),
-                                  apr: data.lend.apr,
-                                  amount: data.lend.amount,
-                              }
-                            : null,
-                        borrow: data.borrow
-                            ? {
-                                  price: toPercentage(data.borrow.price),
-                                  apr: data.borrow.apr,
-                                  amount: data.borrow.amount,
-                              }
-                            : null,
-                        timestamp: data.timestamp,
-                    };
-
-                    this.orderbookCache.set(room, update);
-                    this.server.to(room).emit("orderbook-update", update);
-                },
-            )
-            .catch((err) =>
-                this.logger.error(
-                    "Failed to subscribe to orderbook.snapshot",
-                    err,
-                ),
-            );
+            },
+        );
 
         this.isNatsSubscribed = true;
         this.logger.log("Subscribed to NATS topics");
+    }
+
+    private handleOrdersMessage(data: unknown, subject: string) {
+        if (subject === "orders.status") {
+            this.handleStatusUpdate(data as OrderStatusMessage);
+        } else if (subject === "orders.cancel") {
+            this.handleCancelMessage(data as OrderCancelEnvelope);
+        } else if (
+            subject.startsWith("orders.lend.") ||
+            subject.startsWith("orders.borrow.")
+        ) {
+            this.handleOrderCreation(
+                data as OrderCreationEnvelope,
+                subject,
+            );
+        }
+    }
+
+    private handleOrderCreation(
+        envelope: OrderCreationEnvelope,
+        subject: string,
+    ) {
+        const { data, accountId } = envelope;
+
+        const tracked: TrackedOrder = {
+            orderId: data.orderId,
+            loanToken: data.loanToken,
+            side: data.side,
+            type: data.type,
+            rate: data.rate ?? 0,
+            remainingAmount: data.remainingAmount,
+            originalAmount: data.originalAmount,
+            accountId,
+            status: data.status,
+            walletAddress: data.walletAddress,
+            markets: data.markets,
+            settlementFeeAmount: data.settlementFeeAmount,
+        };
+
+        this.orderState.set(data.orderId, tracked);
+        this.aggregateAndBroadcastOrderbook(data.loanToken);
+        this.emitUserPosition(tracked, subject);
+    }
+
+    private handleStatusUpdate(msg: OrderStatusMessage) {
+        const tracked = this.orderState.get(msg.orderId);
+        if (!tracked) {
+            this.logger.debug(
+                `Status update for unknown order ${msg.orderId}, ignoring`,
+            );
+            return;
+        }
+
+        tracked.status = msg.status as OrderStatus;
+        tracked.remainingAmount = msg.remainingAmount;
+
+        this.aggregateAndBroadcastOrderbook(tracked.loanToken);
+        this.emitUserPosition(tracked, "orders.status");
+    }
+
+    private handleCancelMessage(envelope: OrderCancelEnvelope) {
+        const { orderId } = envelope.data;
+        const tracked = this.orderState.get(orderId);
+        if (!tracked) {
+            this.logger.debug(
+                `Cancel for unknown order ${orderId}, ignoring`,
+            );
+            return;
+        }
+
+        tracked.status = OrderStatus.Cancelled;
+
+        this.aggregateAndBroadcastOrderbook(tracked.loanToken);
+        this.emitUserPosition(tracked, "orders.cancel");
+    }
+
+    private emitUserPosition(tracked: TrackedOrder, subject: string) {
+        const room = `user:${tracked.accountId}`;
+        const payload = {
+            order: this.toOrderPayload(tracked),
+            subject,
+        };
+
+        if (tracked.status === OrderStatus.Filled) {
+            this.server.to(room).emit("active-positions", payload);
+        }
+
+        if (
+            (tracked.status === OrderStatus.Open ||
+                tracked.status === OrderStatus.PartiallyFilled) &&
+            tracked.type === OrderType.Limit
+        ) {
+            this.server.to(room).emit("open-positions", payload);
+        }
+    }
+
+    private toOrderPayload(tracked: TrackedOrder) {
+        return {
+            orderId: tracked.orderId,
+            walletAddress: tracked.walletAddress,
+            loanToken: tracked.loanToken,
+            markets: tracked.markets,
+            side: tracked.side,
+            type: tracked.type,
+            status: tracked.status,
+            originalAmount: tracked.originalAmount,
+            remainingAmount: tracked.remainingAmount,
+            settlementFeeAmount: tracked.settlementFeeAmount,
+            rate: tracked.rate,
+            accountId: tracked.accountId,
+        };
+    }
+
+    private aggregateAndBroadcastOrderbook(loanToken: string) {
+        const activeOrders = Array.from(this.orderState.values()).filter(
+            (o) =>
+                o.loanToken === loanToken &&
+                (o.status === OrderStatus.Open ||
+                    o.status === OrderStatus.PartiallyFilled),
+        );
+
+        const lendLevels = this.aggregateLevels(
+            activeOrders.filter((o) => o.side === OrderSide.Lend),
+        );
+        const borrowLevels = this.aggregateLevels(
+            activeOrders.filter((o) => o.side === OrderSide.Borrow),
+        );
+
+        const update: OrderbookUpdateDto = {
+            loanToken,
+            lend: lendLevels,
+            borrow: borrowLevels,
+            timestamp: Date.now(),
+        };
+
+        const room = `orderbook:${loanToken}`;
+        this.orderbookCache.set(room, update);
+        this.server.to(room).emit("orderbook-update", update);
+    }
+
+    private aggregateLevels(orders: TrackedOrder[]): OrderbookLevel[] {
+        const byRate = new Map<number, { amount: bigint; count: number }>();
+
+        for (const order of orders) {
+            const existing = byRate.get(order.rate);
+            const remaining = BigInt(order.remainingAmount);
+            if (existing) {
+                existing.amount += remaining;
+                existing.count += 1;
+            } else {
+                byRate.set(order.rate, { amount: remaining, count: 1 });
+            }
+        }
+
+        return Array.from(byRate.entries())
+            .sort((a, b) => a[0] - b[0])
+            .map(([rateBps, { amount, count }]) => ({
+                rate: toPercentage(rateBps),
+                amount: amount.toString(),
+                orders: count,
+            }));
     }
 
     @SubscribeMessage("subscribe-orderbook")
@@ -141,7 +330,7 @@ export class EventsGateway
         @ConnectedSocket() client: Socket,
         @MessageBody() body: SubscribeOrderbookDto,
     ) {
-        const room = `orderbook:${body.loanToken}:${body.maturity}`;
+        const room = `orderbook:${body.loanToken}`;
         client.join(room);
         this.logger.log(`Client ${client.id} joined ${room}`);
 
@@ -158,13 +347,12 @@ export class EventsGateway
         @ConnectedSocket() client: Socket,
         @MessageBody() body: SubscribeOrderbookDto,
     ) {
-        const room = `orderbook:${body.loanToken}:${body.maturity}`;
+        const room = `orderbook:${body.loanToken}`;
         client.leave(room);
         this.logger.log(`Client ${client.id} left ${room}`);
         return { success: true, room };
     }
 
-    // TODO - active position need to be calculated from SC
     @SubscribeMessage("active-positions")
     handleActivePosition(
         @ConnectedSocket() client: Socket,

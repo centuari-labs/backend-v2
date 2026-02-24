@@ -15,8 +15,8 @@ export class PrivyService {
 
     constructor() {
         this.privy = new PrivyClient(
-            process.env.NEXT_PUBLIC_PRIVY_APP_ID as string,
-            process.env.NEXT_PUBLIC_PRIVY_PROJECT_SECRET as string,
+            process.env.PRIVY_APP_ID as string,
+            process.env.PRIVY_PROJECT_SECRET as string,
         );
 
         // Try to load verification key if it exists

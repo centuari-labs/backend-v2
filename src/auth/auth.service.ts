@@ -40,4 +40,31 @@ export class AuthService {
 
         return depositWallet;
     }
+
+    async loginOrCreateAccount(privyUserId: string, walletAddress: string) {
+        const account = await this.databaseService.queryOne(
+            `INSERT INTO accounts (privy_user_id, user_wallet)
+             VALUES ($1, $2)
+             ON CONFLICT (privy_user_id) DO UPDATE SET user_wallet = EXCLUDED.user_wallet
+             RETURNING *`,
+            [privyUserId, walletAddress],
+        );
+
+        this.logger.log(
+            `Account upserted for privy user ${privyUserId} with wallet ${walletAddress}`,
+        );
+
+        return account;
+    }
+
+    async updateName(privyUserId: string, name: string) {
+        const account = await this.databaseService.queryOne(
+            `UPDATE accounts SET name = $1 WHERE privy_user_id = $2 RETURNING *`,
+            [name, privyUserId],
+        );
+
+        this.logger.log(`Name updated for privy user ${privyUserId}`);
+
+        return account;
+    }
 }

@@ -9,13 +9,15 @@ import { Order } from "./entities/order.entity";
 import { OrderMarket } from "./entities/order-market.entity";
 import { Account } from "./entities/account.entity";
 import { Token } from "../tokens/entities/token.entity";
+import { Market } from "../market/entities/market.entity";
 import { OrdersController } from "./orders.controller";
 import { OrdersService } from "./orders.service";
 import { OrderRepository } from "./repositories/order.repository";
+import { OrdersWorker } from "./orders.worker";
 
 @Module({
     imports: [
-        TypeOrmModule.forFeature([Order, OrderMarket, Account, Token]),
+        TypeOrmModule.forFeature([Order, OrderMarket, Account, Token, Market]),
         CoreModule,
         PriceModule,
         TokensModule,
@@ -23,7 +25,7 @@ import { OrderRepository } from "./repositories/order.repository";
         forwardRef(() => PortfolioModule),
     ],
     controllers: [OrdersController],
-    providers: [OrdersService, OrderRepository],
+    providers: [OrdersService, OrderRepository, OrdersWorker],
     exports: [OrdersService, OrderRepository],
 })
 export class OrdersModule { }

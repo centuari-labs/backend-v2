@@ -7,9 +7,9 @@ import { OrderRepository } from "./repositories/order.repository";
 import { OrdersService } from "./orders.service";
 import { Market } from "../market/entities/market.entity";
 
-const INSERT_INTERVAL_MS = Number.parseInt("60000", 10);
-const PARTIAL_FILL_INTERVAL_MS = Number.parseInt("10000", 10);
-const MAX_OPEN_ORDERS = Number.parseInt("50", 10);
+const INSERT_INTERVAL_MS = Number.parseInt("5000", 10);
+const PARTIAL_FILL_INTERVAL_MS = Number.parseInt("7000", 10);
+const MAX_OPEN_ORDERS = Number.parseInt("500", 10);
 const CACHE_REFRESH_INTERVAL_MS = Number.parseInt("300000", 10);
 
 const RATE_MIN = Number.parseInt("100", 10);

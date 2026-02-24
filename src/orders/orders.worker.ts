@@ -2,11 +2,7 @@ import { Injectable, Logger, OnModuleInit } from "@nestjs/common";
 import { Interval } from "@nestjs/schedule";
 import { InjectRepository } from "@nestjs/typeorm";
 import { DataSource, Repository } from "typeorm";
-import {
-    OrderSide,
-    OrderStatus,
-    OrderType,
-} from "./constants/order.constants";
+import { OrderSide, OrderStatus, OrderType } from "./constants/order.constants";
 import { Order } from "./entities/order.entity";
 import { OrderRepository } from "./repositories/order.repository";
 import { OrdersService } from "./orders.service";
@@ -15,13 +11,13 @@ import { Market } from "../market/entities/market.entity";
 const INSERT_INTERVAL_MS = Number.parseInt("5000", 10);
 const PARTIAL_FILL_INTERVAL_MS = Number.parseInt("180000", 10);
 const FILL_INTERVAL_MS = Number.parseInt("300000", 10);
-const MAX_OPEN_ORDERS = Number.parseInt("50", 10);
-const CACHE_REFRESH_INTERVAL_MS = Number.parseInt("300000", 10);
+const MAX_OPEN_ORDERS = Number.parseInt("10000", 10);
+const CACHE_REFRESH_INTERVAL_MS = Number.parseInt("60000", 10);
 
 const RATE_MIN = Number.parseInt("100", 10);
 const RATE_MAX = Number.parseInt("2500", 10);
-const QUANTITY_MIN = Number.parseFloat("0.0001");
-const QUANTITY_MAX = Number.parseFloat("0.001");
+const QUANTITY_MIN = Number.parseFloat("100");
+const QUANTITY_MAX = Number.parseFloat("10000");
 const PARTIAL_FILL_MIN_FRACTION = Number.parseFloat("0.2");
 const PARTIAL_FILL_MAX_FRACTION = Number.parseFloat("0.5");
 
@@ -129,6 +125,7 @@ export class OrdersWorker implements OnModuleInit {
             const openCount = await this.orderRepository.count({
                 where: { status: OrderStatus.Open },
             });
+
             if (openCount >= MAX_OPEN_ORDERS) {
                 return;
             }
@@ -195,7 +192,10 @@ export class OrdersWorker implements OnModuleInit {
                 PARTIAL_FILL_MIN_FRACTION +
                 Math.random() *
                     (PARTIAL_FILL_MAX_FRACTION - PARTIAL_FILL_MIN_FRACTION);
-            const incrementNum = Math.max(1, Math.round(remainingNum * fraction));
+            const incrementNum = Math.max(
+                1,
+                Math.round(remainingNum * fraction),
+            );
             const increment = BigInt(incrementNum);
 
             // Ensure it stays partially filled (don't fill 100%)
@@ -296,20 +296,15 @@ export class OrdersWorker implements OnModuleInit {
                 );
 
             const isLend = order.side === OrderSide.Lend;
-            const counterpartySide = isLend
-                ? OrderSide.Borrow
-                : OrderSide.Lend;
+            const counterpartySide = isLend ? OrderSide.Borrow : OrderSide.Lend;
 
             await this.dataSource.transaction(async (manager) => {
                 // 1. Mark original order as FILLED
-                await manager
-                    .getRepository(Order)
-                    .update(order!.id, {
-                        filledQuantity: quantity.toString(),
-                        status: OrderStatus.Filled,
-                        filledSettlementFee:
-                            order!.settlementFee.split(".")[0],
-                    });
+                await manager.getRepository(Order).update(order!.id, {
+                    filledQuantity: quantity.toString(),
+                    status: OrderStatus.Filled,
+                    filledSettlementFee: order!.settlementFee.split(".")[0],
+                });
 
                 // 2. Create counterparty order (FILLED immediately)
                 const counterpartyOrderResult = await manager
@@ -425,14 +420,12 @@ export class OrdersWorker implements OnModuleInit {
     }
 
     private getRandomRate(): number {
-        return (
-            Math.floor(Math.random() * (RATE_MAX - RATE_MIN + 1)) + RATE_MIN
-        );
+        return Math.floor(Math.random() * (RATE_MAX - RATE_MIN + 1)) + RATE_MIN;
     }
 
     private getRandomQuantity(): string {
         const value =
             QUANTITY_MIN + Math.random() * (QUANTITY_MAX - QUANTITY_MIN);
-        return value.toFixed(6);
+        return value.toFixed(2);
     }
 }

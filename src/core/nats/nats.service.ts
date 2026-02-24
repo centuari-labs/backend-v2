@@ -1,4 +1,9 @@
-import { Injectable, OnModuleInit, OnModuleDestroy, Logger } from "@nestjs/common";
+import {
+    Injectable,
+    OnModuleInit,
+    OnModuleDestroy,
+    Logger,
+} from "@nestjs/common";
 import { connect, type NatsConnection, type ConnectionOptions } from "nats";
 
 @Injectable()
@@ -34,8 +39,10 @@ export class NatsService implements OnModuleInit, OnModuleDestroy {
             // Monitor connection status
             this.setupConnectionMonitoring();
         } catch (error) {
-            this.logger.error(`Failed to connect to NATS server: ${error.message}`);
-            throw error;
+            this.logger.error(
+                `Failed to connect to NATS server: ${error.message}. Retrying...`,
+            );
+            setTimeout(() => this.connect(), 1000);
         }
     }
 
@@ -57,8 +64,8 @@ export class NatsService implements OnModuleInit, OnModuleDestroy {
             this.connection = null;
         }
     }
-    
-    // Publish a message to a NATS subject 
+
+    // Publish a message to a NATS subject
     async publish(subject: string, data: unknown): Promise<void> {
         if (!this.connection) {
             throw new Error("NATS connection not established");
@@ -69,12 +76,14 @@ export class NatsService implements OnModuleInit, OnModuleDestroy {
             this.connection.publish(subject, new TextEncoder().encode(payload));
             this.logger.debug(`Published to ${subject}: ${payload}`);
         } catch (error) {
-            this.logger.error(`Failed to publish to ${subject}: ${error.message}`);
+            this.logger.error(
+                `Failed to publish to ${subject}: ${error.message}`,
+            );
             throw error;
         }
     }
 
-     // Subscribe to a NATS subject
+    // Subscribe to a NATS subject
     async subscribe<T>(
         subject: string,
         callback: (data: T, subject: string) => void | Promise<void>,

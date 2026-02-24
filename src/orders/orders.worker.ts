@@ -1,15 +1,20 @@
 import { Injectable, Logger, OnModuleInit } from "@nestjs/common";
 import { Interval } from "@nestjs/schedule";
 import { InjectRepository } from "@nestjs/typeorm";
-import { Repository } from "typeorm";
-import { OrderSide, OrderStatus, OrderType } from "./constants/order.constants";
+import { DataSource, Repository } from "typeorm";
+import {
+    OrderSide,
+    OrderStatus,
+    OrderType,
+} from "./constants/order.constants";
 import { OrderRepository } from "./repositories/order.repository";
 import { OrdersService } from "./orders.service";
 import { Market } from "../market/entities/market.entity";
 
 const INSERT_INTERVAL_MS = Number.parseInt("5000", 10);
-const PARTIAL_FILL_INTERVAL_MS = Number.parseInt("7000", 10);
-const MAX_OPEN_ORDERS = Number.parseInt("500", 10);
+const PARTIAL_FILL_INTERVAL_MS = Number.parseInt("8000", 10);
+const FILL_INTERVAL_MS = Number.parseInt("15000", 10);
+const MAX_OPEN_ORDERS = Number.parseInt("50", 10);
 const CACHE_REFRESH_INTERVAL_MS = Number.parseInt("300000", 10);
 
 const RATE_MIN = Number.parseInt("100", 10);
@@ -59,6 +64,7 @@ export class OrdersWorker implements OnModuleInit {
         @InjectRepository(Market)
         private readonly marketRepository: Repository<Market>,
         private readonly ordersService: OrdersService,
+        private readonly dataSource: DataSource,
     ) {}
 
     async onModuleInit(): Promise<void> {
@@ -76,6 +82,8 @@ export class OrdersWorker implements OnModuleInit {
         if (process.env.NODE_ENV === "production") return false;
         return process.env.ORDER_WORKER_ENABLED === "true";
     }
+
+    // ─── Cache ───────────────────────────────────────────────────────────
 
     @Interval(CACHE_REFRESH_INTERVAL_MS)
     async refreshAssetMarketCache(): Promise<void> {
@@ -102,6 +110,8 @@ export class OrdersWorker implements OnModuleInit {
             );
         }
     }
+
+    // ─── 1. Create OPEN orders ───────────────────────────────────────────
 
     @Interval(INSERT_INTERVAL_MS)
     async createRandomOrder(): Promise<void> {
@@ -130,46 +140,23 @@ export class OrdersWorker implements OnModuleInit {
             const { assetId, marketIds } = entry;
 
             const side = this.getRandomSide();
-            const type = this.getRandomType();
-            const amount = this.getRandomQuantity().toString();
+            const amount = this.getRandomQuantity();
             const rate = this.getRandomRate();
             const account =
                 ACCOUNTS[Math.floor(Math.random() * ACCOUNTS.length)];
 
-            if (side === OrderSide.Lend && type === OrderType.Market) {
-                await this.ordersService.createLendMarketOrder(
-                    { assetId, amount, marketIds },
-                    account.wallet,
-                    account.privyUserId,
-                );
-                return;
-            }
-
-            if (side === OrderSide.Lend && type === OrderType.Limit) {
+            if (side === OrderSide.Lend) {
                 await this.ordersService.createLendLimitOrder(
                     { assetId, amount, marketIds, rate },
                     account.wallet,
                     account.privyUserId,
                 );
-                return;
-            }
-
-            if (side === OrderSide.Borrow && type === OrderType.Market) {
-                await this.ordersService.createBorrowMarketOrder(
-                    { assetId, amount, marketIds },
-                    account.wallet,
-                    account.privyUserId,
-                );
-                return;
-            }
-
-            if (side === OrderSide.Borrow && type === OrderType.Limit) {
+            } else {
                 await this.ordersService.createBorrowLimitOrder(
                     { assetId, amount, marketIds, rate },
                     account.wallet,
                     account.privyUserId,
                 );
-                return;
             }
         } catch (error) {
             this.logger.error(
@@ -178,6 +165,8 @@ export class OrdersWorker implements OnModuleInit {
         }
     }
 
+    // ─── 2. Partially fill OPEN → PARTIALLY_FILLED ──────────────────────
+
     @Interval(PARTIAL_FILL_INTERVAL_MS)
     async partiallyFillRandomOrder(): Promise<void> {
         if (!this.isEnabled) return;
@@ -185,75 +174,262 @@ export class OrdersWorker implements OnModuleInit {
         try {
             const order = await this.orderRepository
                 .createQueryBuilder("order")
-                .where("order.status IN (:...statuses)", {
-                    statuses: [OrderStatus.Open, OrderStatus.PartiallyFilled],
+                .where("order.status = :status", {
+                    status: OrderStatus.Open,
                 })
                 .orderBy("RANDOM()")
                 .getOne();
 
-            if (!order) {
-                return;
-            }
+            if (!order) return;
 
-            // DB numeric columns may return strings like "2.0"; strip decimal for BigInt
             const quantity = BigInt(order.quantity.split(".")[0]);
             const filledQuantity = BigInt(
                 (order.filledQuantity ?? "0").split(".")[0],
             );
             const remaining = quantity - filledQuantity;
-            if (remaining <= 0n) {
-                return;
-            }
+            if (remaining <= 0n) return;
 
             const remainingNum = Number(remaining);
-            const incrementNum = Math.max(
-                1,
-                Math.round(
-                    remainingNum *
-                        (PARTIAL_FILL_MIN_FRACTION +
-                            Math.random() *
-                                (PARTIAL_FILL_MAX_FRACTION -
-                                    PARTIAL_FILL_MIN_FRACTION)),
-                ),
-            );
+            const fraction =
+                PARTIAL_FILL_MIN_FRACTION +
+                Math.random() *
+                    (PARTIAL_FILL_MAX_FRACTION - PARTIAL_FILL_MIN_FRACTION);
+            const incrementNum = Math.max(1, Math.round(remainingNum * fraction));
             const increment = BigInt(incrementNum);
 
-            const nextFilled =
-                filledQuantity + increment >= quantity
-                    ? quantity
-                    : filledQuantity + increment;
+            // Ensure it stays partially filled (don't fill 100%)
+            const nextFilled = filledQuantity + increment;
+            if (nextFilled >= quantity) return; // skip — let fillRandomOrder handle full fills
 
             order.filledQuantity = nextFilled.toString();
+            order.status = OrderStatus.PartiallyFilled;
 
-            if (nextFilled >= quantity) {
-                order.status = OrderStatus.Filled;
-                order.filledSettlementFee = order.settlementFee.split(".")[0];
-            } else {
-                order.status = OrderStatus.PartiallyFilled;
-                const feeTotal = BigInt(order.settlementFee.split(".")[0]);
-                const filledFee = (feeTotal * nextFilled) / quantity;
-                order.filledSettlementFee = filledFee.toString();
-            }
+            const feeTotal = BigInt(order.settlementFee.split(".")[0]);
+            const filledFee =
+                quantity > 0n ? (feeTotal * nextFilled) / quantity : 0n;
+            order.filledSettlementFee = filledFee.toString();
 
             await this.orderRepository.save(order);
+            this.logger.debug(
+                `Partially filled order ${order.id}: ${nextFilled}/${quantity}`,
+            );
         } catch (error) {
             this.logger.error(
-                `Failed to update order partial fill: ${(error as Error).message}`,
+                `Failed to partially fill order: ${(error as Error).message}`,
             );
         }
     }
+
+    // ─── 3. Fully fill → FILLED + match + positions ─────────────────────
+
+    @Interval(FILL_INTERVAL_MS)
+    async fillRandomOrder(): Promise<void> {
+        if (!this.isEnabled) return;
+
+        try {
+            // Prefer partially filled orders, fall back to open
+            let order = await this.orderRepository
+                .createQueryBuilder("order")
+                .where("order.status = :status", {
+                    status: OrderStatus.PartiallyFilled,
+                })
+                .orderBy("RANDOM()")
+                .getOne();
+
+            if (!order) {
+                order = await this.orderRepository
+                    .createQueryBuilder("order")
+                    .where("order.status = :status", {
+                        status: OrderStatus.Open,
+                    })
+                    .orderBy("RANDOM()")
+                    .getOne();
+            }
+
+            if (!order) return;
+
+            const quantity = BigInt(order.quantity.split(".")[0]);
+            if (quantity <= 0n) return;
+
+            // Pick a counterparty account
+            const counterparty =
+                ACCOUNTS[Math.floor(Math.random() * ACCOUNTS.length)];
+
+            // Resolve a market for this asset
+            const entry = this.assetMarketCache.find(
+                (e) => e.assetId === order!.assetId,
+            );
+            if (!entry || entry.marketIds.length === 0) return;
+            const marketId =
+                entry.marketIds[
+                    Math.floor(Math.random() * entry.marketIds.length)
+                ];
+
+            // Find order_market row (needed for match FK)
+            const orderMarket = await this.dataSource
+                .createQueryBuilder()
+                .select("om.order_market_id", "order_market_id")
+                .from("order_markets", "om")
+                .where("om.order_id = :orderId", { orderId: order.id })
+                .getRawOne();
+
+            if (!orderMarket) {
+                this.logger.debug(
+                    `No order_market for order ${order.id}, skipping fill.`,
+                );
+                return;
+            }
+
+            // Get market maturity
+            const market = await this.marketRepository.findOne({
+                where: { id: marketId },
+            });
+            const maturity =
+                market?.maturity ?? new Date(Date.now() + 30 * 86400000);
+
+            // Ensure counterparty account exists
+            const counterpartyAccount =
+                await this.orderRepository.getOrCreateAccount(
+                    counterparty.wallet,
+                    counterparty.privyUserId,
+                );
+
+            const isLend = order.side === OrderSide.Lend;
+            const counterpartySide = isLend
+                ? OrderSide.Borrow
+                : OrderSide.Lend;
+
+            await this.dataSource.transaction(async (manager) => {
+                // 1. Mark original order as FILLED
+                await manager
+                    .createQueryBuilder()
+                    .update("orders")
+                    .set({
+                        filled_quantity: quantity.toString(),
+                        status: OrderStatus.Filled,
+                        filled_settlement_fee:
+                            order!.settlementFee.split(".")[0],
+                    })
+                    .where("id = :id", { id: order!.id })
+                    .execute();
+
+                // 2. Create counterparty order (FILLED immediately)
+                const counterpartyOrderResult = await manager
+                    .createQueryBuilder()
+                    .insert()
+                    .into("orders")
+                    .values({
+                        account_id: counterpartyAccount.id,
+                        asset_id: order!.assetId,
+                        side: counterpartySide,
+                        type: OrderType.Limit,
+                        rate: order!.rate,
+                        quantity: quantity.toString(),
+                        filled_quantity: quantity.toString(),
+                        settlement_fee: "0",
+                        filled_settlement_fee: "0",
+                        status: OrderStatus.Filled,
+                    })
+                    .returning("id")
+                    .execute();
+
+                const counterpartyOrderId =
+                    counterpartyOrderResult.generatedMaps[0]?.id ??
+                    counterpartyOrderResult.raw[0]?.id;
+
+                // 3. Create order_market for counterparty
+                await manager
+                    .createQueryBuilder()
+                    .insert()
+                    .into("order_markets")
+                    .values({
+                        order_id: counterpartyOrderId,
+                        market_id: marketId,
+                    })
+                    .execute();
+
+                // 4. Create match record
+                const lendOrderId = isLend ? order!.id : counterpartyOrderId;
+                const borrowOrderId = isLend ? counterpartyOrderId : order!.id;
+                const lenderAccountId = isLend
+                    ? order!.accountId
+                    : counterpartyAccount.id;
+                const borrowerAccountId = isLend
+                    ? counterpartyAccount.id
+                    : order!.accountId;
+
+                await manager
+                    .createQueryBuilder()
+                    .insert()
+                    .into("matches")
+                    .values({
+                        lend_order_market_id: lendOrderId,
+                        borrow_order_market_id: borrowOrderId,
+                        asset_id: order!.assetId,
+                        lender_account_id: lenderAccountId,
+                        borrower_account_id: borrowerAccountId,
+                        match_amount: quantity.toString(),
+                        rate: order!.rate,
+                        is_borrower_taker: !isLend,
+                        maker_fee: 0,
+                        taker_fee: 0,
+                        lender_settlement_fee: 0,
+                        borrower_settlement_fee: 0,
+                        maturity,
+                    })
+                    .execute();
+
+                // 5. Create lend position
+                await manager
+                    .createQueryBuilder()
+                    .insert()
+                    .into("lend_positions")
+                    .values({
+                        account_id: lenderAccountId,
+                        asset_id: order!.assetId,
+                        market_id: marketId,
+                        shares: quantity.toString(),
+                        original_shares: quantity.toString(),
+                        amount: quantity.toString(),
+                    })
+                    .execute();
+
+                // 6. Create borrow position
+                await manager
+                    .createQueryBuilder()
+                    .insert()
+                    .into("borrow_positions")
+                    .values({
+                        account_id: borrowerAccountId,
+                        asset_id: order!.assetId,
+                        market_id: marketId,
+                        amount: quantity.toString(),
+                        original_debt: quantity.toString(),
+                        debt: quantity.toString(),
+                    })
+                    .execute();
+            });
+
+            this.logger.log(
+                `Filled order ${order.id} (${order.side} ${quantity} of asset ${order.assetId})`,
+            );
+        } catch (error) {
+            this.logger.error(
+                `Failed to fill order: ${(error as Error).message}`,
+            );
+        }
+    }
+
+    // ─── Helpers ─────────────────────────────────────────────────────────
 
     private getRandomSide(): OrderSide {
         return Math.random() < 0.5 ? OrderSide.Lend : OrderSide.Borrow;
     }
 
-    private getRandomType(): OrderType {
-        // Only generate limit orders so every order has a non-zero rate (APR)
-        return OrderType.Limit;
-    }
-
     private getRandomRate(): number {
-        return Math.floor(Math.random() * (RATE_MAX - RATE_MIN + 1)) + RATE_MIN;
+        return (
+            Math.floor(Math.random() * (RATE_MAX - RATE_MIN + 1)) + RATE_MIN
+        );
     }
 
     private getRandomQuantity(): string {

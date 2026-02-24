@@ -24,10 +24,18 @@ import type { CreateLendLimitOrderDto } from "./dto/create-lend-limit-order.dto"
 import type { CreateLendMarketOrderDto } from "./dto/create-lend-market-order.dto";
 import { OrderResponse } from "./dto/order-response.dto";
 import { Order } from "./entities/order.entity";
-import { toPercentage, humanToBaseUnits, calculateSettlementFee } from "../common/utils/number.utils";
+import {
+    toPercentage,
+    humanToBaseUnits,
+    calculateSettlementFee,
+} from "../common/utils/number.utils";
 import { OrderRepository } from "./repositories/order.repository";
 import { PortfolioService } from "../portfolio/portfolio.service";
 import { HEALTH_FACTOR_NO_DEBT } from "../portfolio/helpers/health-factor.helpers";
+import {
+    orderSchema,
+    MatchingEngineOrder,
+} from "./matching-engine/order.schema";
 
 const MIN_HEALTH_FACTOR = 1;
 
@@ -42,10 +50,16 @@ export class OrdersService {
         private readonly priceService: PriceService,
         private readonly marketRepository: MarketRepositories,
         private readonly portfolioService: PortfolioService,
-    ) { }
+    ) {}
 
-    async getOrCreateAccount(walletAddress: string, privyUserId: string): Promise<string> {
-        const account = await this.orderRepository.getOrCreateAccount(walletAddress, privyUserId);
+    async getOrCreateAccount(
+        walletAddress: string,
+        privyUserId: string,
+    ): Promise<string> {
+        const account = await this.orderRepository.getOrCreateAccount(
+            walletAddress,
+            privyUserId,
+        );
         return account.id;
     }
 
@@ -54,12 +68,21 @@ export class OrdersService {
         walletAddress: string,
         privyUserId: string,
     ): Promise<OrderResponse> {
-        const accountId = await this.getOrCreateAccount(walletAddress, privyUserId);
-        
+        const accountId = await this.getOrCreateAccount(
+            walletAddress,
+            privyUserId,
+        );
+
         await this.tokensService.validateTokenByAssetId(dto.assetId);
-        const decimals = await this.tokensService.getTokenDecimalsByAssetId(dto.assetId);
+        const decimals = await this.tokensService.getTokenDecimalsByAssetId(
+            dto.assetId,
+        );
         const quantityBaseUnits = humanToBaseUnits(dto.amount, decimals!);
-        const settlementFee = await this.computeSettlementFee(dto.assetId, dto.amount, decimals!);
+        const settlementFee = await this.computeSettlementFee(
+            dto.assetId,
+            dto.amount,
+            decimals!,
+        );
 
         const order = this.orderRepository.create({
             accountId,
@@ -73,9 +96,17 @@ export class OrdersService {
             autoRollover: dto.autoRollover ?? false,
         });
 
-        const savedOrder = await this.orderRepository.saveOrderWithMarkets(order, dto.marketIds ?? []);
+        const savedOrder = await this.orderRepository.saveOrderWithMarkets(
+            order,
+            dto.marketIds ?? [],
+        );
 
-        await this.publishOrderToNats(NATS_SUBJECTS.LEND_MARKET, savedOrder);
+        const engineOrder = await this.buildMatchingEngineOrder(
+            savedOrder,
+            dto,
+            walletAddress,
+        );
+        await this.publishOrderToNats(NATS_SUBJECTS.LEND_MARKET, engineOrder);
 
         return this.mapToResponse(savedOrder, dto, walletAddress);
     }
@@ -85,12 +116,21 @@ export class OrdersService {
         walletAddress: string,
         privyUserId: string,
     ): Promise<OrderResponse> {
-        const accountId = await this.getOrCreateAccount(walletAddress, privyUserId);
-        
+        const accountId = await this.getOrCreateAccount(
+            walletAddress,
+            privyUserId,
+        );
+
         await this.tokensService.validateTokenByAssetId(dto.assetId);
-        const decimals = await this.tokensService.getTokenDecimalsByAssetId(dto.assetId);
+        const decimals = await this.tokensService.getTokenDecimalsByAssetId(
+            dto.assetId,
+        );
         const quantityBaseUnits = humanToBaseUnits(dto.amount, decimals!);
-        const settlementFee = await this.computeSettlementFee(dto.assetId, dto.amount, decimals!);
+        const settlementFee = await this.computeSettlementFee(
+            dto.assetId,
+            dto.amount,
+            decimals!,
+        );
         const order = this.orderRepository.create({
             accountId,
             assetId: dto.assetId,
@@ -103,9 +143,17 @@ export class OrdersService {
             autoRollover: dto.autoRollover ?? false,
         });
 
-        const savedOrder = await this.orderRepository.saveOrderWithMarkets(order, dto.marketIds ?? []);
+        const savedOrder = await this.orderRepository.saveOrderWithMarkets(
+            order,
+            dto.marketIds ?? [],
+        );
 
-        await this.publishOrderToNats(NATS_SUBJECTS.LEND_LIMIT, savedOrder);
+        const engineOrder = await this.buildMatchingEngineOrder(
+            savedOrder,
+            dto,
+            walletAddress,
+        );
+        await this.publishOrderToNats(NATS_SUBJECTS.LEND_LIMIT, engineOrder);
 
         return this.mapToResponse(savedOrder, dto, walletAddress);
     }
@@ -115,17 +163,29 @@ export class OrdersService {
         walletAddress: string,
         privyUserId: string,
     ): Promise<OrderResponse> {
-        const accountId = await this.getOrCreateAccount(walletAddress, privyUserId);
+        const accountId = await this.getOrCreateAccount(
+            walletAddress,
+            privyUserId,
+        );
         await this.tokensService.validateTokenByAssetId(dto.assetId);
 
-        const decimals = await this.tokensService.getTokenDecimalsByAssetId(dto.assetId);
+        const decimals = await this.tokensService.getTokenDecimalsByAssetId(
+            dto.assetId,
+        );
         const quantityBaseUnits = humanToBaseUnits(dto.amount, decimals!);
-        const settlementFee = await this.computeSettlementFee(dto.assetId, dto.amount, decimals!);
+        const settlementFee = await this.computeSettlementFee(
+            dto.assetId,
+            dto.amount,
+            decimals!,
+        );
 
-        const hfResult = await this.portfolioService.getHealthFactorForAccount(accountId, {
-            assetId: dto.assetId,
-            amountBaseUnits: quantityBaseUnits,
-        });
+        const hfResult = await this.portfolioService.getHealthFactorForAccount(
+            accountId,
+            {
+                assetId: dto.assetId,
+                amountBaseUnits: quantityBaseUnits,
+            },
+        );
         if (
             hfResult.healthFactor !== HEALTH_FACTOR_NO_DEBT &&
             Number.isFinite(hfResult.healthFactor) &&
@@ -148,9 +208,17 @@ export class OrdersService {
             autoRollover: dto.autoRollover ?? false,
         });
 
-        const savedOrder = await this.orderRepository.saveOrderWithMarkets(order, dto.marketIds ?? []);
+        const savedOrder = await this.orderRepository.saveOrderWithMarkets(
+            order,
+            dto.marketIds ?? [],
+        );
 
-        await this.publishOrderToNats(NATS_SUBJECTS.BORROW_MARKET, savedOrder);
+        const engineOrder = await this.buildMatchingEngineOrder(
+            savedOrder,
+            dto,
+            walletAddress,
+        );
+        await this.publishOrderToNats(NATS_SUBJECTS.BORROW_MARKET, engineOrder);
 
         return this.mapToResponse(savedOrder, dto, walletAddress);
     }
@@ -160,17 +228,29 @@ export class OrdersService {
         walletAddress: string,
         privyUserId: string,
     ): Promise<OrderResponse> {
-        const accountId = await this.getOrCreateAccount(walletAddress, privyUserId);
+        const accountId = await this.getOrCreateAccount(
+            walletAddress,
+            privyUserId,
+        );
         await this.tokensService.validateTokenByAssetId(dto.assetId);
 
-        const decimals = await this.tokensService.getTokenDecimalsByAssetId(dto.assetId);
+        const decimals = await this.tokensService.getTokenDecimalsByAssetId(
+            dto.assetId,
+        );
         const quantityBaseUnits = humanToBaseUnits(dto.amount, decimals!);
-        const settlementFee = await this.computeSettlementFee(dto.assetId, dto.amount, decimals!);
+        const settlementFee = await this.computeSettlementFee(
+            dto.assetId,
+            dto.amount,
+            decimals!,
+        );
 
-        const hfResult = await this.portfolioService.getHealthFactorForAccount(accountId, {
-            assetId: dto.assetId,
-            amountBaseUnits: quantityBaseUnits,
-        });
+        const hfResult = await this.portfolioService.getHealthFactorForAccount(
+            accountId,
+            {
+                assetId: dto.assetId,
+                amountBaseUnits: quantityBaseUnits,
+            },
+        );
         if (
             hfResult.healthFactor !== HEALTH_FACTOR_NO_DEBT &&
             Number.isFinite(hfResult.healthFactor) &&
@@ -193,9 +273,17 @@ export class OrdersService {
             autoRollover: dto.autoRollover ?? false,
         });
 
-        const savedOrder = await this.orderRepository.saveOrderWithMarkets(order, dto.marketIds ?? []);
+        const savedOrder = await this.orderRepository.saveOrderWithMarkets(
+            order,
+            dto.marketIds ?? [],
+        );
 
-        await this.publishOrderToNats(NATS_SUBJECTS.BORROW_LIMIT, savedOrder);
+        const engineOrder = await this.buildMatchingEngineOrder(
+            savedOrder,
+            dto,
+            walletAddress,
+        );
+        await this.publishOrderToNats(NATS_SUBJECTS.BORROW_LIMIT, engineOrder);
 
         return this.mapToResponse(savedOrder, dto, walletAddress);
     }
@@ -208,7 +296,8 @@ export class OrdersService {
             throw new NotFoundException(`Order with ID ${orderId} not found`);
         }
 
-        const account = await this.orderRepository.findAccountByWallet(walletAddress);
+        const account =
+            await this.orderRepository.findAccountByWallet(walletAddress);
 
         if (!account) {
             throw new ForbiddenException("Account not found for this wallet");
@@ -269,10 +358,16 @@ export class OrdersService {
 
     private async mapToResponse(
         order: Order,
-        dto: CreateLendMarketOrderDto | CreateLendLimitOrderDto | CreateBorrowMarketOrderDto | CreateBorrowLimitOrderDto,
+        dto:
+            | CreateLendMarketOrderDto
+            | CreateLendLimitOrderDto
+            | CreateBorrowMarketOrderDto
+            | CreateBorrowLimitOrderDto,
         walletAddress: string,
     ): Promise<OrderResponse> {
-        const marketEntities = await this.marketRepository.getMarketsByIds(dto.marketIds ?? []);
+        const marketEntities = await this.marketRepository.getMarketsByIds(
+            dto.marketIds ?? [],
+        );
         const maturityByMarketId = new Map<string, number>();
         for (const market of marketEntities) {
             const maturityUnix = market.maturity
@@ -307,9 +402,63 @@ export class OrdersService {
         };
     }
 
+    private async buildMatchingEngineOrder(
+        order: Order,
+        dto:
+            | CreateLendMarketOrderDto
+            | CreateLendLimitOrderDto
+            | CreateBorrowMarketOrderDto
+            | CreateBorrowLimitOrderDto,
+        walletAddress: string,
+    ): Promise<MatchingEngineOrder> {
+        const token = await this.tokensService.getTokenByAssetId(order.assetId);
+        const loanToken = token.tokenAddress;
+
+        const marketEntities = await this.marketRepository.getMarketsByIds(
+            dto.marketIds ?? [],
+        );
+        const maturityByMarketId = new Map<string, number>();
+        for (const market of marketEntities) {
+            const maturityUnix = market.maturity
+                ? Math.floor(market.maturity.getTime() / 1000)
+                : 0;
+            maturityByMarketId.set(market.id, maturityUnix);
+        }
+        const markets = (dto.marketIds ?? []).map((marketId) => ({
+            marketId,
+            maturity: maturityByMarketId.get(marketId) ?? 0,
+        }));
+
+        const quantity = BigInt(order.quantity);
+        const filledQuantity = BigInt(order.filledQuantity);
+        const remaining = quantity - filledQuantity;
+
+        const basePayload: any = {
+            orderId: order.id,
+            walletAddress,
+            loanToken,
+            markets,
+            timestamp: new Date(order.createdAt).getTime(),
+            side: order.side,
+            type: order.type,
+            status: order.status,
+            originalAmount: order.quantity,
+            remainingAmount: remaining >= 0n ? remaining.toString() : "0",
+            settlementFeeAmount: order.settlementFee,
+            remainingSettlementFeeAmount: order.settlementFee,
+        };
+
+        if (order.type === OrderType.Limit) {
+            basePayload.rate = Number(order.rate);
+        }
+
+        const parsed = orderSchema.parse(basePayload);
+        return parsed;
+    }
+
     private async publishOrderToNats(
         subject: string,
-        order: Order, //@todo :should match with matching engine schema
+        order: MatchingEngineOrder,
     ): Promise<void> {
         try {
             await this.natsService.publish(subject, {
@@ -317,10 +466,10 @@ export class OrdersService {
                 timestamp: new Date().toISOString(),
                 data: order,
             });
-            this.logger.debug(`Published order ${order.id} to ${subject}`);
+            this.logger.debug(`Published order ${order.orderId} to ${subject}`);
         } catch (error) {
             this.logger.error(
-                `Failed to publish order ${order.id} to NATS: ${error.message}`,
+                `Failed to publish order ${order.orderId} to NATS: ${error.message}`,
             );
         }
     }

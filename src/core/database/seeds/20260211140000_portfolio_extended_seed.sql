@@ -69,51 +69,51 @@ BEGIN
     -- 5. Portfolio (Collateral & Balances)
     IF btc_id IS NOT NULL THEN
         INSERT INTO portfolio (id, account_id, asset_id, amount, is_collateral)
-        VALUES (gen_random_uuid(), test_account_id, btc_id, 0.5, true);
+        VALUES (gen_random_uuid(), test_account_id, btc_id, 0.0005, true);
     END IF;
     IF eth_id IS NOT NULL THEN
         INSERT INTO portfolio (id, account_id, asset_id, amount, is_collateral)
-        VALUES (gen_random_uuid(), test_account_id, eth_id, 5.0, true);
+        VALUES (gen_random_uuid(), test_account_id, eth_id, 0.001, true);
     END IF;
     IF usdc_id IS NOT NULL THEN
         INSERT INTO portfolio (id, account_id, asset_id, amount, is_collateral)
-        VALUES (gen_random_uuid(), test_account_id, usdc_id, 50000.0, false);
+        VALUES (gen_random_uuid(), test_account_id, usdc_id, 100.0, false);
     END IF;
 
     -- 6. Simulated Match Data for APY (Crucial for joins)
     IF usdc_market_id IS NOT NULL THEN
         -- Create a LEND order that became a position
         INSERT INTO orders (id, account_id, asset_id, side, type, rate, quantity, filled_quantity, settlement_fee, status)
-        VALUES (usdc_lend_order_id, test_account_id, usdc_id, 'LEND', 'LIMIT', 4.5, 10000.0, 10000.0, 0, 'FILLED');
-        
+        VALUES (usdc_lend_order_id, test_account_id, usdc_id, 'LEND', 'LIMIT', 4.5, 50.0, 50.0, 0, 'FILLED');
+
         INSERT INTO order_markets (order_market_id, order_id, market_id)
         VALUES (usdc_lend_order_id, usdc_lend_order_id, usdc_market_id);
 
         -- Create a MATCH for this order
         INSERT INTO orders (id, account_id, asset_id, side, type, rate, quantity, filled_quantity, settlement_fee, status)
-        VALUES (usdc_borrow_order_id, counterparty_account_id, usdc_id, 'BORROW', 'LIMIT', 4.5, 10000.0, 10000.0, 0, 'FILLED');
+        VALUES (usdc_borrow_order_id, counterparty_account_id, usdc_id, 'BORROW', 'LIMIT', 4.5, 50.0, 50.0, 0, 'FILLED');
 
         INSERT INTO order_markets (order_market_id, order_id, market_id)
         VALUES (usdc_borrow_order_id, usdc_borrow_order_id, usdc_market_id);
 
         INSERT INTO matches (id, lend_order_market_id, borrow_order_market_id, asset_id, lender_account_id, borrower_account_id, match_amount, rate, is_borrower_taker, maker_fee, taker_fee, lender_settlement_fee, borrower_settlement_fee, maturity)
-        VALUES (usdc_match_id, usdc_lend_order_id, usdc_borrow_order_id, usdc_id, test_account_id, counterparty_account_id, 10000.0, 4.5, true, 0, 0, 0, 0, now() + interval '30 days');
+        VALUES (usdc_match_id, usdc_lend_order_id, usdc_borrow_order_id, usdc_id, test_account_id, counterparty_account_id, 50.0, 4.5, true, 0, 0, 0, 0, now() + interval '30 days');
 
         -- 7. Positions
         INSERT INTO lend_positions (id, account_id, asset_id, market_id, shares, original_shares, amount, created_at)
-        VALUES (gen_random_uuid(), test_account_id, usdc_id, usdc_market_id, 10000.0, 10000.0, 10000.0, now());
+        VALUES (gen_random_uuid(), test_account_id, usdc_id, usdc_market_id, 50.0, 50.0, 50.0, now());
     END IF;
 
     IF usdt_market_id IS NOT NULL THEN
         INSERT INTO borrow_positions (id, account_id, asset_id, market_id, amount, original_debt, debt, created_at)
-        VALUES (gen_random_uuid(), test_account_id, usdt_id, usdt_market_id, 2000.0, 2000.0, 2000.0, now());
+        VALUES (gen_random_uuid(), test_account_id, usdt_id, usdt_market_id, 20.0, 20.0, 20.0, now());
     END IF;
 
     -- 8. Open Orders
     FOR i IN 1..5 LOOP
         IF usdc_id IS NOT NULL THEN
             INSERT INTO orders (id, account_id, asset_id, side, type, rate, quantity, filled_quantity, settlement_fee, status, created_at)
-            VALUES (gen_random_uuid(), test_account_id, usdc_id, 'LEND', 'LIMIT', 4.8 + (i * 0.1), 1000.0, 0, 0.0, 'OPEN', now() - (i || ' minutes')::interval);
+            VALUES (gen_random_uuid(), test_account_id, usdc_id, 'LEND', 'LIMIT', 4.8 + (i * 0.1), 10.0, 0, 0.0, 'OPEN', now() - (i || ' minutes')::interval);
         END IF;
     END LOOP;
 

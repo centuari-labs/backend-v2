@@ -484,10 +484,10 @@ export class OrdersService {
                 order,
                 accountId,
             });
-            this.logger.debug(`Published order ${order.orderId} to ${subject}`);
+            this.logger.debug(`Published order ${order.orderId as string} to ${subject}`);
         } catch (error) {
             this.logger.error(
-                `Failed to publish order ${order.orderId} to NATS: ${error.message}`,
+                `Failed to publish order ${order.orderId as string} to NATS: ${error.message}`,
             );
         }
     }

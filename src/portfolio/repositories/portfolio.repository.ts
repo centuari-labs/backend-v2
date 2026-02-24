@@ -17,6 +17,13 @@ export interface RawPosition {
     created_at: Date;
 }
 
+export interface LendPositionForApr {
+    asset_id: string;
+    shares: string;
+    amount: string;
+    created_at: Date;
+}
+
 @Injectable()
 export class PortfolioRepository extends Repository<Portfolio> {
     constructor(private dataSource: DataSource) {
@@ -32,16 +39,15 @@ export class PortfolioRepository extends Repository<Portfolio> {
             .getRawMany();
     }
 
-    //@todo : find how to get net APR from user's lend position shares
-    //@todo : change the function name into getUserNetAPR
-    async getUserNetAPY(accountId: string): Promise<{ asset_id: string, net_apy: string }[]> {
+    async getUserLendPositionsForApr(accountId: string): Promise<LendPositionForApr[]> {
         return this.dataSource.createQueryBuilder()
             .select('lp.asset_id', 'asset_id')
-            .addSelect("'0'", 'net_apy')
+            .addSelect('lp.shares', 'shares')
+            .addSelect('lp.amount', 'amount')
+            .addSelect('lp.created_at', 'created_at')
             .from('lend_positions', 'lp')
             .where('lp.account_id = :accountId', { accountId })
             .andWhere('lp.amount > 0')
-            .groupBy('lp.asset_id')
             .getRawMany();
     }
 

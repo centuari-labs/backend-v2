@@ -171,6 +171,7 @@ export class OrdersService {
         walletAddress: string,
         privyUserId: string,
     ): Promise<OrderResponse> {
+        //@todo : need to consider current open orders and reject if the new order would reduce health factor below 1
         const accountId = await this.getOrCreateAccount(
             walletAddress,
             privyUserId,
@@ -240,6 +241,7 @@ export class OrdersService {
         walletAddress: string,
         privyUserId: string,
     ): Promise<OrderResponse> {
+        //@todo : need to consider current open orders and reject if the new order would reduce health factor below 1
         const accountId = await this.getOrCreateAccount(
             walletAddress,
             privyUserId,

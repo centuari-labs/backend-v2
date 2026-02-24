@@ -60,8 +60,19 @@ export class MarketService {
             }
         }
 
+        const assetIds = assets.map((a) => a.id);
+        const earliestMarkets =
+            await this.marketRepository.getEarliestMarketByAssetIds(assetIds);
+        const earliestByAsset = new Map(
+            earliestMarkets.map((m) => [
+                m.assetId,
+                { marketId: m.marketId, maturity: m.maturity },
+            ]),
+        );
+
         const markets = assets.map(asset => {
             const rates = rateMap.get(asset.id) || { borrow: 0, lend: 0 };
+            const earliest = earliestByAsset.get(asset.id);
             return {
                 asset: {
                     id: asset.id,
@@ -69,11 +80,12 @@ export class MarketService {
                     symbol: asset.symbol,
                     decimals: asset.decimals ?? null,
                     image_url: asset.imageUrl ?? null,
-                    token_address: asset.tokenAddress,
                 },
-                markets: { //@todo : should return the earliest market id of maturity available of the assets
-                    market_id: this.marketRepository.getMarketId(asset.id),
-                    maturity: new Date().toISOString(),
+                market: {
+                    market_id: earliest?.marketId ?? null,
+                    maturity: earliest
+                        ? Math.floor(earliest.maturity.getTime() / 1000)
+                        : null,
                 },
                 // rates in DB are stored as basis points; convert to human percentage for responses
                 borrow_rate: toPercentage(rates.borrow),

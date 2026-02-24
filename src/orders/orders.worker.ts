@@ -7,6 +7,7 @@ import {
     OrderStatus,
     OrderType,
 } from "./constants/order.constants";
+import { Order } from "./entities/order.entity";
 import { OrderRepository } from "./repositories/order.repository";
 import { OrdersService } from "./orders.service";
 import { Market } from "../market/entities/market.entity";
@@ -302,16 +303,13 @@ export class OrdersWorker implements OnModuleInit {
             await this.dataSource.transaction(async (manager) => {
                 // 1. Mark original order as FILLED
                 await manager
-                    .createQueryBuilder()
-                    .update("orders")
-                    .set({
-                        filled_quantity: quantity.toString(),
+                    .getRepository(Order)
+                    .update(order!.id, {
+                        filledQuantity: quantity.toString(),
                         status: OrderStatus.Filled,
-                        filled_settlement_fee:
+                        filledSettlementFee:
                             order!.settlementFee.split(".")[0],
-                    })
-                    .where("id = :id", { id: order!.id })
-                    .execute();
+                    });
 
                 // 2. Create counterparty order (FILLED immediately)
                 const counterpartyOrderResult = await manager

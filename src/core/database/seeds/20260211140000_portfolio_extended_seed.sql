@@ -51,7 +51,7 @@ BEGIN
     IF usdc_id IS NOT NULL THEN
         IF NOT EXISTS(SELECT 1 FROM markets WHERE asset_id = usdc_id) THEN
             usdc_market_id := gen_random_uuid();
-            INSERT INTO markets (id, asset_id, created_at) VALUES (usdc_market_id, usdc_id, now());
+            INSERT INTO markets (id, asset_id, maturity, created_at) VALUES (usdc_market_id, usdc_id, now() + interval '30 days', now());
         ELSE
             SELECT id INTO usdc_market_id FROM markets WHERE asset_id = usdc_id LIMIT 1;
         END IF;
@@ -60,7 +60,7 @@ BEGIN
     IF usdt_id IS NOT NULL THEN
         IF NOT EXISTS(SELECT 1 FROM markets WHERE asset_id = usdt_id) THEN
             usdt_market_id := gen_random_uuid();
-            INSERT INTO markets (id, asset_id, created_at) VALUES (usdt_market_id, usdt_id, now());
+            INSERT INTO markets (id, asset_id, maturity, created_at) VALUES (usdt_market_id, usdt_id, now() + interval '60 days', now());
         ELSE
             SELECT id INTO usdt_market_id FROM markets WHERE asset_id = usdt_id LIMIT 1;
         END IF;

@@ -13,8 +13,8 @@ import { OrdersService } from "./orders.service";
 import { Market } from "../market/entities/market.entity";
 
 const INSERT_INTERVAL_MS = Number.parseInt("5000", 10);
-const PARTIAL_FILL_INTERVAL_MS = Number.parseInt("8000", 10);
-const FILL_INTERVAL_MS = Number.parseInt("15000", 10);
+const PARTIAL_FILL_INTERVAL_MS = Number.parseInt("180000", 10);
+const FILL_INTERVAL_MS = Number.parseInt("300000", 10);
 const MAX_OPEN_ORDERS = Number.parseInt("50", 10);
 const CACHE_REFRESH_INTERVAL_MS = Number.parseInt("300000", 10);
 

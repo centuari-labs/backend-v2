@@ -56,4 +56,15 @@ export class AuthService {
 
         return account;
     }
+
+    async updateName(privyUserId: string, name: string) {
+        const account = await this.databaseService.queryOne(
+            `UPDATE accounts SET name = $1 WHERE privy_user_id = $2 RETURNING *`,
+            [name, privyUserId],
+        );
+
+        this.logger.log(`Name updated for privy user ${privyUserId}`);
+
+        return account;
+    }
 }

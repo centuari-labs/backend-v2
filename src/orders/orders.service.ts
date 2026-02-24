@@ -106,7 +106,11 @@ export class OrdersService {
             dto,
             walletAddress,
         );
-        await this.publishOrderToNats(NATS_SUBJECTS.LEND_MARKET, engineOrder, accountId);
+        await this.publishOrderToNats(
+            NATS_SUBJECTS.LEND_MARKET,
+            engineOrder,
+            accountId,
+        );
 
         return this.mapToResponse(savedOrder, dto, walletAddress);
     }
@@ -153,7 +157,11 @@ export class OrdersService {
             dto,
             walletAddress,
         );
-        await this.publishOrderToNats(NATS_SUBJECTS.LEND_LIMIT, engineOrder, accountId);
+        await this.publishOrderToNats(
+            NATS_SUBJECTS.LEND_LIMIT,
+            engineOrder,
+            accountId,
+        );
 
         return this.mapToResponse(savedOrder, dto, walletAddress);
     }
@@ -218,7 +226,11 @@ export class OrdersService {
             dto,
             walletAddress,
         );
-        await this.publishOrderToNats(NATS_SUBJECTS.BORROW_MARKET, engineOrder, accountId);
+        await this.publishOrderToNats(
+            NATS_SUBJECTS.BORROW_MARKET,
+            engineOrder,
+            accountId,
+        );
 
         return this.mapToResponse(savedOrder, dto, walletAddress);
     }
@@ -283,7 +295,11 @@ export class OrdersService {
             dto,
             walletAddress,
         );
-        await this.publishOrderToNats(NATS_SUBJECTS.BORROW_LIMIT, engineOrder, accountId);
+        await this.publishOrderToNats(
+            NATS_SUBJECTS.BORROW_LIMIT,
+            engineOrder,
+            accountId,
+        );
 
         return this.mapToResponse(savedOrder, dto, walletAddress);
     }
@@ -465,7 +481,7 @@ export class OrdersService {
             await this.natsService.publish(subject, {
                 event: subject,
                 timestamp: new Date().toISOString(),
-                data: order,
+                order,
                 accountId,
             });
             this.logger.debug(`Published order ${order.orderId} to ${subject}`);
@@ -485,7 +501,7 @@ export class OrdersService {
             await this.natsService.publish(subject, {
                 event: subject,
                 timestamp: new Date().toISOString(),
-                data: {
+                order: {
                     orderId,
                     walletAddress,
                 },

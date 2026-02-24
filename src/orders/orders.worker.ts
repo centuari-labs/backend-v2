@@ -7,43 +7,17 @@ import { OrderRepository } from "./repositories/order.repository";
 import { OrdersService } from "./orders.service";
 import { Market } from "../market/entities/market.entity";
 
-const INSERT_INTERVAL_MS = Number.parseInt(
-    process.env.ORDER_WORKER_INSERT_INTERVAL_MS ?? "5000",
-    10,
-);
-const PARTIAL_FILL_INTERVAL_MS = Number.parseInt(
-    process.env.ORDER_WORKER_PARTIAL_FILL_INTERVAL_MS ?? "7000",
-    10,
-);
-const MAX_OPEN_ORDERS = Number.parseInt(
-    process.env.ORDER_WORKER_MAX_OPEN_ORDERS ?? "500",
-    10,
-);
-const CACHE_REFRESH_INTERVAL_MS = Number.parseInt(
-    process.env.ORDER_WORKER_CACHE_REFRESH_MS ?? "300000",
-    10,
-);
+const INSERT_INTERVAL_MS = Number.parseInt("5000", 10);
+const PARTIAL_FILL_INTERVAL_MS = Number.parseInt("7000", 10);
+const MAX_OPEN_ORDERS = Number.parseInt("500", 10);
+const CACHE_REFRESH_INTERVAL_MS = Number.parseInt("300000", 10);
 
-const RATE_MIN = Number.parseInt(
-    process.env.ORDER_WORKER_RATE_MIN ?? "100",
-    10,
-);
-const RATE_MAX = Number.parseInt(
-    process.env.ORDER_WORKER_RATE_MAX ?? "2500",
-    10,
-);
-const QUANTITY_MIN = Number.parseFloat(
-    process.env.ORDER_WORKER_QUANTITY_MIN ?? "1",
-);
-const QUANTITY_MAX = Number.parseFloat(
-    process.env.ORDER_WORKER_QUANTITY_MAX ?? "1000",
-);
-const PARTIAL_FILL_MIN_FRACTION = Number.parseFloat(
-    process.env.ORDER_WORKER_PARTIAL_FILL_MIN_FRACTION ?? "0.05",
-);
-const PARTIAL_FILL_MAX_FRACTION = Number.parseFloat(
-    process.env.ORDER_WORKER_PARTIAL_FILL_MAX_FRACTION ?? "0.25",
-);
+const RATE_MIN = Number.parseInt("100", 10);
+const RATE_MAX = Number.parseInt("2500", 10);
+const QUANTITY_MIN = Number.parseFloat("1");
+const QUANTITY_MAX = Number.parseFloat("10");
+const PARTIAL_FILL_MIN_FRACTION = Number.parseFloat("0.05");
+const PARTIAL_FILL_MAX_FRACTION = Number.parseFloat("0.25");
 
 const ACCOUNTS = [
     {
@@ -110,6 +84,7 @@ export class OrdersWorker implements OnModuleInit {
         try {
             const markets = await this.marketRepository.find();
             const grouped = new Map<string, string[]>();
+
             for (const m of markets) {
                 const arr = grouped.get(m.assetId) ?? [];
                 arr.push(m.id);
@@ -151,6 +126,7 @@ export class OrdersWorker implements OnModuleInit {
                 this.assetMarketCache[
                     Math.floor(Math.random() * this.assetMarketCache.length)
                 ];
+
             const { assetId, marketIds } = entry;
 
             const side = this.getRandomSide();
@@ -187,11 +163,14 @@ export class OrdersWorker implements OnModuleInit {
                 return;
             }
 
-            await this.ordersService.createBorrowLimitOrder(
-                { assetId, amount, marketIds, rate },
-                account.wallet,
-                account.privyUserId,
-            );
+            if (side === OrderSide.Borrow && type === OrderType.Limit) {
+                await this.ordersService.createBorrowLimitOrder(
+                    { assetId, amount, marketIds, rate },
+                    account.wallet,
+                    account.privyUserId,
+                );
+                return;
+            }
         } catch (error) {
             this.logger.error(
                 `Failed to insert order: ${(error as Error).message}`,

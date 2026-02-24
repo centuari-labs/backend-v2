@@ -85,7 +85,7 @@ CREATE TABLE IF NOT EXISTS orders (
 );
 
 CREATE TABLE order_markets (
-  order_market_id UUID PRIMARY KEY,
+  order_market_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   order_id UUID NOT NULL,
   market_id UUID NOT NULL,
   created_at TIMESTAMP,

@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import { PortfolioService } from '../../portfolio/portfolio.service';
 import { Token } from '../../tokens/entities/token.entity';
 import { PriceService } from '../../price/price.service';
+import { TokensService } from '../../tokens/tokens.service';
 import { PortfolioRepository } from '../../portfolio/repositories/portfolio.repository';
 import { OrderRepository } from '../../orders/repositories/order.repository';
 import { OrderSide, OrderStatus } from '../../orders/constants/order.constants';
@@ -12,6 +13,7 @@ describe('PortfolioService', () => {
     let service: PortfolioService;
     let tokenRepositoryMock: jest.Mocked<Repository<Token>>;
     let priceServiceMock: jest.Mocked<PriceService>;
+    let tokensServiceMock: jest.Mocked<Partial<TokensService>>;
     let portfolioRepositoryMock: any;
     let orderRepositoryMock: any;
 
@@ -19,9 +21,9 @@ describe('PortfolioService', () => {
     const mockAccountId = 'account-uuid-001';
 
     const mockTokens = [
-        { id: 'token-uuid-001', symbol: 'ETH', name: 'Ethereum', tokenAddress: '0xETH', averageLTV: 0.75 },
-        { id: 'token-uuid-002', symbol: 'BTC', name: 'Bitcoin', tokenAddress: '0xBTC', averageLTV: 0.70 },
-        { id: 'token-uuid-003', symbol: 'USDC', name: 'USD Coin', tokenAddress: '0xUSDC', averageLTV: 0.85 },
+        { id: 'token-uuid-001', symbol: 'ETH', name: 'Ethereum', tokenAddress: '0xETH', averageLTV: 0.75, decimals: 18 },
+        { id: 'token-uuid-002', symbol: 'BTC', name: 'Bitcoin', tokenAddress: '0xBTC', averageLTV: 0.70, decimals: 8 },
+        { id: 'token-uuid-003', symbol: 'USDC', name: 'USD Coin', tokenAddress: '0xUSDC', averageLTV: 0.85, decimals: 6 },
     ];
 
     beforeEach(async () => {
@@ -36,9 +38,16 @@ describe('PortfolioService', () => {
             getPriceByAssetId: jest.fn(),
         } as any;
 
+        tokensServiceMock = {
+            getTokenDecimalsByAssetId: jest.fn(async (assetId: string) => {
+                const token = mockTokens.find((t) => t.id === assetId);
+                return token?.decimals ?? null;
+            }),
+        } as any;
+
         portfolioRepositoryMock = {
             getUserTotalBalances: jest.fn(),
-            getUserNetAPY: jest.fn(),
+            getUserLendPositionsForApr: jest.fn(),
             getUserSuppliedAssets: jest.fn(),
             getUserBorrowedAssets: jest.fn(),
             getUserCollateralAssets: jest.fn(),
@@ -55,6 +64,7 @@ describe('PortfolioService', () => {
                 PortfolioService,
                 { provide: getRepositoryToken(Token), useValue: tokenRepositoryMock },
                 { provide: PriceService, useValue: priceServiceMock },
+                { provide: TokensService, useValue: tokensServiceMock },
                 { provide: PortfolioRepository, useValue: portfolioRepositoryMock },
                 { provide: OrderRepository, useValue: orderRepositoryMock },
             ],
@@ -71,48 +81,109 @@ describe('PortfolioService', () => {
         it('should calculate total deposit correctly in USD', async () => {
             tokenRepositoryMock.find.mockResolvedValue(mockTokens as any);
             priceServiceMock.getPrices.mockReturnValue({
-                '0xeth': 3000,
-                '0xbtc': 50000,
-                '0xusdc': 1,
+                'token-uuid-001': 3000,
+                'token-uuid-002': 50000,
+                'token-uuid-003': 1,
             });
 
             portfolioRepositoryMock.getUserTotalBalances.mockResolvedValue([
-                { asset_id: 'token-uuid-001', total_amount: '2' }, // 2 ETH
-                { asset_id: 'token-uuid-002', total_amount: '0.5' }, // 0.5 BTC
+                { asset_id: 'token-uuid-001', total_amount: '2' },
+                { asset_id: 'token-uuid-002', total_amount: '0.5' },
             ]);
-            portfolioRepositoryMock.getUserNetAPY.mockResolvedValue([]);
+            portfolioRepositoryMock.getUserLendPositionsForApr.mockResolvedValue([]);
 
             const result = await service.getMyPortfolio(mockWalletAddress);
 
             // (2 * 3000) + (0.5 * 50000) = 6000 + 25000 = 31000
-            expect(result.totalDeposit).toBe('31000.00');
+            expect(result.totalDeposit).toBe(31000);
         });
 
-        it('should calculate net APY correctly', async () => {
+        it('should calculate net APY (percentage) from a single lend position', async () => {
             tokenRepositoryMock.find.mockResolvedValue(mockTokens as any);
-            const prices = {};
-            mockTokens.forEach(t => prices[t.tokenAddress.toLowerCase()] = 1000);
-            priceServiceMock.getPrices.mockReturnValue(prices);
+            priceServiceMock.getPrices.mockReturnValue({});
 
             portfolioRepositoryMock.getUserTotalBalances.mockResolvedValue([]);
-            portfolioRepositoryMock.getUserNetAPY.mockResolvedValue([
-                { asset_id: 'token-uuid-001', net_apy: '5.50' },
-                { asset_id: 'token-uuid-002', net_apy: '3.25' },
+            // USDC (6 decimals): amount = 1000 USDC, shares = 1100 USDC
+            // APR = 1100/1000 - 1 = 0.1 → APY = 10 (%)
+            portfolioRepositoryMock.getUserLendPositionsForApr.mockResolvedValue([
+                { asset_id: 'token-uuid-003', shares: '1100000000', amount: '1000000000', created_at: new Date() },
             ]);
 
             const result = await service.getMyPortfolio(mockWalletAddress);
 
-            expect(result.netAPY).toBe(4.38);
+            expect(result.netAPY).toBe(10);
+        });
+
+        it('should calculate weighted average net APY (percentage) from multiple lend positions', async () => {
+            tokenRepositoryMock.find.mockResolvedValue(mockTokens as any);
+            priceServiceMock.getPrices.mockReturnValue({});
+
+            portfolioRepositoryMock.getUserTotalBalances.mockResolvedValue([]);
+            // Position 1: USDC (6 dec), amount = 1000 USDC, shares = 1050 → APR = 0.05, weight = 1000
+            // Position 2: USDC (6 dec), amount = 500 USDC,  shares = 550  → APR = 0.10, weight = 500
+            // Weighted avg APR = (0.05*1000 + 0.10*500) / (1000+500) = (50+50)/1500 = 0.0667 → APY ≈ 6.67 (%)
+            portfolioRepositoryMock.getUserLendPositionsForApr.mockResolvedValue([
+                { asset_id: 'token-uuid-003', shares: '1050000000', amount: '1000000000', created_at: new Date() },
+                { asset_id: 'token-uuid-003', shares: '550000000', amount: '500000000', created_at: new Date() },
+            ]);
+
+            const result = await service.getMyPortfolio(mockWalletAddress);
+
+            expect(result.netAPY).toBe(6.67);
+        });
+
+        it('should return net APR 0 when there are no lend positions', async () => {
+            tokenRepositoryMock.find.mockResolvedValue(mockTokens as any);
+            priceServiceMock.getPrices.mockReturnValue({});
+
+            portfolioRepositoryMock.getUserTotalBalances.mockResolvedValue([]);
+            portfolioRepositoryMock.getUserLendPositionsForApr.mockResolvedValue([]);
+
+            const result = await service.getMyPortfolio(mockWalletAddress);
+
+            expect(result.netAPY).toBe(0);
+        });
+
+        it('should skip positions with zero amount when computing net APY', async () => {
+            tokenRepositoryMock.find.mockResolvedValue(mockTokens as any);
+            priceServiceMock.getPrices.mockReturnValue({});
+
+            portfolioRepositoryMock.getUserTotalBalances.mockResolvedValue([]);
+            // One valid position (APR = 0.1 → APY = 10%) and one with amountHuman = 0 (should be skipped)
+            portfolioRepositoryMock.getUserLendPositionsForApr.mockResolvedValue([
+                { asset_id: 'token-uuid-003', shares: '1100000000', amount: '1000000000', created_at: new Date() },
+                { asset_id: 'token-uuid-003', shares: '0', amount: '0', created_at: new Date() },
+            ]);
+
+            const result = await service.getMyPortfolio(mockWalletAddress);
+
+            expect(result.netAPY).toBe(10);
+        });
+
+        it('should skip positions with missing decimals', async () => {
+            const tokensWithMissingDecimals = [
+                ...mockTokens,
+                { id: 'token-no-decimals', symbol: 'NODEC', name: 'No Decimals Token', tokenAddress: '0xNODEC', averageLTV: 0, decimals: null },
+            ];
+            tokenRepositoryMock.find.mockResolvedValue(tokensWithMissingDecimals as any);
+            priceServiceMock.getPrices.mockReturnValue({});
+
+            portfolioRepositoryMock.getUserTotalBalances.mockResolvedValue([]);
+            portfolioRepositoryMock.getUserLendPositionsForApr.mockResolvedValue([
+                { asset_id: 'token-no-decimals', shares: '1100', amount: '1000', created_at: new Date() },
+            ]);
+
+            const result = await service.getMyPortfolio(mockWalletAddress);
+
+            expect(result.netAPY).toBe(0);
         });
 
         it('should calculate all time return correctly', async () => {
             tokenRepositoryMock.find.mockResolvedValue(mockTokens as any);
-            const prices = {};
-            mockTokens.forEach(t => prices[t.tokenAddress.toLowerCase()] = 1000);
-            priceServiceMock.getPrices.mockReturnValue(prices);
+            priceServiceMock.getPrices.mockReturnValue({});
 
             portfolioRepositoryMock.getUserTotalBalances.mockResolvedValue([]);
-            portfolioRepositoryMock.getUserNetAPY.mockResolvedValue([]);
+            portfolioRepositoryMock.getUserLendPositionsForApr.mockResolvedValue([]);
 
             const result = await service.getMyPortfolio(mockWalletAddress);
 
@@ -126,11 +197,11 @@ describe('PortfolioService', () => {
             portfolioRepositoryMock.getUserTotalBalances.mockResolvedValue([
                 { asset_id: 'token-uuid-001', total_amount: '2' },
             ]);
-            portfolioRepositoryMock.getUserNetAPY.mockResolvedValue([]);
+            portfolioRepositoryMock.getUserLendPositionsForApr.mockResolvedValue([]);
 
             const result = await service.getMyPortfolio(mockWalletAddress);
 
-            expect(result.totalDeposit).toBe('0.00');
+            expect(result.totalDeposit).toBe(0);
         });
     });
 
@@ -164,8 +235,8 @@ describe('PortfolioService', () => {
             tokenRepositoryMock.createQueryBuilder.mockReturnValue(mockQueryBuilder as any);
 
             priceServiceMock.getPrices.mockReturnValue({
-                '0xeth': 3000,
-                '0xbtc': 50000,
+                'token-uuid-001': 3000,
+                'token-uuid-002': 50000,
             });
 
             const result = await service.getMyAssets(mockWalletAddress, { page: 1, limit: 10 });
@@ -174,15 +245,15 @@ describe('PortfolioService', () => {
             expect(result.data[0]).toEqual({
                 symbol: 'ETH',
                 name: 'Ethereum',
-                walletBalance: '1.5',
-                amountInUsd: '4500.00',
+                walletBalance: 1.5,
+                amountInUsd: 4500,
                 isCollateral: true,
             });
             expect(result.data[1]).toEqual({
                 symbol: 'BTC',
                 name: 'Bitcoin',
-                walletBalance: '0.25',
-                amountInUsd: '12500.00',
+                walletBalance: 0.25,
+                amountInUsd: 12500,
                 isCollateral: false,
             });
             expect(result.totalData).toBe(2);
@@ -217,7 +288,7 @@ describe('PortfolioService', () => {
             expect(result.totalPages).toBe(3);
         });
 
-        it('should return 0.00 USD for missing price data', async () => {
+        it('should return 0 USD for missing price data', async () => {
             orderRepositoryMock.findAccountByWallet.mockResolvedValue({ id: mockAccountId });
 
             portfolioRepositoryMock.getUserAssets.mockResolvedValue({
@@ -235,7 +306,7 @@ describe('PortfolioService', () => {
 
             const result = await service.getMyAssets(mockWalletAddress, { page: 1, limit: 10 });
 
-            expect(result.data[0].amountInUsd).toBe('0.00');
+            expect(result.data[0].amountInUsd).toBe(0);
         });
     });
 
@@ -378,7 +449,7 @@ describe('PortfolioService', () => {
             expect(result.data).toHaveLength(1);
         });
 
-        it('should calculate remaining quantity correctly', async () => {
+        it('should return position quantity as walletBalance', async () => {
             orderRepositoryMock.findAccountByWallet.mockResolvedValue({ id: mockAccountId });
 
             portfolioRepositoryMock.getUserPositions.mockResolvedValue({
@@ -405,12 +476,11 @@ describe('PortfolioService', () => {
                 getMany: jest.fn().mockResolvedValue([mockTokens[0]]),
             };
             tokenRepositoryMock.createQueryBuilder.mockReturnValue(mockQueryBuilder as any);
-            priceServiceMock.getPrices.mockReturnValue({ '0xeth': 3000 });
+            priceServiceMock.getPrices.mockReturnValue({ 'token-uuid-001': 3000 });
 
             const result = await service.getMyPosition(mockWalletAddress, { page: 1, limit: 10 });
 
-            // Remaining: 1000 - 300 = 700
-            expect(result.data[0].walletBalance).toBe('700');
+            expect(result.data[0].walletBalance).toBe(1000);
         });
 
         it('should calculate USD amount correctly for positions', async () => {
@@ -440,13 +510,12 @@ describe('PortfolioService', () => {
                 getMany: jest.fn().mockResolvedValue([mockTokens[0]]),
             };
             tokenRepositoryMock.createQueryBuilder.mockReturnValue(mockQueryBuilder as any);
-            priceServiceMock.getPrices.mockReturnValue({ '0xeth': 3000 });
+            priceServiceMock.getPrices.mockReturnValue({ 'token-uuid-001': 3000 });
 
             const result = await service.getMyPosition(mockWalletAddress, { page: 1, limit: 10 });
 
-            // Remaining: 2 - 0.5 = 1.5 ETH
-            // USD: 1.5 * 3000 = 4500
-            expect(result.data[0].amountInUsd).toBe('4500.00');
+            // quantity = 2, price = 3000 → USD = 6000
+            expect(result.data[0].amountInUsd).toBe(6000);
         });
 
         it('should handle missing price data for positions', async () => {
@@ -480,7 +549,7 @@ describe('PortfolioService', () => {
 
             const result = await service.getMyPosition(mockWalletAddress, { page: 1, limit: 10 });
 
-            expect(result.data[0].amountInUsd).toBe('0.00');
+            expect(result.data[0].amountInUsd).toBe(0);
         });
 
         it('should return isCollateral as false for positions', async () => {

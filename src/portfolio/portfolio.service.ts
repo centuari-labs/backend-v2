@@ -3,10 +3,12 @@ import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
 import { Token } from "../tokens/entities/token.entity";
 import { PriceService } from "../price/price.service";
+import { TokensService } from "../tokens/tokens.service";
 import { MyPortfolioResponseDto, GetMyAssetsQueryDto, MyAssetsResponseDto, LendBorrowAssetResponseDto, GetMyPositionResponseDto, MyPositionQueryDto, SetAssetAsCollateralDto, MyHealthFactorResponseDto } from "./dto/portfolio.dto";
 import { PortfolioRepository } from "./repositories/portfolio.repository";
 import { OrderRepository } from "../orders/repositories/order.repository";
 import { calculateUsdAmount, createPaginatedResponse } from "./helpers/position.helpers";
+import { baseUnitsToHuman } from "../common/utils/number.utils";
 import {
     computeHealthFactor,
     formatHealthFactorResponse,
@@ -21,6 +23,7 @@ export class PortfolioService {
         @InjectRepository(Token)
         private readonly tokenRepository: Repository<Token>,
         private readonly priceService: PriceService,
+        private readonly tokensService: TokensService,
         private readonly portfolioRepository: PortfolioRepository,
         private readonly orderRepository: OrderRepository,
     ) { }
@@ -31,40 +34,51 @@ export class PortfolioService {
             throw new NotFoundException("Account not found");
         }
 
-        const assets = await this.tokenRepository.find();
         const allPrices = this.priceService.getPrices();
-        const priceMap = new Map<string, number>();
-
-        for (const asset of assets) {
-            const price = allPrices[asset.id.toLowerCase()];
-            if (price !== undefined) {
-                priceMap.set(asset.id, price);
-            }
-        }
 
         let totalBalanceUsd = 0;
-        let totalNetAPY = 0;
 
-        const portfolio = await this.portfolioRepository.getUserTotalBalances(account.id);
-        const netAPY = await this.portfolioRepository.getUserNetAPY(account.id);
+        const [portfolio, lendPositions] = await Promise.all([
+            this.portfolioRepository.getUserTotalBalances(account.id),
+            this.portfolioRepository.getUserLendPositionsForApr(account.id),
+        ]);
 
         for (const deposit of portfolio) {
-            const price = priceMap.get(deposit.asset_id);
+            const price = allPrices[deposit.asset_id.toLowerCase()];
             if (price !== undefined) {
                 totalBalanceUsd += Number.parseFloat(deposit.total_amount) * price;
             }
         }
 
-        if (netAPY.length > 0) {
-            const sumAPY = netAPY.reduce((sum, item) => sum + Number.parseFloat(item.net_apy), 0);
-            totalNetAPY = sumAPY / netAPY.length;
+        let netAPR = 0;
+        if (lendPositions.length > 0) {
+            let totalWeightedAPR = 0;
+            let totalAmount = 0;
+
+            for (const position of lendPositions) {
+                const decimals = await this.tokensService.getTokenDecimalsByAssetId(position.asset_id);
+                if (decimals == null) continue;
+
+                const amountHuman = Number(baseUnitsToHuman(position.amount, decimals));
+                const sharesHuman = Number(baseUnitsToHuman(position.shares, decimals));
+
+                if (amountHuman <= 0) continue;
+
+                const apr = sharesHuman / amountHuman - 1;
+                totalWeightedAPR += apr * amountHuman;
+                totalAmount += amountHuman;
+            }
+
+            if (totalAmount > 0) {
+                netAPR = totalWeightedAPR / totalAmount;
+            }
         }
 
         //@todo : need to return user's all time return
         //@todo : need to return user's portofolio allocation percentages
         return {
             totalDeposit: totalBalanceUsd,
-            netAPY: Number(totalNetAPY.toFixed(2)),
+            netAPY: Number((netAPR * 100).toFixed(2)),
             allTimeReturn: 0,
         };
     }

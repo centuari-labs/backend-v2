@@ -370,10 +370,10 @@ export class OrdersService {
                 timestamp: new Date().toISOString(),
                 data: order,
             });
-            this.logger.debug(`Published order ${order.orderId} to ${subject}`);
+            this.logger.debug(`Published order ${order.orderId as string} to ${subject}`);
         } catch (error) {
             this.logger.error(
-                `Failed to publish order ${order.id} to NATS: ${error.message}`,
+                `Failed to publish order ${order.orderId as string} to NATS: ${error.message}`,
             );
         }
     }

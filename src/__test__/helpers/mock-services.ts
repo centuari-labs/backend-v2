@@ -6,7 +6,7 @@ import type { PriceService } from '../../price/price.service';
 import type { MarketRepositories } from '../../market/repository/market.repository';
 import type { PortfolioService } from '../../portfolio/portfolio.service';
 import type { OrdersService } from '../../orders/orders.service';
-import type { DataSource, Repository } from 'typeorm';
+import type { DataSource, ObjectLiteral, Repository } from 'typeorm';
 
 export function createMockOrderRepository(): Partial<jest.Mocked<OrderRepository>> {
     return {
@@ -74,7 +74,7 @@ export function createMockOrdersService(): Partial<jest.Mocked<OrdersService>> {
     } as any;
 }
 
-export function createMockRepository<T>(): Partial<jest.Mocked<Repository<T>>> {
+export function createMockRepository<T extends ObjectLiteral>(): Partial<jest.Mocked<Repository<T>>> {
     return {
         find: jest.fn(),
         findOne: jest.fn(),

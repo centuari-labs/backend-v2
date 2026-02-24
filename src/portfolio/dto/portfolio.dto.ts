@@ -38,6 +38,7 @@ export class MyAssetDto {
     assetsId: string;
     amountInUsd: number;
     isCollateral: boolean;
+    imageUrl?: string | null;
 }
 
 export class GetMyAssetsQueryDto {
@@ -52,6 +53,7 @@ export class MyAssetItemDto {
     walletBalance: number;
     amountInUsd: number;
     isCollateral: boolean;
+    imageUrl?: string | null;
 }
 
 export class MyAssetsResponseDto {
@@ -88,6 +90,7 @@ export class MyPositionItemDto {
     walletBalance: number;
     amountInUsd: number;
     isCollateral: boolean;
+    imageUrl?: string | null;
 }
 
 export class GetMyPositionResponseDto {

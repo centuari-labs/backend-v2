@@ -21,6 +21,9 @@ export class Token {
     @Column({ name: "chain_id", type: "numeric", nullable: true })
     chainId: number | null;
 
+    @Column({ name: "image_url", type: "text", nullable: true })
+    imageUrl: string | null;
+
     @Column({ name: "avg_ltv", type: "numeric", nullable: true })
     averageLTV: number | null;
 
@@ -29,9 +32,6 @@ export class Token {
 
     @Column({ type: "int", nullable: true })
     decimals: number | null;
-
-    @Column({ name: "image_url", type: "text", nullable: true })
-    imageUrl: string | null;
 
     @CreateDateColumn({ name: "created_at" })
     createdAt: Date;

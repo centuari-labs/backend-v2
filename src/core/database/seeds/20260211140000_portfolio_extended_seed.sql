@@ -90,8 +90,14 @@ BEGIN
         VALUES (usdc_lend_order_id, usdc_lend_order_id, usdc_market_id);
 
         -- Create a MATCH for this order
-        INSERT INTO matches (id, lend_order_market_id, borrow_order_market_id, asset_id, lender_account_id, borrower_account_id, match_amount, rate, is_borrower_taker, maker_fee, taker_fee, lender_settlement_fee, borrower_settlement_fee, maturity)
-        VALUES (usdc_match_id, usdc_lend_order_id, gen_random_uuid(), usdc_id, test_account_id, counterparty_account_id, 10000.0, 4.5, true, 0, 0, 0, 0, now() + interval '30 days');
+        INSERT INTO orders (id, account_id, asset_id, side, type, rate, quantity, filled_quantity, settlement_fee, status)
+        VALUES (usdc_borrow_order_id, counterparty_account_id, usdc_id, 'BORROW', 'LIMIT', 4.5, 10000.0, 10000.0, 0, 'FILLED');
+
+        INSERT INTO order_markets (order_market_id, order_id, market_id)
+        VALUES (usdc_borrow_order_id, usdc_borrow_order_id, usdc_market_id);
+
+        INSERT INTO matches (id, lend_order_market_id, borrow_order_market_id, asset_id, lender_account_id, borrower_account_id, match_amount, rate, is_borrower_taker, maker_fee, taker_fee, lender_settlement_fee, borrower_settlement_fee)
+        VALUES (usdc_match_id, usdc_lend_order_id, usdc_borrow_order_id, usdc_id, test_account_id, counterparty_account_id, 10000.0, 4.5, true, 0, 0, 0, 0);
 
         -- 7. Positions
         INSERT INTO lend_positions (id, account_id, asset_id, market_id, shares, original_shares, amount, created_at)

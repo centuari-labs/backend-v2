@@ -1,18 +1,16 @@
-export interface OrderbookSideDto {
-    price: number;
-    apr: string;
+export interface OrderbookLevel {
+    rate: number;
     amount: string;
+    orders: number;
 }
 
 export interface OrderbookUpdateDto {
     loanToken: string;
-    maturity: number;
-    lend: OrderbookSideDto | null;
-    borrow: OrderbookSideDto | null;
+    lend: OrderbookLevel[];
+    borrow: OrderbookLevel[];
     timestamp: number;
 }
 
 export interface SubscribeOrderbookDto {
     loanToken: string;
-    maturity: number;
 }

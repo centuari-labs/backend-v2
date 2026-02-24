@@ -477,15 +477,10 @@ export class OrdersService {
     private async publishOrderToNats(
         subject: string,
         order: MatchingEngineOrder,
-        accountId: string,
+        _accountId: string,
     ): Promise<void> {
         try {
-            await this.natsService.publish(subject, {
-                event: subject,
-                timestamp: new Date().toISOString(),
-                order,
-                accountId,
-            });
+            await this.natsService.publish(subject, order);
             this.logger.debug(`Published order ${order.orderId as string} to ${subject}`);
         } catch (error) {
             this.logger.error(
@@ -501,12 +496,8 @@ export class OrdersService {
         const subject = NATS_SUBJECTS.CANCEL;
         try {
             await this.natsService.publish(subject, {
-                event: subject,
-                timestamp: new Date().toISOString(),
-                order: {
-                    orderId,
-                    walletAddress,
-                },
+                orderId,
+                walletAddress,
             });
             this.logger.debug(
                 `Published cancel order ${orderId} to ${subject}`,

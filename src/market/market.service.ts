@@ -42,21 +42,23 @@ export class MarketService {
 
         for (const deposit of portfolioDeposits) {
             const asset = assets.find(a => a.id === deposit.asset_id);
-            if (!asset) continue;
+            if (!asset || !asset.decimals) continue;
 
             const price = priceMap.get(asset.id.toLowerCase());
             if (price !== undefined) {
-                totalDepositUSD += Number.parseFloat(deposit.total_amount) * price;
+                const humanAmount = Number.parseFloat(deposit.total_amount) / Math.pow(10, asset.decimals);
+                totalDepositUSD += humanAmount * price;
             }
         }
 
         for (const loan of lendPositions) {
             const asset = assets.find(a => a.id === loan.asset_id);
-            if (!asset) continue;
+            if (!asset || !asset.decimals) continue;
 
             const price = priceMap.get(asset.id.toLowerCase());
             if (price !== undefined) {
-                activeLoansUSD += Number.parseFloat(loan.total_amount) * price;
+                const humanAmount = Number.parseFloat(loan.total_amount) / Math.pow(10, asset.decimals);
+                activeLoansUSD += humanAmount * price;
             }
         }
 

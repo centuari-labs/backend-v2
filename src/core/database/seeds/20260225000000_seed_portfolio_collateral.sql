@@ -50,16 +50,16 @@ BEGIN
                 CONTINUE;
             END IF;
 
-            -- Generous human amounts per asset type
+            -- Tiny human amounts (BTC max 0.0005, ETH max 0.001)
             human_amount := CASE asset.symbol
-                WHEN 'BTC'    THEN 2
-                WHEN 'ETH'    THEN 20
-                WHEN 'XAUT'   THEN 50
-                WHEN 'SLVon'  THEN 500
-                WHEN 'NVDAon' THEN 200
-                WHEN 'AAPLon' THEN 200
-                WHEN 'TLTon'  THEN 500
-                ELSE 100
+                WHEN 'BTC'    THEN 0.0001
+                WHEN 'ETH'    THEN 0.0005
+                WHEN 'XAUT'   THEN 0.001
+                WHEN 'SLVon'  THEN 0.005
+                WHEN 'NVDAon' THEN 0.005
+                WHEN 'AAPLon' THEN 0.005
+                WHEN 'TLTon'  THEN 0.005
+                ELSE 0.001
             END;
 
             -- Convert to base units: human_amount * 10^decimals

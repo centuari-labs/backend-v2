@@ -22,47 +22,56 @@ BEGIN
     SELECT id INTO usdc_id FROM assets WHERE symbol = 'USDC' LIMIT 1;
     SELECT id INTO usdt_id FROM assets WHERE symbol = 'USDT' LIMIT 1;
 
+    -- All amounts in base units: BTC=8 decimals, ETH=18 decimals, USDC/USDT=6 decimals
     IF test_account_id IS NOT NULL THEN
-        IF btc_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM portfolio WHERE account_id = test_account_id AND asset_id = btc_id AND amount = 0.5) THEN
+        -- 0.0001 BTC = 10000 base units
+        IF btc_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM portfolio WHERE account_id = test_account_id AND asset_id = btc_id AND is_collateral = true) THEN
             INSERT INTO portfolio (id, account_id, asset_id, amount, is_collateral)
-            VALUES (gen_random_uuid(), test_account_id, btc_id, 0.5, true);
+            VALUES (gen_random_uuid(), test_account_id, btc_id, 10000, true);
         END IF;
 
-        IF eth_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM portfolio WHERE account_id = test_account_id AND asset_id = eth_id AND amount = 5.0) THEN
+        -- 0.0005 ETH = 500000000000000 base units
+        IF eth_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM portfolio WHERE account_id = test_account_id AND asset_id = eth_id AND is_collateral = true) THEN
             INSERT INTO portfolio (id, account_id, asset_id, amount, is_collateral)
-            VALUES (gen_random_uuid(), test_account_id, eth_id, 5.0, true);
+            VALUES (gen_random_uuid(), test_account_id, eth_id, 500000000000000, true);
         END IF;
 
-        IF usdc_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM portfolio WHERE account_id = test_account_id AND asset_id = usdc_id AND amount = 1000.0) THEN
+        -- 50 USDC = 50000000 base units
+        IF usdc_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM portfolio WHERE account_id = test_account_id AND asset_id = usdc_id AND amount > 0) THEN
             INSERT INTO portfolio (id, account_id, asset_id, amount, is_collateral)
-            VALUES (gen_random_uuid(), test_account_id, usdc_id, 1000.0, false);
+            VALUES (gen_random_uuid(), test_account_id, usdc_id, 50000000, false);
         END IF;
 
-        IF usdc_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM portfolio WHERE account_id = test_account_id AND asset_id = usdc_id AND amount = -400.0) THEN
+        -- -10 USDC = -10000000 base units
+        IF usdc_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM portfolio WHERE account_id = test_account_id AND asset_id = usdc_id AND amount < 0) THEN
             INSERT INTO portfolio (id, account_id, asset_id, amount, is_collateral)
-            VALUES (gen_random_uuid(), test_account_id, usdc_id, -400.0, false);
+            VALUES (gen_random_uuid(), test_account_id, usdc_id, -10000000, false);
         END IF;
 
-        IF usdc_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM orders WHERE account_id = test_account_id AND asset_id = usdc_id AND side = 'LEND' AND quantity = 500.0) THEN
+        -- 1 USDC order = 1000000 base units
+        IF usdc_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM orders WHERE account_id = test_account_id AND asset_id = usdc_id AND side = 'LEND' AND status = 'OPEN') THEN
             INSERT INTO orders (account_id, asset_id, side, type, rate, quantity, filled_quantity, settlement_fee, status)
-            VALUES (test_account_id, usdc_id, 'LEND', 'LIMIT', 5.5, 500.0, 0, 0.5, 'OPEN');
+            VALUES (test_account_id, usdc_id, 'LEND', 'LIMIT', 5.5, 1000000, 0, 0, 'OPEN');
         END IF;
 
-        IF eth_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM orders WHERE account_id = test_account_id AND asset_id = eth_id AND side = 'LEND' AND quantity = 2.0) THEN
+        -- 0.0001 ETH = 100000000000000 base units
+        IF eth_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM orders WHERE account_id = test_account_id AND asset_id = eth_id AND side = 'LEND' AND status = 'OPEN') THEN
             INSERT INTO orders (account_id, asset_id, side, type, rate, quantity, filled_quantity, settlement_fee, status)
-            VALUES (test_account_id, eth_id, 'LEND', 'LIMIT', 3.2, 2.0, 0, 0.002, 'OPEN');
+            VALUES (test_account_id, eth_id, 'LEND', 'LIMIT', 3.2, 100000000000000, 0, 0, 'OPEN');
         END IF;
 
-        IF usdt_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM orders WHERE account_id = test_account_id AND asset_id = usdt_id AND side = 'BORROW' AND quantity = 2000.0) THEN
+        -- 5 USDT = 5000000 base units
+        IF usdt_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM orders WHERE account_id = test_account_id AND asset_id = usdt_id AND side = 'BORROW' AND status = 'OPEN') THEN
             INSERT INTO orders (account_id, asset_id, side, type, rate, quantity, filled_quantity, settlement_fee, status)
-            VALUES (test_account_id, usdt_id, 'BORROW', 'LIMIT', 7.0, 2000.0, 0, 2.0, 'OPEN');
+            VALUES (test_account_id, usdt_id, 'BORROW', 'LIMIT', 7.0, 5000000, 0, 0, 'OPEN');
         END IF;
 
-        IF usdc_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM orders WHERE account_id = test_account_id AND asset_id = usdc_id AND side = 'BORROW' AND quantity = 1000.0 AND filled_quantity = 400.0) THEN
+        -- 3 USDC = 3000000 base units, filled 1 USDC = 1000000
+        IF usdc_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM orders WHERE account_id = test_account_id AND asset_id = usdc_id AND side = 'BORROW' AND status = 'PARTIALLY_FILLED') THEN
             INSERT INTO orders (account_id, asset_id, side, type, rate, quantity, filled_quantity, settlement_fee, status)
-            VALUES (test_account_id, usdc_id, 'BORROW', 'LIMIT', 6.5, 1000.0, 400.0, 1.0, 'PARTIALLY_FILLED');
+            VALUES (test_account_id, usdc_id, 'BORROW', 'LIMIT', 6.5, 3000000, 1000000, 0, 'PARTIALLY_FILLED');
         END IF;
-        
+
     END IF;
 
 END $$;

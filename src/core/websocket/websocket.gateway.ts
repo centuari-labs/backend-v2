@@ -24,34 +24,25 @@ import type {
     SubscribeOrderbookDto,
 } from "./dto/orderbook.dto";
 
-/** Shape of order creation messages published by backend-v2 to NATS */
-interface OrderCreationEnvelope {
-    event: string;
-    timestamp: string;
-    data: {
-        orderId: string;
-        walletAddress: string;
-        loanToken: string;
-        markets: Array<{ marketId: string; maturity: number }>;
-        side: OrderSide;
-        type: OrderType;
-        status: OrderStatus;
-        originalAmount: string;
-        remainingAmount: string;
-        settlementFeeAmount: string;
-        rate?: number;
-    };
-    accountId: string;
+/** Shape of order creation messages published by backend-v2 to NATS (flat, no envelope) */
+interface OrderCreationMessage {
+    orderId: string;
+    walletAddress: string;
+    loanToken: string;
+    markets: Array<{ marketId: string; maturity: number }>;
+    side: OrderSide;
+    type: OrderType;
+    status: OrderStatus;
+    originalAmount: string;
+    remainingAmount: string;
+    settlementFeeAmount: string;
+    rate?: number;
 }
 
-/** Shape of cancel messages published by backend-v2 to NATS */
-interface OrderCancelEnvelope {
-    event: string;
-    timestamp: string;
-    data: {
-        orderId: string;
-        walletAddress: string;
-    };
+/** Shape of cancel messages published by backend-v2 to NATS (flat, no envelope) */
+interface OrderCancelMessage {
+    orderId: string;
+    walletAddress: string;
 }
 
 /** Shape of status updates published by matching engine directly */
@@ -168,41 +159,39 @@ export class EventsGateway
         if (subject === "orders.status") {
             this.handleStatusUpdate(data as OrderStatusMessage);
         } else if (subject === "orders.cancel") {
-            this.handleCancelMessage(data as OrderCancelEnvelope);
+            this.handleCancelMessage(data as OrderCancelMessage);
         } else if (
             subject.startsWith("orders.lend.") ||
             subject.startsWith("orders.borrow.")
         ) {
             this.handleOrderCreation(
-                data as OrderCreationEnvelope,
+                data as OrderCreationMessage,
                 subject,
             );
         }
     }
 
     private handleOrderCreation(
-        envelope: OrderCreationEnvelope,
+        msg: OrderCreationMessage,
         subject: string,
     ) {
-        const { data, accountId } = envelope;
-
         const tracked: TrackedOrder = {
-            orderId: data.orderId,
-            loanToken: data.loanToken,
-            side: data.side,
-            type: data.type,
-            rate: data.rate ?? 0,
-            remainingAmount: data.remainingAmount,
-            originalAmount: data.originalAmount,
-            accountId,
-            status: data.status,
-            walletAddress: data.walletAddress,
-            markets: data.markets,
-            settlementFeeAmount: data.settlementFeeAmount,
+            orderId: msg.orderId,
+            loanToken: msg.loanToken,
+            side: msg.side,
+            type: msg.type,
+            rate: msg.rate ?? 0,
+            remainingAmount: msg.remainingAmount,
+            originalAmount: msg.originalAmount,
+            accountId: msg.walletAddress,
+            status: msg.status,
+            walletAddress: msg.walletAddress,
+            markets: msg.markets,
+            settlementFeeAmount: msg.settlementFeeAmount,
         };
 
-        this.orderState.set(data.orderId, tracked);
-        this.aggregateAndBroadcastOrderbook(data.loanToken);
+        this.orderState.set(msg.orderId, tracked);
+        this.aggregateAndBroadcastOrderbook(msg.loanToken);
         this.emitUserPosition(tracked, subject);
     }
 
@@ -222,8 +211,8 @@ export class EventsGateway
         this.emitUserPosition(tracked, "orders.status");
     }
 
-    private handleCancelMessage(envelope: OrderCancelEnvelope) {
-        const { orderId } = envelope.data;
+    private handleCancelMessage(msg: OrderCancelMessage) {
+        const { orderId } = msg;
         const tracked = this.orderState.get(orderId);
         if (!tracked) {
             this.logger.debug(

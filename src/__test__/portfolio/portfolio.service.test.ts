@@ -178,16 +178,22 @@ describe('PortfolioService', () => {
             expect(result.netAPY).toBe(0);
         });
 
-        it('should calculate all time return correctly', async () => {
+        it('should calculate all time return correctly from lend positions and prices', async () => {
             tokenRepositoryMock.find.mockResolvedValue(mockTokens as any);
-            priceServiceMock.getPrices.mockReturnValue({});
+            // Price of USDC = 1 USD
+            priceServiceMock.getPrices.mockReturnValue({
+                'token-uuid-003': 1,
+            });
 
             portfolioRepositoryMock.getUserTotalBalances.mockResolvedValue([]);
-            portfolioRepositoryMock.getUserLendPositionsForApr.mockResolvedValue([]);
+            // USDC (6 decimals): amount = 1000 USDC, shares = 1100 USDC → gain = 100 USDC
+            portfolioRepositoryMock.getUserLendPositionsForApr.mockResolvedValue([
+                { asset_id: 'token-uuid-003', shares: '1100000000', amount: '1000000000', created_at: new Date() },
+            ]);
 
             const result = await service.getMyPortfolio(mockWalletAddress);
 
-            expect(result.allTimeReturn).toBe(0);
+            expect(result.allTimeReturn).toBe(100);
         });
 
         it('should handle missing price data gracefully', async () => {

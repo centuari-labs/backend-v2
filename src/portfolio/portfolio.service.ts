@@ -51,6 +51,7 @@ export class PortfolioService {
         }
 
         let netAPR = 0;
+        let allTimeReturnUsd = 0;
         if (lendPositions.length > 0) {
             let totalWeightedAPR = 0;
             let totalAmount = 0;
@@ -67,6 +68,12 @@ export class PortfolioService {
                 const apr = sharesHuman / amountHuman - 1;
                 totalWeightedAPR += apr * amountHuman;
                 totalAmount += amountHuman;
+
+                const price = allPrices[position.asset_id.toLowerCase()];
+                if (price !== undefined) {
+                    const gainHuman = sharesHuman - amountHuman;
+                    allTimeReturnUsd += gainHuman * price;
+                }
             }
 
             if (totalAmount > 0) {
@@ -74,12 +81,11 @@ export class PortfolioService {
             }
         }
 
-        //@todo : need to return user's all time return
         //@todo : need to return user's portofolio allocation percentages
         return {
             totalDeposit: totalBalanceUsd,
+            allTimeReturn: Number(allTimeReturnUsd.toFixed(2)),
             netAPY: Number((netAPR * 100).toFixed(2)),
-            allTimeReturn: 0,
         };
     }
 

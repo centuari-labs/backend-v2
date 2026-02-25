@@ -10,4 +10,6 @@ export class MarketController {
     async getMarket(): Promise<MarketResponseDto> {
         return this.marketService.getMarketSnapshot();
     }
+
+    //@todo : market detail endpoint
 }

@@ -38,9 +38,11 @@ export class PortfolioService {
 
         let totalBalanceUsd = 0;
 
-        const [portfolio, lendPositions] = await Promise.all([
+        const [portfolio, lendPositions, suppliedAssets, borrowedAssets] = await Promise.all([
             this.portfolioRepository.getUserTotalBalances(account.id),
             this.portfolioRepository.getUserLendPositionsForApr(account.id),
+            this.portfolioRepository.getUserSuppliedAssets(account.id),
+            this.portfolioRepository.getUserBorrowedAssets(account.id),
         ]);
 
         for (const deposit of portfolio) {
@@ -81,11 +83,59 @@ export class PortfolioService {
             }
         }
 
-        //@todo : need to return user's portofolio allocation percentages
+        let suppliedAssetsUsd = 0;
+        for (const position of suppliedAssets) {
+            const decimals = await this.tokensService.getTokenDecimalsByAssetId(position.asset_id);
+            if (decimals == null) continue;
+            const amountHuman = Number(baseUnitsToHuman(position.amount, decimals));
+            if (amountHuman <= 0) continue;
+
+            const price = allPrices[position.asset_id.toLowerCase()];
+            if (price === undefined) continue;
+
+            suppliedAssetsUsd += amountHuman * price;
+        }
+
+        let borrowedAssetsUsd = 0;
+        for (const position of borrowedAssets) {
+            const decimals = await this.tokensService.getTokenDecimalsByAssetId(position.asset_id);
+            if (decimals == null) continue;
+            const amountHuman = Number(baseUnitsToHuman(position.amount, decimals));
+            if (amountHuman <= 0) continue;
+
+            const price = allPrices[position.asset_id.toLowerCase()];
+            if (price === undefined) continue;
+
+            borrowedAssetsUsd += amountHuman * price;
+        }
+
+        const availableBalanceUsdRaw = totalBalanceUsd - suppliedAssetsUsd;
+        const availableBalanceUsd = availableBalanceUsdRaw > 0 ? availableBalanceUsdRaw : 0;
+
+        const allocationTotalUsd = availableBalanceUsd + suppliedAssetsUsd + borrowedAssetsUsd;
+
+        let availableBalancePct = 0;
+        let suppliedAssetsPct = 0;
+        let borrowedAssetsPct = 0;
+
+        if (allocationTotalUsd > 0) {
+            availableBalancePct = (availableBalanceUsd / allocationTotalUsd) * 100;
+            suppliedAssetsPct = (suppliedAssetsUsd / allocationTotalUsd) * 100;
+            borrowedAssetsPct = (borrowedAssetsUsd / allocationTotalUsd) * 100;
+        }
+
         return {
             totalDeposit: totalBalanceUsd,
             allTimeReturn: Number(allTimeReturnUsd.toFixed(2)),
             netAPY: Number((netAPR * 100).toFixed(2)),
+            allocation: {
+                availableBalanceUsd: Number(availableBalanceUsd.toFixed(2)),
+                suppliedAssetsUsd: Number(suppliedAssetsUsd.toFixed(2)),
+                borrowedAssetsUsd: Number(borrowedAssetsUsd.toFixed(2)),
+                availableBalancePct: Number(availableBalancePct.toFixed(2)),
+                suppliedAssetsPct: Number(suppliedAssetsPct.toFixed(2)),
+                borrowedAssetsPct: Number(borrowedAssetsPct.toFixed(2)),
+            },
         };
     }
 

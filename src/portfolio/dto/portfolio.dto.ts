@@ -10,10 +10,20 @@ export class NetAPYDto {
     netAPY: number;
 }
 
+export class PortfolioAllocationDto {
+    availableBalanceUsd: number;
+    suppliedAssetsUsd: number;
+    borrowedAssetsUsd: number;
+    availableBalancePct: number;
+    suppliedAssetsPct: number;
+    borrowedAssetsPct: number;
+}
+
 export class MyPortfolioResponseDto {
     totalDeposit: number;
     allTimeReturn: number;
     netAPY: number;
+    allocation: PortfolioAllocationDto;
 }
 
 export class healthFactorDto {

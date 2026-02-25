@@ -8,6 +8,16 @@ export class MarketItemDto {
         symbol: string;
         decimals?: number | null;
         imageUrl?: string | null;
+        /** On-chain token contract address. */
+        token_address: string;
+    };
+    /**
+     * Single earliest-maturity market for this asset (market_id and maturity), or null if none.
+     * maturity is Unix timestamp in seconds.
+     */
+    market: {
+        market_id: string | null;
+        maturity: number | null;
     };
     /**
      * Borrow rate expressed as a percentage (e.g. 5 = 5%).

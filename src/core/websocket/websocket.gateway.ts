@@ -23,6 +23,10 @@ import type {
     OrderbookUpdateDto,
     SubscribeOrderbookDto,
 } from "./dto/orderbook.dto";
+import type {
+    RecentTradeDto,
+    SubscribeRecentTradesDto,
+} from "./dto/recent-trades.dto";
 
 /** Shape of order creation messages published by backend-v2 to NATS (flat, no envelope) */
 interface OrderCreationMessage {
@@ -97,6 +101,10 @@ export class EventsGateway
     /** Cached aggregated orderbook per loanToken room */
     private orderbookCache = new Map<string, OrderbookUpdateDto>();
 
+    /** Cached recent trades per loanToken room (max 20 per room) */
+    private recentTradesCache = new Map<string, RecentTradeDto[]>();
+    private readonly maxRecentTrades = 20;
+
     constructor(private readonly natsService: NatsService) {}
 
     afterInit(_server: Server) {
@@ -143,6 +151,21 @@ export class EventsGateway
             (data: unknown, subject: string) => {
                 try {
                     this.handleOrdersMessage(data, subject);
+                } catch (err) {
+                    this.logger.error(
+                        `Error handling NATS message on ${subject}: ${(err as Error).message}`,
+                    );
+                }
+            },
+        );
+
+        await this.natsService.subscribe(
+            "matches.>",
+            (data: unknown, subject: string) => {
+                try {
+                    if (subject === "matches.created") {
+                        this.handleMatchCreated(data as RecentTradeDto);
+                    }
                 } catch (err) {
                     this.logger.error(
                         `Error handling NATS message on ${subject}: ${(err as Error).message}`,
@@ -361,6 +384,53 @@ export class EventsGateway
         const room = `user:${body.accountId}`;
         client.join(room);
         this.logger.log(`Client ${client.id} joined ${room}`);
+        return { success: true, room };
+    }
+
+    // ─── Recent Trades ────────────────────────────────────────────────
+
+    public handleMatchCreated(trade: RecentTradeDto) {
+        const room = `recent-trades:${trade.loanToken}`;
+        const cached = this.recentTradesCache.get(room) ?? [];
+        cached.unshift(trade);
+        if (cached.length > this.maxRecentTrades) {
+            cached.length = this.maxRecentTrades;
+        }
+        this.recentTradesCache.set(room, cached);
+
+        const socketsInRoom = this.server.sockets.adapter.rooms.get(room);
+        this.logger.log(
+            `recent-trade → room=${room}, clients=${socketsInRoom?.size ?? 0}, trade=${JSON.stringify(trade)}`,
+        );
+
+        this.server.to(room).emit("recent-trade", trade);
+    }
+
+    @SubscribeMessage("subscribe-recent-trades")
+    handleSubscribeRecentTrades(
+        @ConnectedSocket() client: Socket,
+        @MessageBody() body: SubscribeRecentTradesDto,
+    ) {
+        const room = `recent-trades:${body.loanToken}`;
+        client.join(room);
+        this.logger.log(`Client ${client.id} joined ${room}`);
+
+        const cached = this.recentTradesCache.get(room);
+        if (cached && cached.length > 0) {
+            client.emit("recent-trades-snapshot", cached);
+        }
+
+        return { success: true, room };
+    }
+
+    @SubscribeMessage("unsubscribe-recent-trades")
+    handleUnsubscribeRecentTrades(
+        @ConnectedSocket() client: Socket,
+        @MessageBody() body: SubscribeRecentTradesDto,
+    ) {
+        const room = `recent-trades:${body.loanToken}`;
+        client.leave(room);
+        this.logger.log(`Client ${client.id} left ${room}`);
         return { success: true, room };
     }
 }

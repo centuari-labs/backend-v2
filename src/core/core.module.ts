@@ -7,6 +7,7 @@ import { AuthGuard } from "../common/guards/auth.guard";
 import { AuthStrategyFactory } from "../common/guards/strategies/auth-strategy.factory";
 import { PrivyAuthStrategy } from "../common/guards/strategies/privy-auth.strategy";
 import { DevAuthStrategy } from "../common/guards/strategies/dev-auth.strategy";
+import { EventsGateway } from "./websocket/websocket.gateway";
 
 @Module({
     imports: [],
@@ -19,6 +20,7 @@ import { DevAuthStrategy } from "../common/guards/strategies/dev-auth.strategy";
         AuthStrategyFactory,
         PrivyAuthStrategy,
         DevAuthStrategy,
+        EventsGateway,
     ],
     providers: [
         ViemService,
@@ -29,6 +31,7 @@ import { DevAuthStrategy } from "../common/guards/strategies/dev-auth.strategy";
         AuthStrategyFactory,
         PrivyAuthStrategy,
         DevAuthStrategy,
+        EventsGateway,
     ],
 })
 export class CoreModule { }

@@ -49,4 +49,31 @@ export class MarketRepositories extends Repository<Market> {
             .where("market.id = :marketId", { marketId })
             .getRawOne();
     }
+
+    async getEarliestMarketByAssetIds(
+        assetIds: string[],
+    ): Promise<{ assetId: string; marketId: string; maturity: Date }[]> {
+        if (assetIds.length === 0) {
+            return [];
+        }
+        const rows = await this.dataSource.query<{
+            id: string;
+            asset_id: string;
+            maturity: Date | string;
+        }[]>(
+            `SELECT DISTINCT ON (asset_id) id, asset_id, maturity
+             FROM markets
+             WHERE asset_id = ANY($1::uuid[])
+             ORDER BY asset_id, maturity ASC`,
+            [assetIds],
+        );
+        return rows.map((row) => ({
+            assetId: row.asset_id,
+            marketId: row.id,
+            maturity:
+                row.maturity instanceof Date
+                    ? row.maturity
+                    : new Date(row.maturity),
+        }));
+    }
 }

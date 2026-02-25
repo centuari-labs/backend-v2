@@ -91,11 +91,21 @@ describe('PortfolioService', () => {
                 { asset_id: 'token-uuid-002', total_amount: '0.5' },
             ]);
             portfolioRepositoryMock.getUserLendPositionsForApr.mockResolvedValue([]);
+            portfolioRepositoryMock.getUserSuppliedAssets.mockResolvedValue([]);
+            portfolioRepositoryMock.getUserBorrowedAssets.mockResolvedValue([]);
 
             const result = await service.getMyPortfolio(mockWalletAddress);
 
             // (2 * 3000) + (0.5 * 50000) = 6000 + 25000 = 31000
             expect(result.totalDeposit).toBe(31000);
+            expect(result.allocation).toEqual({
+                availableBalanceUsd: 31000,
+                suppliedAssetsUsd: 0,
+                borrowedAssetsUsd: 0,
+                availableBalancePct: 100,
+                suppliedAssetsPct: 0,
+                borrowedAssetsPct: 0,
+            });
         });
 
         it('should calculate net APY (percentage) from a single lend position', async () => {
@@ -108,6 +118,8 @@ describe('PortfolioService', () => {
             portfolioRepositoryMock.getUserLendPositionsForApr.mockResolvedValue([
                 { asset_id: 'token-uuid-003', shares: '1100000000', amount: '1000000000', created_at: new Date() },
             ]);
+            portfolioRepositoryMock.getUserSuppliedAssets.mockResolvedValue([]);
+            portfolioRepositoryMock.getUserBorrowedAssets.mockResolvedValue([]);
 
             const result = await service.getMyPortfolio(mockWalletAddress);
 
@@ -126,6 +138,8 @@ describe('PortfolioService', () => {
                 { asset_id: 'token-uuid-003', shares: '1050000000', amount: '1000000000', created_at: new Date() },
                 { asset_id: 'token-uuid-003', shares: '550000000', amount: '500000000', created_at: new Date() },
             ]);
+            portfolioRepositoryMock.getUserSuppliedAssets.mockResolvedValue([]);
+            portfolioRepositoryMock.getUserBorrowedAssets.mockResolvedValue([]);
 
             const result = await service.getMyPortfolio(mockWalletAddress);
 
@@ -138,6 +152,8 @@ describe('PortfolioService', () => {
 
             portfolioRepositoryMock.getUserTotalBalances.mockResolvedValue([]);
             portfolioRepositoryMock.getUserLendPositionsForApr.mockResolvedValue([]);
+            portfolioRepositoryMock.getUserSuppliedAssets.mockResolvedValue([]);
+            portfolioRepositoryMock.getUserBorrowedAssets.mockResolvedValue([]);
 
             const result = await service.getMyPortfolio(mockWalletAddress);
 
@@ -154,6 +170,8 @@ describe('PortfolioService', () => {
                 { asset_id: 'token-uuid-003', shares: '1100000000', amount: '1000000000', created_at: new Date() },
                 { asset_id: 'token-uuid-003', shares: '0', amount: '0', created_at: new Date() },
             ]);
+            portfolioRepositoryMock.getUserSuppliedAssets.mockResolvedValue([]);
+            portfolioRepositoryMock.getUserBorrowedAssets.mockResolvedValue([]);
 
             const result = await service.getMyPortfolio(mockWalletAddress);
 
@@ -172,6 +190,8 @@ describe('PortfolioService', () => {
             portfolioRepositoryMock.getUserLendPositionsForApr.mockResolvedValue([
                 { asset_id: 'token-no-decimals', shares: '1100', amount: '1000', created_at: new Date() },
             ]);
+            portfolioRepositoryMock.getUserSuppliedAssets.mockResolvedValue([]);
+            portfolioRepositoryMock.getUserBorrowedAssets.mockResolvedValue([]);
 
             const result = await service.getMyPortfolio(mockWalletAddress);
 
@@ -190,6 +210,8 @@ describe('PortfolioService', () => {
             portfolioRepositoryMock.getUserLendPositionsForApr.mockResolvedValue([
                 { asset_id: 'token-uuid-003', shares: '1100000000', amount: '1000000000', created_at: new Date() },
             ]);
+            portfolioRepositoryMock.getUserSuppliedAssets.mockResolvedValue([]);
+            portfolioRepositoryMock.getUserBorrowedAssets.mockResolvedValue([]);
 
             const result = await service.getMyPortfolio(mockWalletAddress);
 
@@ -204,10 +226,50 @@ describe('PortfolioService', () => {
                 { asset_id: 'token-uuid-001', total_amount: '2' },
             ]);
             portfolioRepositoryMock.getUserLendPositionsForApr.mockResolvedValue([]);
+            portfolioRepositoryMock.getUserSuppliedAssets.mockResolvedValue([]);
+            portfolioRepositoryMock.getUserBorrowedAssets.mockResolvedValue([]);
 
             const result = await service.getMyPortfolio(mockWalletAddress);
 
             expect(result.totalDeposit).toBe(0);
+        });
+
+        it('should compute allocation percentages from supplied and borrowed assets', async () => {
+            tokenRepositoryMock.find.mockResolvedValue(mockTokens as any);
+            priceServiceMock.getPrices.mockReturnValue({
+                'token-uuid-001': 3000,
+                'token-uuid-002': 50000,
+            });
+
+            // Total deposit: 2 ETH -> 6000 USD
+            portfolioRepositoryMock.getUserTotalBalances.mockResolvedValue([
+                { asset_id: 'token-uuid-001', total_amount: '2' },
+            ]);
+            portfolioRepositoryMock.getUserLendPositionsForApr.mockResolvedValue([]);
+
+            // Supplied: 1 ETH (base units)
+            portfolioRepositoryMock.getUserSuppliedAssets.mockResolvedValue([
+                { asset_id: 'token-uuid-001', amount: '1000000000000000000' },
+            ]);
+
+            // Borrowed: 0.02 BTC (base units for 8 decimals)
+            portfolioRepositoryMock.getUserBorrowedAssets.mockResolvedValue([
+                { asset_id: 'token-uuid-002', amount: '2000000' },
+            ]);
+
+            const result = await service.getMyPortfolio(mockWalletAddress);
+
+            // suppliedUsd = 1 * 3000 = 3000
+            // borrowedUsd = 0.02 * 50000 = 1000
+            // availableUsd = totalDeposit - suppliedUsd = 6000 - 3000 = 3000
+            // allocationTotal = 3000 + 3000 + 1000 = 7000
+            // availablePct ≈ 42.86, suppliedPct ≈ 42.86, borrowedPct ≈ 14.29
+            expect(result.allocation.availableBalanceUsd).toBe(3000);
+            expect(result.allocation.suppliedAssetsUsd).toBe(3000);
+            expect(result.allocation.borrowedAssetsUsd).toBe(1000);
+            expect(result.allocation.availableBalancePct).toBe(42.86);
+            expect(result.allocation.suppliedAssetsPct).toBe(42.86);
+            expect(result.allocation.borrowedAssetsPct).toBe(14.29);
         });
     });
 
@@ -254,6 +316,7 @@ describe('PortfolioService', () => {
                 walletBalance: 1.5,
                 amountInUsd: 4500,
                 isCollateral: true,
+                imageUrl: null,
             });
             expect(result.data[1]).toEqual({
                 symbol: 'BTC',
@@ -261,6 +324,7 @@ describe('PortfolioService', () => {
                 walletBalance: 0.25,
                 amountInUsd: 12500,
                 isCollateral: false,
+                imageUrl: null,
             });
             expect(result.totalData).toBe(2);
             expect(result.totalPages).toBe(1);

@@ -561,6 +561,102 @@
         }
       ],
       "id": "59f9f17f-80f5-4ce2-b5d9-2ff0fd9b1ef9"
+    },
+    {
+      "name": "Rate history",
+      "item": [
+        {
+          "name": "Rate history",
+          "id": "9c5f6424-c80e-4e47-b742-a5d4d80e323c",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/rate-history?assetId=ac7ae153-ad3f-44aa-96e7-44c8d22e84ab",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "rate-history"
+              ],
+              "query": [
+                {
+                  "key": "assetId",
+                  "value": "ac7ae153-ad3f-44aa-96e7-44c8d22e84ab",
+                  "uuid": "cb181de4-911d-4b19-a8c7-9ea8b754abb1"
+                }
+              ]
+            }
+          },
+          "response": [
+            {
+              "id": "42c6c824-f16e-47f3-a0d9-9ed117a19f89",
+              "name": "200 OK",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/rate-history?assetId=ac7ae153-ad3f-44aa-96e7-44c8d22e84ab",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "rate-history"
+                  ],
+                  "query": [
+                    {
+                      "key": "assetId",
+                      "value": "ac7ae153-ad3f-44aa-96e7-44c8d22e84ab",
+                      "uuid": "cb181de4-911d-4b19-a8c7-9ea8b754abb1"
+                    }
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "X-Powered-By",
+                  "value": "Express"
+                },
+                {
+                  "key": "Access-Control-Allow-Origin",
+                  "value": "*"
+                },
+                {
+                  "key": "Content-Type",
+                  "value": "application/json; charset=utf-8"
+                },
+                {
+                  "key": "Content-Length",
+                  "value": "817"
+                },
+                {
+                  "key": "ETag",
+                  "value": "W/\"331-WAQ+gAfScGC1YJSaO6quC6irRMg\""
+                },
+                {
+                  "key": "Date",
+                  "value": "Wed, 25 Feb 2026 12:31:11 GMT"
+                },
+                {
+                  "key": "Connection",
+                  "value": "keep-alive"
+                },
+                {
+                  "key": "Keep-Alive",
+                  "value": "timeout=5"
+                }
+              ],
+              "cookie": [],
+              "responseTime": "2026-02-25T12:32:50.626Z",
+              "body": "{\n    \"statusCode\": 200,\n    \"data\": {\n        \"assetId\": \"ac7ae153-ad3f-44aa-96e7-44c8d22e84ab\",\n        \"rateHistory\": [\n            {\n                \"date\": \"2026-02-10T17:00:00.000Z\",\n                \"rate\": 0.05\n            },\n            {\n                \"date\": \"2026-02-11T17:00:00.000Z\",\n                \"rate\": 0.055\n            },\n            {\n                \"date\": \"2026-02-12T17:00:00.000Z\",\n                \"rate\": 0.06\n            },\n            {\n                \"date\": \"2026-02-13T17:00:00.000Z\",\n                \"rate\": 0.065\n            },\n            {\n                \"date\": \"2026-02-14T17:00:00.000Z\",\n                \"rate\": 0.07\n            },\n            {\n                \"date\": \"2026-02-15T17:00:00.000Z\",\n                \"rate\": 0.075\n            },\n            {\n                \"date\": \"2026-02-16T17:00:00.000Z\",\n                \"rate\": 0.08\n            },\n            {\n                \"date\": \"2026-02-17T17:00:00.000Z\",\n                \"rate\": 0.085\n            },\n            {\n                \"date\": \"2026-02-18T17:00:00.000Z\",\n                \"rate\": 0.09\n            },\n            {\n                \"date\": \"2026-02-19T17:00:00.000Z\",\n                \"rate\": 0.095\n            },\n            {\n                \"date\": \"2026-02-20T17:00:00.000Z\",\n                \"rate\": 0.1\n            },\n            {\n                \"date\": \"2026-02-21T17:00:00.000Z\",\n                \"rate\": 0.105\n            },\n            {\n                \"date\": \"2026-02-22T17:00:00.000Z\",\n                \"rate\": 0.11\n            },\n            {\n                \"date\": \"2026-02-23T17:00:00.000Z\",\n                \"rate\": 0.115\n            },\n            {\n                \"date\": \"2026-02-24T17:00:00.000Z\",\n                \"rate\": 4.5\n            }\n        ]\n    }\n}"
+            }
+          ]
+        }
+      ],
+      "id": "d3861ba8-5703-4301-b44d-034ce2a077d2"
     }
   ],
   "variable": [

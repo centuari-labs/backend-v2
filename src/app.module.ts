@@ -10,6 +10,8 @@ import { TokensModule } from "./tokens/tokens.module";
 import { MarketModule } from "./market/market.module";
 import { PortfolioModule } from "./portfolio/portfolio.module";
 import { FaucetModule } from "./faucet/faucet.module";
+import { RateModule } from "./rate-history/rate-history.module";
+import { EventsGateway } from "./core/websocket/websocket.gateway";
 
 @Module({
     imports: [
@@ -32,8 +34,9 @@ import { FaucetModule } from "./faucet/faucet.module";
         MarketModule,
         PortfolioModule,
         FaucetModule,
+        RateModule,
     ],
     controllers: [],
-    providers: [],
+    providers: [EventsGateway],
 })
 export class AppModule { }

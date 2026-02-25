@@ -409,9 +409,9 @@ export class OrdersWorker implements OnModuleInit {
             });
 
             // Broadcast recent trade directly to WebSocket clients
-            if (entry.tokenAddress) {
+            if (entry.assetId) {
                 const trade = {
-                    loanToken: entry.tokenAddress,
+                    assetId: entry.assetId,
                     side: (isLend ? "BORROW" : "LEND") as "LEND" | "BORROW",
                     amount: quantity.toString(),
                     rate: order.rate,
@@ -419,7 +419,7 @@ export class OrdersWorker implements OnModuleInit {
                 };
                 this.eventsGateway.handleMatchCreated(trade);
                 this.logger.log(
-                    `Broadcast recent-trade for ${entry.tokenAddress}`,
+                    `Broadcast recent-trade for asset ${entry.assetId}`,
                 );
             }
 

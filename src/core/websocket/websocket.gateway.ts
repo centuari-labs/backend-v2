@@ -33,6 +33,7 @@ interface OrderCreationMessage {
     orderId: string;
     walletAddress: string;
     loanToken: string;
+    assetId?: string;
     markets: Array<{ marketId: string; maturity: number }>;
     side: OrderSide;
     type: OrderType;
@@ -60,7 +61,7 @@ interface OrderStatusMessage {
 /** In-memory tracked order state */
 interface TrackedOrder {
     orderId: string;
-    loanToken: string;
+    assetId: string;
     side: OrderSide;
     type: OrderType;
     rate: number;
@@ -98,10 +99,10 @@ export class EventsGateway
     /** In-memory order state indexed by orderId */
     private orderState = new Map<string, TrackedOrder>();
 
-    /** Cached aggregated orderbook per loanToken room */
+    /** Cached aggregated orderbook per assetId room */
     private orderbookCache = new Map<string, OrderbookUpdateDto>();
 
-    /** Cached recent trades per loanToken room (max 20 per room) */
+    /** Cached recent trades per assetId room (max 20 per room) */
     private recentTradesCache = new Map<string, RecentTradeDto[]>();
     private readonly maxRecentTrades = 20;
 
@@ -198,9 +199,11 @@ export class EventsGateway
         msg: OrderCreationMessage,
         subject: string,
     ) {
+        const assetId = msg.assetId ?? msg.loanToken;
+
         const tracked: TrackedOrder = {
             orderId: msg.orderId,
-            loanToken: msg.loanToken,
+            assetId,
             side: msg.side,
             type: msg.type,
             rate: msg.rate ?? 0,
@@ -214,7 +217,7 @@ export class EventsGateway
         };
 
         this.orderState.set(msg.orderId, tracked);
-        this.aggregateAndBroadcastOrderbook(msg.loanToken);
+        this.aggregateAndBroadcastOrderbook(assetId);
         this.emitUserPosition(tracked, subject);
     }
 
@@ -230,7 +233,7 @@ export class EventsGateway
         tracked.status = msg.status as OrderStatus;
         tracked.remainingAmount = msg.remainingAmount;
 
-        this.aggregateAndBroadcastOrderbook(tracked.loanToken);
+        this.aggregateAndBroadcastOrderbook(tracked.assetId);
         this.emitUserPosition(tracked, "orders.status");
     }
 
@@ -246,7 +249,7 @@ export class EventsGateway
 
         tracked.status = OrderStatus.Cancelled;
 
-        this.aggregateAndBroadcastOrderbook(tracked.loanToken);
+        this.aggregateAndBroadcastOrderbook(tracked.assetId);
         this.emitUserPosition(tracked, "orders.cancel");
     }
 
@@ -274,7 +277,7 @@ export class EventsGateway
         return {
             orderId: tracked.orderId,
             walletAddress: tracked.walletAddress,
-            loanToken: tracked.loanToken,
+            assetId: tracked.assetId,
             markets: tracked.markets,
             side: tracked.side,
             type: tracked.type,
@@ -287,10 +290,10 @@ export class EventsGateway
         };
     }
 
-    private aggregateAndBroadcastOrderbook(loanToken: string) {
+    private aggregateAndBroadcastOrderbook(assetId: string) {
         const activeOrders = Array.from(this.orderState.values()).filter(
             (o) =>
-                o.loanToken === loanToken &&
+                o.assetId === assetId &&
                 (o.status === OrderStatus.Open ||
                     o.status === OrderStatus.PartiallyFilled),
         );
@@ -303,13 +306,13 @@ export class EventsGateway
         );
 
         const update: OrderbookUpdateDto = {
-            loanToken,
+            assetId,
             lend: lendLevels,
             borrow: borrowLevels,
             timestamp: Date.now(),
         };
 
-        const room = `orderbook:${loanToken}`;
+        const room = `orderbook:${assetId}`;
         this.orderbookCache.set(room, update);
         this.server.to(room).emit("orderbook-update", update);
     }
@@ -342,7 +345,7 @@ export class EventsGateway
         @ConnectedSocket() client: Socket,
         @MessageBody() body: SubscribeOrderbookDto,
     ) {
-        const room = `orderbook:${body.loanToken}`;
+        const room = `orderbook:${body.assetId}`;
         client.join(room);
         this.logger.log(`Client ${client.id} joined ${room}`);
 
@@ -359,7 +362,7 @@ export class EventsGateway
         @ConnectedSocket() client: Socket,
         @MessageBody() body: SubscribeOrderbookDto,
     ) {
-        const room = `orderbook:${body.loanToken}`;
+        const room = `orderbook:${body.assetId}`;
         client.leave(room);
         this.logger.log(`Client ${client.id} left ${room}`);
         return { success: true, room };
@@ -390,7 +393,7 @@ export class EventsGateway
     // ─── Recent Trades ────────────────────────────────────────────────
 
     public handleMatchCreated(trade: RecentTradeDto) {
-        const room = `recent-trades:${trade.loanToken}`;
+        const room = `recent-trades:${trade.assetId}`;
         const cached = this.recentTradesCache.get(room) ?? [];
         cached.unshift(trade);
         if (cached.length > this.maxRecentTrades) {
@@ -411,7 +414,7 @@ export class EventsGateway
         @ConnectedSocket() client: Socket,
         @MessageBody() body: SubscribeRecentTradesDto,
     ) {
-        const room = `recent-trades:${body.loanToken}`;
+        const room = `recent-trades:${body.assetId}`;
         client.join(room);
         this.logger.log(`Client ${client.id} joined ${room}`);
 
@@ -428,7 +431,7 @@ export class EventsGateway
         @ConnectedSocket() client: Socket,
         @MessageBody() body: SubscribeRecentTradesDto,
     ) {
-        const room = `recent-trades:${body.loanToken}`;
+        const room = `recent-trades:${body.assetId}`;
         client.leave(room);
         this.logger.log(`Client ${client.id} left ${room}`);
         return { success: true, room };

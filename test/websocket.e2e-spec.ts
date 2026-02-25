@@ -91,21 +91,21 @@ describe('WebSocket E2E', () => {
         it('should subscribe client to orderbook room', () => {
             const result = gateway.handleSubscribeOrderbook(
                 mockClient,
-                { loanToken: '0xTokenAddr' },
+                { assetId: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890' },
             );
 
-            expect(mockClient.join).toHaveBeenCalledWith('orderbook:0xTokenAddr');
-            expect(result).toEqual({ success: true, room: 'orderbook:0xTokenAddr' });
+            expect(mockClient.join).toHaveBeenCalledWith('orderbook:a1b2c3d4-e5f6-7890-abcd-ef1234567890');
+            expect(result).toEqual({ success: true, room: 'orderbook:a1b2c3d4-e5f6-7890-abcd-ef1234567890' });
         });
 
         it('should unsubscribe client from orderbook room', () => {
             const result = gateway.handleUnsubscribeOrderbook(
                 mockClient,
-                { loanToken: '0xTokenAddr' },
+                { assetId: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890' },
             );
 
-            expect(mockClient.leave).toHaveBeenCalledWith('orderbook:0xTokenAddr');
-            expect(result).toEqual({ success: true, room: 'orderbook:0xTokenAddr' });
+            expect(mockClient.leave).toHaveBeenCalledWith('orderbook:a1b2c3d4-e5f6-7890-abcd-ef1234567890');
+            expect(result).toEqual({ success: true, room: 'orderbook:a1b2c3d4-e5f6-7890-abcd-ef1234567890' });
         });
 
         it('should aggregate and broadcast orderbook on order creation', () => {
@@ -116,7 +116,7 @@ describe('WebSocket E2E', () => {
                 {
                     orderId: 'order-e2e-1',
                     walletAddress: '0xE2EWallet',
-                    loanToken: '0xE2EToken',
+                    assetId: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
                     markets: [{ marketId: 'market-1', maturity: 1748736000 }],
                     side: OrderSide.Lend,
                     type: OrderType.Limit,
@@ -129,11 +129,11 @@ describe('WebSocket E2E', () => {
                 'orders.lend.limit',
             );
 
-            expect(mockServer.to).toHaveBeenCalledWith('orderbook:0xE2EToken');
+            expect(mockServer.to).toHaveBeenCalledWith('orderbook:a1b2c3d4-e5f6-7890-abcd-ef1234567890');
             expect(mockServer.emit).toHaveBeenCalledWith(
                 'orderbook-update',
                 expect.objectContaining({
-                    loanToken: '0xE2EToken',
+                    assetId: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
                     lend: expect.arrayContaining([
                         expect.objectContaining({ rate: 3, amount: '500' }),
                     ]),
@@ -168,16 +168,16 @@ describe('WebSocket E2E', () => {
         it('should subscribe to recent-trades room', () => {
             const result = gateway.handleSubscribeRecentTrades(
                 mockClient,
-                { loanToken: '0xE2EToken' },
+                { assetId: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890' },
             );
 
-            expect(mockClient.join).toHaveBeenCalledWith('recent-trades:0xE2EToken');
-            expect(result).toEqual({ success: true, room: 'recent-trades:0xE2EToken' });
+            expect(mockClient.join).toHaveBeenCalledWith('recent-trades:a1b2c3d4-e5f6-7890-abcd-ef1234567890');
+            expect(result).toEqual({ success: true, room: 'recent-trades:a1b2c3d4-e5f6-7890-abcd-ef1234567890' });
         });
 
         it('should broadcast trade on handleMatchCreated', () => {
             const trade: RecentTradeDto = {
-                loanToken: '0xE2ETrade',
+                assetId: 'a1b2c3d4-e5f6-7890-abcd-trade1234567',
                 side: 'LEND',
                 amount: '1000',
                 rate: 500,
@@ -186,18 +186,18 @@ describe('WebSocket E2E', () => {
 
             gateway.handleMatchCreated(trade);
 
-            expect(mockServer.to).toHaveBeenCalledWith('recent-trades:0xE2ETrade');
+            expect(mockServer.to).toHaveBeenCalledWith('recent-trades:a1b2c3d4-e5f6-7890-abcd-trade1234567');
             expect(mockServer.emit).toHaveBeenCalledWith('recent-trade', trade);
         });
 
         it('should unsubscribe from recent-trades room', () => {
             const result = gateway.handleUnsubscribeRecentTrades(
                 mockClient,
-                { loanToken: '0xE2EToken' },
+                { assetId: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890' },
             );
 
-            expect(mockClient.leave).toHaveBeenCalledWith('recent-trades:0xE2EToken');
-            expect(result).toEqual({ success: true, room: 'recent-trades:0xE2EToken' });
+            expect(mockClient.leave).toHaveBeenCalledWith('recent-trades:a1b2c3d4-e5f6-7890-abcd-ef1234567890');
+            expect(result).toEqual({ success: true, room: 'recent-trades:a1b2c3d4-e5f6-7890-abcd-ef1234567890' });
         });
     });
 

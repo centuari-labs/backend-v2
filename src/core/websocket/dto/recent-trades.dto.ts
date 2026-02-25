@@ -1,5 +1,5 @@
 export interface RecentTradeDto {
-    loanToken: string;
+    assetId: string;
     side: "LEND" | "BORROW";
     amount: string;
     rate: number;
@@ -7,5 +7,5 @@ export interface RecentTradeDto {
 }
 
 export interface SubscribeRecentTradesDto {
-    loanToken: string;
+    assetId: string;
 }

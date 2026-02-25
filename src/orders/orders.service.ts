@@ -455,6 +455,7 @@ export class OrdersService {
             orderId: order.id,
             walletAddress,
             loanToken,
+            assetId: order.assetId,
             markets,
             timestamp: new Date(order.createdAt).getTime(),
             side: order.side,

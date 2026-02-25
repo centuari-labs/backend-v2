@@ -8,8 +8,6 @@ export class MarketItemDto {
         symbol: string;
         decimals?: number | null;
         imageUrl?: string | null;
-        /** On-chain token contract address. */
-        token_address: string;
     };
     /**
      * Single earliest-maturity market for this asset (market_id and maturity), or null if none.

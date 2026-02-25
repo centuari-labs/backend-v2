@@ -5,6 +5,8 @@ import { OrderSide, OrderStatus, OrderType } from '../../orders/constants/order.
 import type { RecentTradeDto } from '../../core/websocket/dto/recent-trades.dto';
 import { createMockNatsService } from '../helpers/mock-services';
 
+const TEST_ASSET_ID = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
+
 /**
  * Integration tests for WebSocket gateway — recent trades and orderbook flows.
  * Uses a real EventsGateway with mocked NATS and Socket.IO server.
@@ -65,25 +67,25 @@ describe('WebSocket Recent Trades Integration', () => {
         it('should join the recent-trades room on subscribe', () => {
             const result = gateway.handleSubscribeRecentTrades(
                 mockClient,
-                { loanToken: '0xToken123' },
+                { assetId: TEST_ASSET_ID },
             );
 
-            expect(mockClient.join).toHaveBeenCalledWith('recent-trades:0xToken123');
-            expect(result).toEqual({ success: true, room: 'recent-trades:0xToken123' });
+            expect(mockClient.join).toHaveBeenCalledWith(`recent-trades:${TEST_ASSET_ID}`);
+            expect(result).toEqual({ success: true, room: `recent-trades:${TEST_ASSET_ID}` });
         });
 
         it('should leave the recent-trades room on unsubscribe', () => {
             gateway.handleUnsubscribeRecentTrades(
                 mockClient,
-                { loanToken: '0xToken123' },
+                { assetId: TEST_ASSET_ID },
             );
 
-            expect(mockClient.leave).toHaveBeenCalledWith('recent-trades:0xToken123');
+            expect(mockClient.leave).toHaveBeenCalledWith(`recent-trades:${TEST_ASSET_ID}`);
         });
 
         it('should broadcast trade on handleMatchCreated', () => {
             const trade: RecentTradeDto = {
-                loanToken: '0xToken123',
+                assetId: TEST_ASSET_ID,
                 side: 'LEND',
                 amount: '1000',
                 rate: 500,
@@ -92,14 +94,14 @@ describe('WebSocket Recent Trades Integration', () => {
 
             gateway.handleMatchCreated(trade);
 
-            expect(mockServer.to).toHaveBeenCalledWith('recent-trades:0xToken123');
+            expect(mockServer.to).toHaveBeenCalledWith(`recent-trades:${TEST_ASSET_ID}`);
             expect(mockServer.emit).toHaveBeenCalledWith('recent-trade', trade);
         });
 
         it('should cache recent trades (max 20)', () => {
             for (let i = 0; i < 25; i++) {
                 gateway.handleMatchCreated({
-                    loanToken: '0xToken123',
+                    assetId: TEST_ASSET_ID,
                     side: 'LEND',
                     amount: String(i),
                     rate: 500,
@@ -109,7 +111,7 @@ describe('WebSocket Recent Trades Integration', () => {
 
             // Access internal cache to verify
             const cache = (gateway as any).recentTradesCache;
-            const trades = cache.get('recent-trades:0xToken123');
+            const trades = cache.get(`recent-trades:${TEST_ASSET_ID}`);
             expect(trades).toHaveLength(20);
             // Most recent trade should be first
             expect(trades[0].amount).toBe('24');
@@ -118,7 +120,7 @@ describe('WebSocket Recent Trades Integration', () => {
         it('should send snapshot on subscribe when cache exists', () => {
             // Populate cache first
             const trade: RecentTradeDto = {
-                loanToken: '0xToken123',
+                assetId: TEST_ASSET_ID,
                 side: 'BORROW',
                 amount: '500',
                 rate: 300,
@@ -127,7 +129,7 @@ describe('WebSocket Recent Trades Integration', () => {
             gateway.handleMatchCreated(trade);
 
             // New client subscribes
-            gateway.handleSubscribeRecentTrades(mockClient, { loanToken: '0xToken123' });
+            gateway.handleSubscribeRecentTrades(mockClient, { assetId: TEST_ASSET_ID });
 
             expect(mockClient.emit).toHaveBeenCalledWith(
                 'recent-trades-snapshot',
@@ -136,7 +138,7 @@ describe('WebSocket Recent Trades Integration', () => {
         });
 
         it('should not send snapshot when cache is empty', () => {
-            gateway.handleSubscribeRecentTrades(mockClient, { loanToken: '0xNewToken' });
+            gateway.handleSubscribeRecentTrades(mockClient, { assetId: 'new-asset-id' });
 
             expect(mockClient.emit).not.toHaveBeenCalledWith(
                 'recent-trades-snapshot',
@@ -149,21 +151,21 @@ describe('WebSocket Recent Trades Integration', () => {
         it('should join orderbook room on subscribe', () => {
             const result = gateway.handleSubscribeOrderbook(
                 mockClient,
-                { loanToken: '0xToken123' },
+                { assetId: TEST_ASSET_ID },
             );
 
-            expect(mockClient.join).toHaveBeenCalledWith('orderbook:0xToken123');
-            expect(result).toEqual({ success: true, room: 'orderbook:0xToken123' });
+            expect(mockClient.join).toHaveBeenCalledWith(`orderbook:${TEST_ASSET_ID}`);
+            expect(result).toEqual({ success: true, room: `orderbook:${TEST_ASSET_ID}` });
         });
 
         it('should leave orderbook room on unsubscribe', () => {
             const result = gateway.handleUnsubscribeOrderbook(
                 mockClient,
-                { loanToken: '0xToken123' },
+                { assetId: TEST_ASSET_ID },
             );
 
-            expect(mockClient.leave).toHaveBeenCalledWith('orderbook:0xToken123');
-            expect(result).toEqual({ success: true, room: 'orderbook:0xToken123' });
+            expect(mockClient.leave).toHaveBeenCalledWith(`orderbook:${TEST_ASSET_ID}`);
+            expect(result).toEqual({ success: true, room: `orderbook:${TEST_ASSET_ID}` });
         });
 
         it('should send cached orderbook on subscribe', () => {
@@ -174,7 +176,7 @@ describe('WebSocket Recent Trades Integration', () => {
                     {
                         orderId: 'order-1',
                         walletAddress: '0xWallet',
-                        loanToken: '0xToken123',
+                        assetId: TEST_ASSET_ID,
                         markets: [{ marketId: 'market-1', maturity: 1748736000 }],
                         side: OrderSide.Lend,
                         type: OrderType.Limit,
@@ -189,13 +191,13 @@ describe('WebSocket Recent Trades Integration', () => {
             }
 
             // Subscribe should return cached orderbook
-            gateway.handleSubscribeOrderbook(mockClient, { loanToken: '0xToken123' });
+            gateway.handleSubscribeOrderbook(mockClient, { assetId: TEST_ASSET_ID });
 
             // If NATS was set up, there should be cached data
             if (ordersCallback) {
                 expect(mockClient.emit).toHaveBeenCalledWith(
                     'orderbook-update',
-                    expect.objectContaining({ loanToken: '0xToken123' }),
+                    expect.objectContaining({ assetId: TEST_ASSET_ID }),
                 );
             }
         });

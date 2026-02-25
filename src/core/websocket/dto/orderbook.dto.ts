@@ -5,12 +5,12 @@ export interface OrderbookLevel {
 }
 
 export interface OrderbookUpdateDto {
-    loanToken: string;
+    assetId: string;
     lend: OrderbookLevel[];
     borrow: OrderbookLevel[];
     timestamp: number;
 }
 
 export interface SubscribeOrderbookDto {
-    loanToken: string;
+    assetId: string;
 }

@@ -292,7 +292,7 @@ export class PortfolioService {
         const data = userAssets.map((ua) => {
             const token = tokenMap.get(ua.asset_id);
             const price = allPrices[ua.asset_id.toLowerCase()];
-            const amount = Number.parseFloat(ua.amount);
+            const amount = Number.parseFloat(ua.amount); //@todo : convert this to human readable from assets decimal
             //@todo : need to also return asset id, better use the same DTO for all asset type return
             return {
                 symbol: token?.symbol || "UNKNOWN",

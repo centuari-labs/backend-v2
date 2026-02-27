@@ -47,17 +47,17 @@ export class PortfolioRepository extends Repository<Portfolio> {
             .addSelect('lp.created_at', 'created_at')
             .from('lend_positions', 'lp')
             .where('lp.account_id = :accountId', { accountId })
-            .andWhere('lp.amount > 0')
+            .andWhere('lp.shares > 0')
             .getRawMany();
     }
 
     async getUserSuppliedAssets(accountId: string): Promise<{ asset_id: string, amount: string }[]> {
         return this.dataSource.createQueryBuilder()
             .select('lp.asset_id', 'asset_id')
-            .addSelect('SUM(lp.amount)', 'amount')
+            .addSelect('SUM(lp.shares)', 'amount')
             .from('lend_positions', 'lp')
             .where('lp.account_id = :accountId', { accountId })
-            .andWhere('lp.amount > 0')
+            .andWhere('lp.shares > 0')
             .groupBy('lp.asset_id')
             .getRawMany();
     }

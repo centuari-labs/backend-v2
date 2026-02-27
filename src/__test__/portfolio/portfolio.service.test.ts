@@ -656,7 +656,7 @@ describe('PortfolioService', () => {
             expect(result.data[0].isCollateral).toBe(false);
         });
         describe('getLendBorrowAssets', () => {
-            it('should return collateral/debt USD and weighted-LTV health factor', async () => {
+            it('should return supplied lend assets USD, debt USD and health factor', async () => {
                 orderRepositoryMock.findAccountByWallet.mockResolvedValue({ id: mockAccountId });
                 const tokensWithDecimals = mockTokens.map((t) => ({
                     ...t,
@@ -667,20 +667,26 @@ describe('PortfolioService', () => {
                 priceServiceMock.getPrices.mockReturnValue({
                     'token-uuid-001': 3000,
                     'token-uuid-002': 50000,
+                    'token-uuid-003': 1,
                 });
 
-                // Collateral: 2 ETH (base 2e18); debt: 0.1 BTC (base 1e7 for 8 decimals)
+                // Collateral (used for health factor calculation only)
                 portfolioRepositoryMock.getUserCollateralAssets.mockResolvedValue([
                     { asset_id: 'token-uuid-001', amount: '2000000000000000000' },
                 ]);
+                // Supplied lend assets (used for suppliedAssets field)
+                portfolioRepositoryMock.getUserSuppliedAssets.mockResolvedValue([
+                    { asset_id: 'token-uuid-003', amount: '5000000000' }, // 5000 USDC (6 decimals)
+                ]);
+                // Borrowed
                 portfolioRepositoryMock.getUserBorrowedAssets.mockResolvedValue([
                     { asset_id: 'token-uuid-002', amount: '10000000' },
                 ]);
 
                 const result = await service.getLendBorrowAssets(mockWalletAddress);
 
-                expect(result.suppliedAssets).toBe(6000); // 2 * 3000
-                expect(result.borrowedAssets).toBe(5000);  // 0.1 * 50000
+                expect(result.suppliedAssets).toBe(5000); // 5000 USDC * $1
+                expect(result.borrowedAssets).toBe(5000);  // 0.1 BTC * $50000
                 // HF = ((6000 - 5000) * 0.75) / 5000 = 0.15
                 expect(result.healthFactor).toBe(0.15);
             });
@@ -698,11 +704,15 @@ describe('PortfolioService', () => {
                 portfolioRepositoryMock.getUserCollateralAssets.mockResolvedValue([
                     { asset_id: 'token-uuid-001', amount: '1000000000000000000' },
                 ]);
+                // Supplied lend assets: 1 ETH
+                portfolioRepositoryMock.getUserSuppliedAssets.mockResolvedValue([
+                    { asset_id: 'token-uuid-001', amount: '1000000000000000000' },
+                ]);
                 portfolioRepositoryMock.getUserBorrowedAssets.mockResolvedValue([]);
 
                 const result = await service.getLendBorrowAssets(mockWalletAddress);
 
-                expect(result.suppliedAssets).toBe(3000);
+                expect(result.suppliedAssets).toBe(3000); // 1 ETH * $3000
                 expect(result.borrowedAssets).toBe(0);
                 expect(result.healthFactor).toBe(0); // no debt -> formatted as 0 in response
             });

@@ -145,10 +145,26 @@ export class PortfolioService {
             throw new NotFoundException("Account not found");
         }
 
-        const result = await this.getHealthFactorForAccount(account.id);
+        const [result, suppliedAssets] = await Promise.all([
+            this.getHealthFactorForAccount(account.id),
+            this.portfolioRepository.getUserSuppliedAssets(account.id),
+        ]);
         const formatted = formatHealthFactorResponse(result);
+        const allPrices = this.priceService.getPrices();
+
+        let suppliedAssetsUsd = 0;
+        for (const position of suppliedAssets) {
+            const decimals = await this.tokensService.getTokenDecimalsByAssetId(position.asset_id);
+            if (decimals == null) continue;
+            const amountHuman = Number(baseUnitsToHuman(position.amount, decimals));
+            if (amountHuman <= 0) continue;
+            const price = allPrices[position.asset_id.toLowerCase()];
+            if (price === undefined) continue;
+            suppliedAssetsUsd += amountHuman * price;
+        }
+
         return {
-            suppliedAssets: formatted.collateralUsd, //@todo : change this to supplied lend assets
+            suppliedAssets: Number(suppliedAssetsUsd.toFixed(2)),
             borrowedAssets: formatted.debtUsd, //@todo : change this to total borrowed assets
             healthFactor: Number.isFinite(formatted.healthFactor) ? formatted.healthFactor : 0,
         };

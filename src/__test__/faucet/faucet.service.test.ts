@@ -66,7 +66,7 @@ describe("FaucetService", () => {
     function setupConfig(overrides: Record<string, string | undefined> = {}) {
         configService.get.mockImplementation((key: string) => {
             const defaults: Record<string, string> = {
-                "FAUCET_OPERATOR_PRIVATE_KEY": OPERATOR_KEY,
+                "OPERATOR_PRIVATE_KEY": OPERATOR_KEY,
                 [`FAUCET_ADDRESS_${CHAIN_ID}`]: FAUCET_ADDRESS,
                 [`FAUCET_TOKENS_${CHAIN_ID}`]: TOKENS_ENV,
             };
@@ -142,7 +142,7 @@ describe("FaucetService", () => {
         });
 
         it("should throw BadRequestException when operator key is missing", async () => {
-            setupConfig({ "FAUCET_OPERATOR_PRIVATE_KEY": undefined });
+            setupConfig({ "OPERATOR_PRIVATE_KEY": undefined });
 
             await expect(
                 service.requestTokens(CHAIN_ID, RECIPIENT_ADDRESS, "all-assets"),

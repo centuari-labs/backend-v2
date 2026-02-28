@@ -54,7 +54,7 @@ export class FaucetService {
             return this.mockRequestTokens(chainId, recipientAddress, token);
         }
 
-        const operatorKey = this.configService.get<string>("FAUCET_OPERATOR_PRIVATE_KEY");
+        const operatorKey = this.configService.get<string>("OPERATOR_PRIVATE_KEY");
         const faucetAddress = this.configService.get<string>(`FAUCET_ADDRESS_${chainId}`);
 
         if (!operatorKey || !faucetAddress) {
@@ -111,7 +111,7 @@ export class FaucetService {
             return this.mockRequestTokens(chainId, recipientAddress, "all-assets");
         }
 
-        const operatorKey = this.configService.get<string>("FAUCET_OPERATOR_PRIVATE_KEY");
+        const operatorKey = this.configService.get<string>("OPERATOR_PRIVATE_KEY");
         const faucetAddress = this.configService.get<string>(`FAUCET_ADDRESS_${chainId}`);
 
         if (!operatorKey || !faucetAddress) {

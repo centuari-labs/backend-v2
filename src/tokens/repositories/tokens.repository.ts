@@ -37,4 +37,11 @@ export class TokensRepository {
     async findLoanTokens(): Promise<Token[]> {
         return this.tokensRepository.find({ where: { isLoanToken: true } });
     }
+
+    /**
+     * Return all tokens that are collateral/deposit tokens (is_loan_token = false).
+     */
+    async findDepositTokens(): Promise<Token[]> {
+        return this.tokensRepository.find({ where: { isLoanToken: false } });
+    }
 }

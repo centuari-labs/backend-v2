@@ -10,6 +10,7 @@ import { TokensModule } from "./tokens/tokens.module";
 import { MarketModule } from "./market/market.module";
 import { PortfolioModule } from "./portfolio/portfolio.module";
 import { FaucetModule } from "./faucet/faucet.module";
+import { DepositModule } from "./deposit/deposit.module";
 import { RateModule } from "./rate-history/rate-history.module";
 import { EventsGateway } from "./core/websocket/websocket.gateway";
 
@@ -34,6 +35,7 @@ import { EventsGateway } from "./core/websocket/websocket.gateway";
         MarketModule,
         PortfolioModule,
         FaucetModule,
+        DepositModule,
         RateModule,
     ],
     controllers: [],

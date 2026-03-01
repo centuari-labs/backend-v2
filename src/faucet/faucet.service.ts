@@ -1,7 +1,10 @@
 import { Injectable, BadRequestException, Logger } from "@nestjs/common";
+import { InjectRepository } from "@nestjs/typeorm";
+import { In, Repository } from "typeorm";
 import { ViemService } from "../core/viem/viem.service";
 import { faucetAbi } from "../abis/Faucet";
 import { ConfigService } from "@nestjs/config";
+import { Token } from "../tokens/entities/token.entity";
 import { FaucetResponseDto, TokenMintResultDto } from "./dto/faucet.dto";
 import type { TransactionReceipt } from "viem";
 
@@ -18,17 +21,58 @@ export class FaucetService {
     private readonly isDevMode: boolean;
 
     constructor(
+        @InjectRepository(Token)
+        private readonly tokenRepository: Repository<Token>,
         private readonly viemService: ViemService,
         private readonly configService: ConfigService,
     ) {
         this.isDevMode =
-            this.configService.get<string>("AUTH_MODE") === "development";
+            this.configService.get<string>("NODE_ENV") !== "production";
 
         if (this.isDevMode) {
             this.logger.warn(
                 "FAUCET running in DEV MODE -- returning mock responses",
             );
         }
+    }
+
+    /**
+     * If any requested token looks like a symbol (not starting with 0x),
+     * look it up in the assets table and replace with the on-chain address.
+     * Passes through "all-assets" and 0x-prefixed addresses unchanged.
+     */
+    private async resolveSymbolsToAddresses(
+        token: string | string[],
+    ): Promise<string | string[]> {
+        if (token === "all-assets") return token;
+
+        const tokens = Array.isArray(token) ? token : [token];
+        const symbols = tokens.filter(
+            (t) => typeof t === "string" && !t.startsWith("0x"),
+        );
+
+        if (symbols.length === 0) return token;
+
+        const rows = await this.tokenRepository.find({
+            where: { symbol: In(symbols.map((s) => s.toUpperCase())) },
+            select: ["symbol", "tokenAddress"],
+        });
+
+        const symbolToAddress = new Map<string, string>();
+        for (const row of rows) {
+            symbolToAddress.set(row.symbol.toUpperCase(), row.tokenAddress);
+        }
+
+        const resolved = tokens.map((t) => {
+            if (t.startsWith("0x")) return t;
+            const address = symbolToAddress.get(t.toUpperCase());
+            if (!address) {
+                throw new BadRequestException(`Unknown token symbol: ${t}`);
+            }
+            return address;
+        });
+
+        return Array.isArray(token) ? resolved : resolved[0];
     }
 
     private resolveTokenAddresses(
@@ -43,18 +87,23 @@ export class FaucetService {
         }
         const addresses = raw
             .split(",")
-            .map((a) => a.trim())
+            .map((a) => a.trim().replace(/^["']|["']$/g, ""))
             .filter(Boolean);
 
         if (requestedToken === "all-assets") {
             return addresses;
         }
 
+        const lowerAddresses = addresses.map((a) => a.toLowerCase());
+
         const requestedArray = Array.isArray(requestedToken)
             ? requestedToken
             : [requestedToken];
         for (const reqToken of requestedArray) {
-            if (typeof reqToken !== "string" || !addresses.includes(reqToken)) {
+            if (
+                typeof reqToken !== "string" ||
+                !lowerAddresses.includes(reqToken.toLowerCase())
+            ) {
                 throw new BadRequestException(
                     `Token address ${reqToken} is not supported on chain ${chainId}`,
                 );
@@ -69,8 +118,15 @@ export class FaucetService {
         recipientAddress: string,
         token: string | string[],
     ): Promise<FaucetResponseDto> {
+        // Resolve symbols (e.g. "usdt") to on-chain addresses from DB
+        const resolvedToken = await this.resolveSymbolsToAddresses(token);
+
         if (this.isDevMode) {
-            return this.mockRequestTokens(chainId, recipientAddress, token);
+            return this.mockRequestTokens(
+                chainId,
+                recipientAddress,
+                resolvedToken,
+            );
         }
 
         const operatorKey = this.configService.get<string>(
@@ -84,10 +140,17 @@ export class FaucetService {
             this.logger.warn(
                 `Faucet not fully configured for chain ${chainId} — falling back to mock response`,
             );
-            return this.mockRequestTokens(chainId, recipientAddress, token);
+            return this.mockRequestTokens(
+                chainId,
+                recipientAddress,
+                resolvedToken,
+            );
         }
 
-        const tokenAddresses = this.resolveTokenAddresses(chainId, token);
+        const tokenAddresses = this.resolveTokenAddresses(
+            chainId,
+            resolvedToken,
+        );
 
         const mintResults = await Promise.allSettled(
             tokenAddresses.map((tokenAddress) =>

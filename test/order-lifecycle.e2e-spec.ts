@@ -66,8 +66,8 @@ describe("Order Lifecycle E2E", () => {
     });
 
     beforeAll(async () => {
-        const originalEnv = process.env.AUTH_MODE;
-        process.env.AUTH_MODE = "development";
+        const originalEnv = process.env.NODE_ENV;
+        process.env.NODE_ENV = "development";
 
         const mockOrdersService = {
             createLendMarketOrder: jest.fn(),
@@ -97,7 +97,7 @@ describe("Order Lifecycle E2E", () => {
 
         ordersService = moduleFixture.get(OrdersService);
 
-        process.env.AUTH_MODE = originalEnv;
+        process.env.NODE_ENV = originalEnv;
     });
 
     afterAll(async () => {

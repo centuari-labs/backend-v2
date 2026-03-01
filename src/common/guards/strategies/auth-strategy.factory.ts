@@ -12,18 +12,18 @@ export class AuthStrategyFactory {
         private readonly privyStrategy: PrivyAuthStrategy,
         private readonly devStrategy: DevAuthStrategy,
     ) {
-        this.isDev = process.env.AUTH_MODE === "development";
+        this.isDev = process.env.NODE_ENV !== "production";
 
         if (this.isDev) {
-            this.logger.warn("⚠️  AUTH IN DEV MODE (AUTH_MODE=development)");
+            this.logger.warn(
+                `⚠️  AUTH IN DEV MODE (NODE_ENV=${process.env.NODE_ENV ?? "undefined"})`,
+            );
         } else {
-            this.logger.log("⚠️ AUTH IN PRODUCTION MODE (NODE_ENV=production)");
+            this.logger.log("AUTH IN PRODUCTION MODE");
         }
     }
 
     getStrategy(): IAuthStrategy {
-        return this.isDev
-            ? this.devStrategy
-            : this.privyStrategy;
+        return this.isDev ? this.devStrategy : this.privyStrategy;
     }
 }

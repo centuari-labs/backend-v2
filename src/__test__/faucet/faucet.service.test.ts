@@ -1,8 +1,10 @@
 import { Test, TestingModule } from "@nestjs/testing";
 import { BadRequestException, Logger } from "@nestjs/common";
+import { getRepositoryToken } from "@nestjs/typeorm";
 import { ConfigService } from "@nestjs/config";
 import { FaucetService } from "../../faucet/faucet.service";
 import { ViemService } from "../../core/viem/viem.service";
+import { Token } from "../../tokens/entities/token.entity";
 
 describe("FaucetService", () => {
     let service: FaucetService;
@@ -43,12 +45,21 @@ describe("FaucetService", () => {
         };
 
         const mockConfigService: Partial<jest.Mocked<ConfigService>> = {
-            get: jest.fn(),
+            get: jest.fn().mockImplementation((key: string) => {
+                // Return "production" for NODE_ENV so isDevMode=false during construction
+                if (key === "NODE_ENV") return "production";
+                return undefined;
+            }),
+        };
+
+        const mockTokenRepository = {
+            find: jest.fn().mockResolvedValue([]),
         };
 
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 FaucetService,
+                { provide: getRepositoryToken(Token), useValue: mockTokenRepository },
                 { provide: ViemService, useValue: mockViemService },
                 { provide: ConfigService, useValue: mockConfigService },
             ],

@@ -34,7 +34,11 @@ import { AuthStrategyFactory } from "src/common/guards/strategies/auth-strategy.
 import { DevAuthStrategy } from "src/common/guards/strategies/dev-auth.strategy";
 import { PrivyAuthStrategy } from "src/common/guards/strategies/privy-auth.strategy";
 
-import { OrderSide, OrderType, OrderStatus } from "src/orders/constants/order.constants";
+import {
+    OrderSide,
+    OrderType,
+    OrderStatus,
+} from "src/orders/constants/order.constants";
 
 describe("Response Contract Integration", () => {
     let app: INestApplication<App>;
@@ -46,8 +50,8 @@ describe("Response Contract Integration", () => {
     const devToken = `DEV_TOKEN_${devWallet}`;
 
     beforeAll(async () => {
-        const originalEnv = process.env.AUTH_MODE;
-        process.env.AUTH_MODE = "development";
+        const originalEnv = process.env.NODE_ENV;
+        process.env.NODE_ENV = "development";
 
         const mockOrdersService = {
             createLendMarketOrder: jest.fn(),
@@ -71,7 +75,11 @@ describe("Response Contract Integration", () => {
         };
 
         const moduleFixture: TestingModule = await Test.createTestingModule({
-            controllers: [OrdersController, MarketController, PortfolioController],
+            controllers: [
+                OrdersController,
+                MarketController,
+                PortfolioController,
+            ],
             providers: [
                 { provide: OrdersService, useValue: mockOrdersService },
                 { provide: MarketService, useValue: mockMarketService },
@@ -94,7 +102,7 @@ describe("Response Contract Integration", () => {
         marketService = moduleFixture.get(MarketService);
         portfolioService = moduleFixture.get(PortfolioService);
 
-        process.env.AUTH_MODE = originalEnv;
+        process.env.NODE_ENV = originalEnv;
     });
 
     afterAll(async () => {
@@ -131,7 +139,9 @@ describe("Response Contract Integration", () => {
                     updatedAt: new Date(),
                 },
             };
-            ordersService.createLendLimitOrder.mockResolvedValue(serviceResponse as any);
+            ordersService.createLendLimitOrder.mockResolvedValue(
+                serviceResponse as any,
+            );
 
             const { body } = await request(app.getHttpServer())
                 .post("/orders/lend/limit")
@@ -175,7 +185,9 @@ describe("Response Contract Integration", () => {
                     updatedAt: new Date(),
                 },
             };
-            ordersService.createLendLimitOrder.mockResolvedValue(serviceResponse as any);
+            ordersService.createLendLimitOrder.mockResolvedValue(
+                serviceResponse as any,
+            );
 
             const { body } = await request(app.getHttpServer())
                 .post("/orders/lend/limit")
@@ -254,7 +266,9 @@ describe("Response Contract Integration", () => {
                 totalData: 1,
                 totalPages: 1,
             };
-            portfolioService.getMyAssets.mockResolvedValue(paginatedResponse as any);
+            portfolioService.getMyAssets.mockResolvedValue(
+                paginatedResponse as any,
+            );
 
             const { body } = await request(app.getHttpServer())
                 .get("/portfolio/my-assets?limit=100")
@@ -279,15 +293,31 @@ describe("Response Contract Integration", () => {
         it("FE unwrap: apiClient gets flat array (not paginated object)", async () => {
             const paginatedResponse = {
                 data: [
-                    { symbol: "USDC", name: "USD Coin", walletBalance: 1000, amountInUsd: 1000, isCollateral: false, imageUrl: null },
-                    { symbol: "ETH", name: "Ethereum", walletBalance: 2, amountInUsd: 6000, isCollateral: true, imageUrl: null },
+                    {
+                        symbol: "USDC",
+                        name: "USD Coin",
+                        walletBalance: 1000,
+                        amountInUsd: 1000,
+                        isCollateral: false,
+                        imageUrl: null,
+                    },
+                    {
+                        symbol: "ETH",
+                        name: "Ethereum",
+                        walletBalance: 2,
+                        amountInUsd: 6000,
+                        isCollateral: true,
+                        imageUrl: null,
+                    },
                 ],
                 page: 1,
                 limit: 100,
                 totalData: 2,
                 totalPages: 1,
             };
-            portfolioService.getMyAssets.mockResolvedValue(paginatedResponse as any);
+            portfolioService.getMyAssets.mockResolvedValue(
+                paginatedResponse as any,
+            );
 
             const { body } = await request(app.getHttpServer())
                 .get("/portfolio/my-assets?limit=100")

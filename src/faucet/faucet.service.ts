@@ -21,51 +21,82 @@ export class FaucetService {
         private readonly viemService: ViemService,
         private readonly configService: ConfigService,
     ) {
-        this.isDevMode = this.configService.get<string>("AUTH_MODE") === "development";
+        this.isDevMode =
+            this.configService.get<string>("AUTH_MODE") === "development";
 
         if (this.isDevMode) {
-            this.logger.warn("FAUCET running in DEV MODE -- returning mock responses");
+            this.logger.warn(
+                "FAUCET running in DEV MODE -- returning mock responses",
+            );
         }
     }
 
-    private resolveTokenAddresses(chainId: number, requestedToken: string | string[]): string[] {
+    private resolveTokenAddresses(
+        chainId: number,
+        requestedToken: string | string[],
+    ): string[] {
         const raw = this.configService.get<string>(`FAUCET_TOKENS_${chainId}`);
         if (!raw) {
-            throw new BadRequestException(`No tokens configured for faucet on chain ${chainId}`);
+            throw new BadRequestException(
+                `No tokens configured for faucet on chain ${chainId}`,
+            );
         }
-        const addresses = raw.split(",").map((a) => a.trim()).filter(Boolean);
+        const addresses = raw
+            .split(",")
+            .map((a) => a.trim())
+            .filter(Boolean);
 
         if (requestedToken === "all-assets") {
             return addresses;
         }
 
-        const requestedArray = Array.isArray(requestedToken) ? requestedToken : [requestedToken];
+        const requestedArray = Array.isArray(requestedToken)
+            ? requestedToken
+            : [requestedToken];
         for (const reqToken of requestedArray) {
             if (typeof reqToken !== "string" || !addresses.includes(reqToken)) {
-                throw new BadRequestException(`Token address ${reqToken} is not supported on chain ${chainId}`);
+                throw new BadRequestException(
+                    `Token address ${reqToken} is not supported on chain ${chainId}`,
+                );
             }
         }
 
         return requestedArray;
     }
 
-    async requestTokens(chainId: number, recipientAddress: string, token: string | string[]): Promise<FaucetResponseDto> {
+    async requestTokens(
+        chainId: number,
+        recipientAddress: string,
+        token: string | string[],
+    ): Promise<FaucetResponseDto> {
         if (this.isDevMode) {
             return this.mockRequestTokens(chainId, recipientAddress, token);
         }
 
-        const operatorKey = this.configService.get<string>("OPERATOR_PRIVATE_KEY");
-        const faucetAddress = this.configService.get<string>(`FAUCET_ADDRESS_${chainId}`);
+        const operatorKey = this.configService.get<string>(
+            "OPERATOR_PRIVATE_KEY",
+        );
+        const faucetAddress = this.configService.get<string>(
+            `FAUCET_ADDRESS_${chainId}`,
+        );
 
         if (!operatorKey || !faucetAddress) {
-            throw new BadRequestException("Faucet not configured for this chain");
+            throw new BadRequestException(
+                "Faucet not configured for this chain",
+            );
         }
 
         const tokenAddresses = this.resolveTokenAddresses(chainId, token);
 
         const mintResults = await Promise.allSettled(
             tokenAddresses.map((tokenAddress) =>
-                this.mintToken(chainId, operatorKey, faucetAddress, tokenAddress, recipientAddress),
+                this.mintToken(
+                    chainId,
+                    operatorKey,
+                    faucetAddress,
+                    tokenAddress,
+                    recipientAddress,
+                ),
             ),
         );
 
@@ -81,7 +112,10 @@ export class FaucetService {
             return {
                 tokenAddress: tokenAddresses[idx],
                 amount: "0",
-                error: outcome.reason instanceof Error ? outcome.reason.message : String(outcome.reason),
+                error:
+                    outcome.reason instanceof Error
+                        ? outcome.reason.message
+                        : String(outcome.reason),
             };
         });
 
@@ -94,7 +128,8 @@ export class FaucetService {
         return {
             chainId,
             recipientAddress,
-            transactionHash: firstSuccess?.receipt?.transactionHash ?? `0x${"0".repeat(64)}`,
+            transactionHash:
+                firstSuccess?.receipt?.transactionHash ?? `0x${"0".repeat(64)}`,
             blockNumber: firstSuccess?.receipt?.blockNumber?.toString() ?? "0",
             status: firstSuccess ? firstSuccess.receipt!.status : "failed",
             results,
@@ -108,19 +143,35 @@ export class FaucetService {
         amounts: string[],
     ): Promise<FaucetResponseDto> {
         if (this.isDevMode) {
-            return this.mockRequestTokens(chainId, recipientAddress, "all-assets");
+            return this.mockRequestTokens(
+                chainId,
+                recipientAddress,
+                "all-assets",
+            );
         }
 
-        const operatorKey = this.configService.get<string>("OPERATOR_PRIVATE_KEY");
-        const faucetAddress = this.configService.get<string>(`FAUCET_ADDRESS_${chainId}`);
+        const operatorKey = this.configService.get<string>(
+            "OPERATOR_PRIVATE_KEY",
+        );
+        const faucetAddress = this.configService.get<string>(
+            `FAUCET_ADDRESS_${chainId}`,
+        );
 
         if (!operatorKey || !faucetAddress) {
-            throw new BadRequestException("Faucet not configured for this chain");
+            throw new BadRequestException(
+                "Faucet not configured for this chain",
+            );
         }
 
         const mintResults = await Promise.allSettled(
             tokenAddresses.map((tokenAddress, idx) =>
-                this.mintToken(chainId, operatorKey, tokenAddress, recipientAddress, amounts[idx]),
+                this.mintToken(
+                    chainId,
+                    operatorKey,
+                    tokenAddress,
+                    recipientAddress,
+                    amounts[idx],
+                ),
             ),
         );
 
@@ -136,7 +187,10 @@ export class FaucetService {
             return {
                 tokenAddress: tokenAddresses[idx],
                 amount: "0",
-                error: outcome.reason instanceof Error ? outcome.reason.message : String(outcome.reason),
+                error:
+                    outcome.reason instanceof Error
+                        ? outcome.reason.message
+                        : String(outcome.reason),
             };
         });
 
@@ -149,7 +203,8 @@ export class FaucetService {
         return {
             chainId,
             recipientAddress,
-            transactionHash: firstSuccess?.receipt?.transactionHash ?? `0x${"0".repeat(64)}`,
+            transactionHash:
+                firstSuccess?.receipt?.transactionHash ?? `0x${"0".repeat(64)}`,
             blockNumber: firstSuccess?.receipt?.blockNumber?.toString() ?? "0",
             status: firstSuccess ? firstSuccess.receipt!.status : "failed",
             results,
@@ -167,19 +222,17 @@ export class FaucetService {
         tokenAddress: string,
         recipientAddress: string,
     ): Promise<MintOutcome> {
-        const [enabled, maxPerRequest] = await this.viemService.readContract<[boolean, bigint, bigint]>(
-            chainId,
-            faucetAddress,
-            faucetAbi,
-            "configOf",
-            [tokenAddress],
-        );
+        const [enabled, maxPerRequest] = await this.viemService.readContract<
+            [boolean, bigint, bigint]
+        >(chainId, faucetAddress, faucetAbi, "configOf", [tokenAddress]);
 
         if (!enabled) {
-            throw new BadRequestException(`Token ${tokenAddress} not enabled on faucet`);
+            throw new BadRequestException(
+                `Token ${tokenAddress} not enabled on faucet`,
+            );
         }
 
-        const receipt = await this.viemService.writeContract(
+        const receipt = (await this.viemService.writeContract(
             chainId,
             operatorKey,
             faucetAddress,
@@ -187,7 +240,7 @@ export class FaucetService {
             "mintTo",
             [tokenAddress, recipientAddress, maxPerRequest],
             { waitForReceipt: true },
-        ) as TransactionReceipt;
+        )) as TransactionReceipt;
 
         return {
             tokenAddress,
@@ -196,7 +249,11 @@ export class FaucetService {
         };
     }
 
-    private mockRequestTokens(chainId: number, recipientAddress: string, token: string | string[]): FaucetResponseDto {
+    private mockRequestTokens(
+        chainId: number,
+        recipientAddress: string,
+        token: string | string[],
+    ): FaucetResponseDto {
         // In DEV mode we don't need real config -- use whatever is configured or fall back to placeholders.
         let tokenAddresses: string[];
         try {
@@ -216,10 +273,12 @@ export class FaucetService {
             `[DEV] Mock mint: tokens=${tokenAddresses.join(",")}, recipient=${recipientAddress}, chain=${chainId}`,
         );
 
-        const results: TokenMintResultDto[] = tokenAddresses.map((tokenAddress) => ({
-            tokenAddress,
-            amount: "1000000000000000000",
-        }));
+        const results: TokenMintResultDto[] = tokenAddresses.map(
+            (tokenAddress) => ({
+                tokenAddress,
+                amount: "1000000000000000000",
+            }),
+        );
 
         return {
             chainId,

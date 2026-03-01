@@ -11,16 +11,21 @@ import { Token } from "../tokens/entities/token.entity";
 import { NatsService } from "../core/nats/nats.service";
 import { EventsGateway } from "../core/websocket/websocket.gateway";
 
-const INSERT_INTERVAL_MS = Number.parseInt("5000", 10);
-const PARTIAL_FILL_INTERVAL_MS = Number.parseInt("180000", 10);
-const FILL_INTERVAL_MS = Number.parseInt("300000", 10);
+const LEND_INSERT_INTERVAL_MS = Number.parseInt("3000", 10);
+const BORROW_INSERT_INTERVAL_MS = Number.parseInt("3000", 10);
+const PARTIAL_FILL_INTERVAL_MS = Number.parseInt("600000", 10);
+const FILL_INTERVAL_MS = Number.parseInt("1200000", 10);
 const MAX_OPEN_ORDERS = Number.parseInt("10000", 10);
 const CACHE_REFRESH_INTERVAL_MS = Number.parseInt("60000", 10);
 
-const RATE_MIN = Number.parseInt("100", 10);
-const RATE_MAX = Number.parseInt("2500", 10);
-const QUANTITY_MIN = Number.parseFloat("100");
-const QUANTITY_MAX = Number.parseFloat("10000");
+const LEND_RATE_MIN = Number.parseInt("800", 10);
+const LEND_RATE_MAX = Number.parseInt("2500", 10);
+const BORROW_RATE_MIN = Number.parseInt("100", 10);
+const BORROW_RATE_MAX = Number.parseInt("600", 10);
+const LEND_QUANTITY_MIN = Number.parseFloat("500");
+const LEND_QUANTITY_MAX = Number.parseFloat("10000");
+const BORROW_QUANTITY_MIN = Number.parseFloat("100");
+const BORROW_QUANTITY_MAX = Number.parseFloat("5000");
 const PARTIAL_FILL_MIN_FRACTION = Number.parseFloat("0.2");
 const PARTIAL_FILL_MAX_FRACTION = Number.parseFloat("0.5");
 
@@ -68,7 +73,6 @@ export class OrdersWorker implements OnModuleInit {
         private readonly tokenRepository: Repository<Token>,
         private readonly ordersService: OrdersService,
         private readonly dataSource: DataSource,
-        private readonly natsService: NatsService,
         private readonly eventsGateway: EventsGateway,
     ) {}
 
@@ -125,10 +129,10 @@ export class OrdersWorker implements OnModuleInit {
         }
     }
 
-    // ─── 1. Create OPEN orders ───────────────────────────────────────────
+    // ─── 1a. Create LEND orders ──────────────────────────────────────────
 
-    @Interval(INSERT_INTERVAL_MS)
-    async createRandomOrder(): Promise<void> {
+    @Interval(LEND_INSERT_INTERVAL_MS)
+    async createLendOrder(): Promise<void> {
         if (!this.isEnabled) return;
 
         try {
@@ -153,29 +157,64 @@ export class OrdersWorker implements OnModuleInit {
                 ];
 
             const { assetId, marketIds } = entry;
-
-            const side = this.getRandomSide();
-            const amount = this.getRandomQuantity();
-            const rate = this.getRandomRate();
+            const amount = this.getRandomLendQuantity();
+            const rate = this.getRandomLendRate();
             const account =
                 ACCOUNTS[Math.floor(Math.random() * ACCOUNTS.length)];
 
-            if (side === OrderSide.Lend) {
-                await this.ordersService.createLendLimitOrder(
-                    { assetId, amount, marketIds, rate },
-                    account.wallet,
-                    account.privyUserId,
-                );
-            } else {
-                await this.ordersService.createBorrowLimitOrder(
-                    { assetId, amount, marketIds, rate },
-                    account.wallet,
-                    account.privyUserId,
-                );
-            }
+            await this.ordersService.createLendLimitOrder(
+                { assetId, amount, marketIds, rate },
+                account.wallet,
+                account.privyUserId,
+            );
         } catch (error) {
             this.logger.error(
-                `Failed to insert order: ${(error as Error).message}`,
+                `Failed to insert lend order: ${(error as Error).message}`,
+            );
+        }
+    }
+
+    // ─── 1b. Create BORROW orders ────────────────────────────────────────
+
+    @Interval(BORROW_INSERT_INTERVAL_MS)
+    async createBorrowOrder(): Promise<void> {
+        if (!this.isEnabled) return;
+
+        try {
+            if (this.assetMarketCache.length === 0) {
+                this.logger.warn(
+                    "Asset/market cache is empty. Skipping order creation.",
+                );
+                return;
+            }
+
+            const openCount = await this.orderRepository.count({
+                where: { status: OrderStatus.Open },
+            });
+
+            if (openCount >= MAX_OPEN_ORDERS) {
+                return;
+            }
+
+            const entry =
+                this.assetMarketCache[
+                    Math.floor(Math.random() * this.assetMarketCache.length)
+                ];
+
+            const { assetId, marketIds } = entry;
+            const amount = this.getRandomBorrowQuantity();
+            const rate = this.getRandomBorrowRate();
+            const account =
+                ACCOUNTS[Math.floor(Math.random() * ACCOUNTS.length)];
+
+            await this.ordersService.createBorrowLimitOrder(
+                { assetId, amount, marketIds, rate },
+                account.wallet,
+                account.privyUserId,
+            );
+        } catch (error) {
+            this.logger.error(
+                `Failed to insert borrow order: ${(error as Error).message}`,
             );
         }
     }
@@ -435,17 +474,32 @@ export class OrdersWorker implements OnModuleInit {
 
     // ─── Helpers ─────────────────────────────────────────────────────────
 
-    private getRandomSide(): OrderSide {
-        return Math.random() < 0.5 ? OrderSide.Lend : OrderSide.Borrow;
+    private getRandomLendRate(): number {
+        return (
+            Math.floor(Math.random() * (LEND_RATE_MAX - LEND_RATE_MIN + 1)) +
+            LEND_RATE_MIN
+        );
     }
 
-    private getRandomRate(): number {
-        return Math.floor(Math.random() * (RATE_MAX - RATE_MIN + 1)) + RATE_MIN;
+    private getRandomBorrowRate(): number {
+        return (
+            Math.floor(
+                Math.random() * (BORROW_RATE_MAX - BORROW_RATE_MIN + 1),
+            ) + BORROW_RATE_MIN
+        );
     }
 
-    private getRandomQuantity(): string {
+    private getRandomLendQuantity(): string {
         const value =
-            QUANTITY_MIN + Math.random() * (QUANTITY_MAX - QUANTITY_MIN);
+            LEND_QUANTITY_MIN +
+            Math.random() * (LEND_QUANTITY_MAX - LEND_QUANTITY_MIN);
+        return value.toFixed(2);
+    }
+
+    private getRandomBorrowQuantity(): string {
+        const value =
+            BORROW_QUANTITY_MIN +
+            Math.random() * (BORROW_QUANTITY_MAX - BORROW_QUANTITY_MIN);
         return value.toFixed(2);
     }
 }

@@ -81,9 +81,10 @@ export class FaucetService {
         );
 
         if (!operatorKey || !faucetAddress) {
-            throw new BadRequestException(
-                "Faucet not configured for this chain",
+            this.logger.warn(
+                `Faucet not fully configured for chain ${chainId} — falling back to mock response`,
             );
+            return this.mockRequestTokens(chainId, recipientAddress, token);
         }
 
         const tokenAddresses = this.resolveTokenAddresses(chainId, token);
@@ -158,8 +159,13 @@ export class FaucetService {
         );
 
         if (!operatorKey || !faucetAddress) {
-            throw new BadRequestException(
-                "Faucet not configured for this chain",
+            this.logger.warn(
+                `Faucet not fully configured for chain ${chainId} — falling back to mock response`,
+            );
+            return this.mockRequestTokens(
+                chainId,
+                recipientAddress,
+                "all-assets",
             );
         }
 

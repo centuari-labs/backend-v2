@@ -141,24 +141,24 @@ describe("FaucetService", () => {
             expect(result.results[1].tokenAddress).toBe(TOKEN_ADDRESS_B);
         });
 
-        it("should throw BadRequestException when operator key is missing", async () => {
+        it("should fall back to mock when operator key is missing", async () => {
             setupConfig({ "OPERATOR_PRIVATE_KEY": undefined });
 
-            await expect(
-                service.requestTokens(CHAIN_ID, RECIPIENT_ADDRESS, "all-assets"),
-            ).rejects.toThrow(BadRequestException);
+            const result = await service.requestTokens(CHAIN_ID, RECIPIENT_ADDRESS, "all-assets");
 
+            expect(result.status).toBe("success");
+            expect(result.results).toHaveLength(2);
             expect(viemService.readContract).not.toHaveBeenCalled();
             expect(viemService.writeContract).not.toHaveBeenCalled();
         });
 
-        it("should throw BadRequestException when faucet address is missing", async () => {
+        it("should fall back to mock when faucet address is missing", async () => {
             setupConfig({ [`FAUCET_ADDRESS_${CHAIN_ID}`]: undefined });
 
-            await expect(
-                service.requestTokens(CHAIN_ID, RECIPIENT_ADDRESS, "all-assets"),
-            ).rejects.toThrow(BadRequestException);
+            const result = await service.requestTokens(CHAIN_ID, RECIPIENT_ADDRESS, "all-assets");
 
+            expect(result.status).toBe("success");
+            expect(result.results).toHaveLength(2);
             expect(viemService.readContract).not.toHaveBeenCalled();
         });
 

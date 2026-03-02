@@ -6,17 +6,17 @@ BEGIN;
 INSERT INTO assets (name, symbol, token_address, is_loan_token, chain_id, coingecko_id, decimals, image_url)
 SELECT v.name, v.symbol, v.token_address, v.is_loan_token, v.chain_id, v.coingecko_id, v.decimals, v.image_url
 FROM (VALUES
-    ('Bitcoin',                                                'BTC',    '0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf', false, 421614, 'bitcoin',                                          8,  '/tokens/btc.svg'),
-    ('Ethereum',                                               'ETH',    '0x4200000000000000000000000000000000000006', false, 421614, 'ethereum',                                         18, '/tokens/eth.svg'),
-    ('Tether Gold',                                            'XAUT',   '0x0000000000000000000000000000000000000003', false, 421614, 'tether-gold',                                      6,  '/tokens/xaut.svg'),
-    ('USD Coin',                                               'USDC',   '0x036CbD53842c5426634e7929541eC2318f3dCF7e', true,  421614, 'usd-coin',                                         6,  '/tokens/usdc.svg'),
-    ('Tether USD',                                             'USDT',   '0x0000000000000000000000000000000000000007', true,  421614, 'tether',                                           6,  '/tokens/usdt.svg'),
-    ('Indonesian Rupiah',                                      'IDRX',   '0x18Bc5bcC660cf2B9cE3cd51a404aFe1a0cBD3C22', true,  421614, 'idrx',                                             18, '/tokens/idrx.svg'),
-    ('StraitsX SGD',                                           'XSGD',   '0x0000000000000000000000000000000000000006', true,  421614, 'xsgd',                                             6,  '/tokens/xsgd.svg'),
-    ('iShares Silver Trust (Ondo)',                            'SLVon',  '0x0000000000000000000000000000000000000008', false, 421614, 'ishares-silver-trust-ondo',         18, '/tokens/slvon.svg'),
-    ('NVIDIA (Ondo)',                                          'NVDAon', '0x0000000000000000000000000000000000000009', false, 421614, 'nvidia-ondo-tokenized-stock',                      18, '/tokens/nvdaon.svg'),
-    ('Apple (Ondo)',                                           'AAPLon', '0x000000000000000000000000000000000000000a', false, 421614, 'apple-ondo-tokenized-stock',                       18, '/tokens/aaplon.svg'),
-    ('iShares 20+ Year Treasury Bond ETF (Ondo)',              'TLTon',  '0x000000000000000000000000000000000000000b', false, 421614, 'ishares-20-year-treasury-bond-etf-ondo-tokenized-etf', 18, '/tokens/tltlon.svg')
+    ('Bitcoin',                                                'BTC',    '0xc2EFd38075d80e0bEfa7F4343c1102344B9aD44c', false, 421614, 'bitcoin',                                          8,  '/tokens/btc.svg'),
+    ('Ethereum',                                               'ETH',    '0x80E70a7949f9657729d09e144f65812b90E16Cb4', false, 421614, 'ethereum',                                         18, '/tokens/eth.svg'),
+    ('Tether Gold',                                            'XAUT',   '0x09da5F9853d10E0241f717800f255e24Ec797469', false, 421614, 'tether-gold',                                      6,  '/tokens/xaut.svg'),
+    ('USD Coin',                                               'USDC',   '0x26970F990252306AFa328B2c91225605c0862498', true,  421614, 'usd-coin',                                         6,  '/tokens/usdc.svg'),
+    ('Tether USD',                                             'USDT',   '0xe1e9f8aDFBee861d1173850d692dD3863B7f2b61', true,  421614, 'tether',                                           6,  '/tokens/usdt.svg'),
+    ('Indonesian Rupiah',                                      'IDRX',   '0xDB0683a2A3d85B07f35F7eD4413E88C28Da26C7C', true,  421614, 'idrx',                                             18, '/tokens/idrx.svg'),
+    ('StraitsX SGD',                                           'XSGD',   '0x612CFED4026384AF12c573A64F4d2996620D911e', true,  421614, 'xsgd',                                             6,  '/tokens/xsgd.svg'),
+    ('iShares Silver Trust (Ondo)',                            'SLVon',  '0x1E202e2Ffc478C408cc5A13663a0390ee5a416E2', false, 421614, 'ishares-silver-trust-ondo',         18, '/tokens/slvon.svg'),
+    ('NVIDIA (Ondo)',                                          'NVDAon', '0x35a0291104408e9eeC3e343583A7b1aD8c7A5496', false, 421614, 'nvidia-ondo-tokenized-stock',                      18, '/tokens/nvdaon.svg'),
+    ('Apple (Ondo)',                                           'AAPLon', '0xf554E2813B5959B6896aDc650231b76d716F3812', false, 421614, 'apple-ondo-tokenized-stock',                       18, '/tokens/aaplon.svg'),
+    ('iShares 20+ Year Treasury Bond ETF (Ondo)',              'TLTon',  '0xf6c3b7Db9cdAA6429D62C040bFF3Ff3c443c1EEf', false, 421614, 'ishares-20-year-treasury-bond-etf-ondo-tokenized-etf', 18, '/tokens/tltlon.svg')
 ) AS v(name, symbol, token_address, is_loan_token, chain_id, coingecko_id, decimals, image_url)
 WHERE NOT EXISTS (
     SELECT 1 FROM assets a WHERE a.symbol = v.symbol AND a.chain_id = v.chain_id::NUMERIC

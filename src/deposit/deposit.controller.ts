@@ -13,7 +13,7 @@ import { Wallet } from "../common/decorators/wallet.decorator";
 import { BearerToken } from "../common/decorators/bearer-token.decorator";
 import { AuthGuard } from "../common/guards/auth.guard";
 import { DepositService } from "./deposit.service";
-import { CreateDepositDto } from "./dto/deposit.dto";
+import { CreateDepositDto, VerifyDepositDto } from "./dto/deposit.dto";
 import type {
     DepositResponseDto,
     DepositTokenDto,
@@ -37,6 +37,21 @@ export class DepositController {
             dto.amount,
             walletAddress,
             bearerToken,
+        );
+    }
+
+    @Post("verify")
+    @HttpCode(HttpStatus.OK)
+    @UseGuards(AuthGuard)
+    async verifyDeposit(
+        @Body() dto: VerifyDepositDto,
+        @Wallet() walletAddress: string,
+    ): Promise<DepositResponseDto> {
+        return this.depositService.verifyDeposit(
+            dto.txHash,
+            dto.assetId,
+            dto.amount,
+            walletAddress,
         );
     }
 

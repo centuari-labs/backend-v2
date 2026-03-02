@@ -35,6 +35,7 @@ const baseOrderSchema = z.object({
     orderId: z.string().uuid("Order ID must be a valid UUID"),
     walletAddress: ethereumAddressSchema,
     loanToken: ethereumAddressSchema,
+    assetId: z.string().uuid("Asset ID must be a valid UUID"),
     markets: z
         .array(marketSlotSchema)
         .min(1, "At least one market slot is required"),

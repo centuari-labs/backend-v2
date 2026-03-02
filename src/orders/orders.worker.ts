@@ -8,7 +8,6 @@ import { OrderRepository } from "./repositories/order.repository";
 import { OrdersService } from "./orders.service";
 import { Market } from "../market/entities/market.entity";
 import { Token } from "../tokens/entities/token.entity";
-import { NatsService } from "../core/nats/nats.service";
 import { EventsGateway } from "../core/websocket/websocket.gateway";
 
 const LEND_INSERT_INTERVAL_MS = Number.parseInt("3000", 10);

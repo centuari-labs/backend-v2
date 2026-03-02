@@ -292,13 +292,13 @@ export class PortfolioService {
         const data = userAssets.map((ua) => {
             const token = tokenMap.get(ua.asset_id);
             const price = allPrices[ua.asset_id.toLowerCase()];
-            const amount = Number.parseFloat(ua.amount); //@todo : convert this to human readable from assets decimal
-            //@todo : need to also return asset id, better use the same DTO for all asset type return
+            const decimals = token?.decimals ?? 0;
+            const amountHuman = Number(baseUnitsToHuman(ua.amount, decimals));
             return {
                 symbol: token?.symbol || "UNKNOWN",
                 name: token?.name || "Unknown Token",
-                walletBalance: amount,
-                amountInUsd: calculateUsdAmount(amount, price ?? 0),
+                walletBalance: amountHuman,
+                amountInUsd: calculateUsdAmount(amountHuman, price ?? 0),
                 isCollateral: !!ua.is_collateral,
                 imageUrl: token?.imageUrl ?? null,
             };
@@ -330,14 +330,19 @@ export class PortfolioService {
 
         const data = positions.map((position) => {
             const price = allPrices[position.asset_id.toLowerCase()];
-            const quantity = Number.parseFloat(position.quantity);
+            const decimals = Number(position.decimals) || 0;
+            const quantityHuman = Number(baseUnitsToHuman(position.quantity, decimals));
 
             return {
+                id: position.position_id,
                 symbol: position.symbol,
                 name: position.name,
-                walletBalance: quantity,
-                amountInUsd: calculateUsdAmount(quantity, price ?? 0),
+                walletBalance: quantityHuman,
+                amountInUsd: calculateUsdAmount(quantityHuman, price ?? 0),
                 isCollateral: false,
+                imageUrl: position.image_url ?? null,
+                side: position.side as 'LEND' | 'BORROW',
+                maturity: position.maturity ? new Date(position.maturity).getTime() / 1000 : null,
             };
         });
 

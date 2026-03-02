@@ -95,12 +95,15 @@ export class MyPositionQueryDto {
 }
 
 export class MyPositionItemDto {
+    id: string;
     symbol: string;
     name: string;
     walletBalance: number;
     amountInUsd: number;
     isCollateral: boolean;
     imageUrl?: string | null;
+    side: 'LEND' | 'BORROW';
+    maturity?: number | null;
 }
 
 export class GetMyPositionResponseDto {

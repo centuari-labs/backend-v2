@@ -18,7 +18,7 @@ interface MintOutcome {
 @Injectable()
 export class FaucetService {
     private readonly logger = new Logger(FaucetService.name);
-    private readonly isDevMode: boolean;
+    private readonly isDevMode: boolean = false;
 
     constructor(
         @InjectRepository(Token)
@@ -26,14 +26,13 @@ export class FaucetService {
         private readonly viemService: ViemService,
         private readonly configService: ConfigService,
     ) {
-        this.isDevMode =
-            this.configService.get<string>("NODE_ENV") !== "production";
-
-        if (this.isDevMode) {
-            this.logger.warn(
-                "FAUCET running in DEV MODE -- returning mock responses",
-            );
-        }
+        // this.isDevMode =
+        //     this.configService.get<string>("NODE_ENV") !== "production";
+        // if (this.isDevMode) {
+        //     this.logger.warn(
+        //         "FAUCET running in DEV MODE -- returning mock responses",
+        //     );
+        // }
     }
 
     /**
@@ -94,11 +93,24 @@ export class FaucetService {
             return addresses;
         }
 
+        this.logger.debug(
+            `Configured faucet tokens for chain ${chainId}: ${addresses.join(",")}`,
+        );
+
         const lowerAddresses = addresses.map((a) => a.toLowerCase());
+
+        this.logger.debug(
+            `Normalized faucet token addresses for chain ${chainId}: ${lowerAddresses.join(",")}`,
+        );
 
         const requestedArray = Array.isArray(requestedToken)
             ? requestedToken
             : [requestedToken];
+
+        this.logger.debug(
+            `Requested tokens to mint for chain ${chainId}: ${requestedArray.join(",")}`,
+        );
+
         for (const reqToken of requestedArray) {
             if (
                 typeof reqToken !== "string" ||
@@ -110,6 +122,10 @@ export class FaucetService {
             }
         }
 
+        this.logger.debug(
+            `Resolved token addresses for request: ${requestedArray.join(",")}`,
+        );
+
         return requestedArray;
     }
 
@@ -118,8 +134,17 @@ export class FaucetService {
         recipientAddress: string,
         token: string | string[],
     ): Promise<FaucetResponseDto> {
+        this.logger.debug(
+            `Received faucet request: chainId=${chainId}, recipient=${recipientAddress}, token=${Array.isArray(token) ? token.join(",") : token}`,
+        );
         // Resolve symbols (e.g. "usdt") to on-chain addresses from DB
         const resolvedToken = await this.resolveSymbolsToAddresses(token);
+
+        this.logger.debug(
+            `Resolved token addresses: ${Array.isArray(resolvedToken) ? resolvedToken.join(",") : resolvedToken}`,
+        );
+
+        this.logger.debug("this.isDevMode", this.isDevMode);
 
         if (this.isDevMode) {
             return this.mockRequestTokens(
@@ -150,6 +175,12 @@ export class FaucetService {
         const tokenAddresses = this.resolveTokenAddresses(
             chainId,
             resolvedToken,
+        );
+
+        this.logger.debug(
+            `Requesting tokens from faucet: chainId=${chainId}, recipient=${recipientAddress}, tokens=${tokenAddresses.join(
+                ",",
+            )}`,
         );
 
         const mintResults = await Promise.allSettled(

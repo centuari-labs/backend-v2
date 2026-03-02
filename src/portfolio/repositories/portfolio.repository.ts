@@ -13,6 +13,8 @@ export interface RawPosition {
     symbol: string;
     name: string;
     token_address: string;
+    image_url: string | null;
+    decimals: number;
     maturity: Date | null;
     created_at: Date;
 }
@@ -127,7 +129,7 @@ export class PortfolioRepository extends Repository<Portfolio> {
         //@todo : get rate base on the shares
         if (includeLend) {
             queries.push(`
-                SELECT 
+                SELECT
                     lp.id AS position_id,
                     lp.asset_id AS asset_id,
                     'LEND' AS side,
@@ -136,6 +138,8 @@ export class PortfolioRepository extends Repository<Portfolio> {
                     t.symbol AS symbol,
                     t.name AS name,
                     t.token_address AS token_address,
+                    t.image_url AS image_url,
+                    COALESCE(t.decimals, 0) AS decimals,
                     m.maturity AS maturity,
                     lp.created_at AS created_at
                 FROM lend_positions lp
@@ -151,7 +155,7 @@ export class PortfolioRepository extends Repository<Portfolio> {
         //@todo : get rate base on shares
         if (includeBorrow) {
             queries.push(`
-                SELECT 
+                SELECT
                     bp.id AS position_id,
                     bp.asset_id AS asset_id,
                     'BORROW' AS side,
@@ -160,6 +164,8 @@ export class PortfolioRepository extends Repository<Portfolio> {
                     t.symbol AS symbol,
                     t.name AS name,
                     t.token_address AS token_address,
+                    t.image_url AS image_url,
+                    COALESCE(t.decimals, 0) AS decimals,
                     m.maturity AS maturity,
                     bp.created_at AS created_at
                 FROM borrow_positions bp

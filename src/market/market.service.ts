@@ -79,6 +79,7 @@ export class MarketService {
                     symbol: asset.symbol,
                     decimals: asset.decimals ?? null,
                     image_url: asset.imageUrl ?? null,
+                    token_address: asset.tokenAddress ?? null,
                 },
                 market: {
                     market_id: earliest?.marketId ?? null,

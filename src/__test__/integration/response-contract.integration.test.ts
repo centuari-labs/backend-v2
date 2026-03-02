@@ -31,7 +31,6 @@ import { PortfolioService } from "src/portfolio/portfolio.service";
 
 import { AuthGuard } from "src/common/guards/auth.guard";
 import { AuthStrategyFactory } from "src/common/guards/strategies/auth-strategy.factory";
-import { DevAuthStrategy } from "src/common/guards/strategies/dev-auth.strategy";
 import { PrivyAuthStrategy } from "src/common/guards/strategies/privy-auth.strategy";
 
 import {
@@ -46,13 +45,9 @@ describe("Response Contract Integration", () => {
     let marketService: jest.Mocked<MarketService>;
     let portfolioService: jest.Mocked<PortfolioService>;
 
-    const devWallet = "0xIntegrationTestWallet";
-    const devToken = `DEV_TOKEN_${devWallet}`;
+    const testToken = "test-privy-jwt";
 
     beforeAll(async () => {
-        const originalEnv = process.env.NODE_ENV;
-        process.env.NODE_ENV = "development";
-
         const mockOrdersService = {
             createLendMarketOrder: jest.fn(),
             createLendLimitOrder: jest.fn(),
@@ -86,11 +81,7 @@ describe("Response Contract Integration", () => {
                 { provide: PortfolioService, useValue: mockPortfolioService },
                 AuthGuard,
                 AuthStrategyFactory,
-                DevAuthStrategy,
-                {
-                    provide: PrivyAuthStrategy,
-                    useValue: { validate: jest.fn(), getName: () => "privy" },
-                },
+                PrivyAuthStrategy,
             ],
         }).compile();
 
@@ -101,8 +92,6 @@ describe("Response Contract Integration", () => {
         ordersService = moduleFixture.get(OrdersService);
         marketService = moduleFixture.get(MarketService);
         portfolioService = moduleFixture.get(PortfolioService);
-
-        process.env.NODE_ENV = originalEnv;
     });
 
     afterAll(async () => {
@@ -119,7 +108,7 @@ describe("Response Contract Integration", () => {
                 statusCode: HttpStatus.CREATED,
                 data: {
                     orderId: "d0000000-0000-0000-0000-000000000001",
-                    walletAddress: devWallet,
+                    walletAddress: "0xMock",
                     assetId: "b0000000-0000-0000-0000-000000000001",
                     markets: [
                         {
@@ -145,7 +134,7 @@ describe("Response Contract Integration", () => {
 
             const { body } = await request(app.getHttpServer())
                 .post("/orders/lend/limit")
-                .set("Authorization", `Bearer ${devToken}`)
+                .set("Authorization", `Bearer ${testToken}`)
                 .send({
                     assetId: "b0000000-0000-0000-0000-000000000001",
                     amount: "1000",
@@ -170,7 +159,7 @@ describe("Response Contract Integration", () => {
                 statusCode: HttpStatus.CREATED,
                 data: {
                     orderId: "order-123",
-                    walletAddress: devWallet,
+                    walletAddress: "0xMock",
                     assetId: "asset-1",
                     markets: [],
                     timestamp: Date.now(),
@@ -191,7 +180,7 @@ describe("Response Contract Integration", () => {
 
             const { body } = await request(app.getHttpServer())
                 .post("/orders/lend/limit")
-                .set("Authorization", `Bearer ${devToken}`)
+                .set("Authorization", `Bearer ${testToken}`)
                 .send({
                     assetId: "asset-1",
                     amount: "500",
@@ -272,7 +261,7 @@ describe("Response Contract Integration", () => {
 
             const { body } = await request(app.getHttpServer())
                 .get("/portfolio/my-assets?limit=100")
-                .set("Authorization", `Bearer ${devToken}`)
+                .set("Authorization", `Bearer ${testToken}`)
                 .expect(HttpStatus.OK);
 
             // ResponseInterceptor extracts paginated response
@@ -321,7 +310,7 @@ describe("Response Contract Integration", () => {
 
             const { body } = await request(app.getHttpServer())
                 .get("/portfolio/my-assets?limit=100")
-                .set("Authorization", `Bearer ${devToken}`)
+                .set("Authorization", `Bearer ${testToken}`)
                 .expect(HttpStatus.OK);
 
             // Simulate FE: apiClient unwraps → body.data

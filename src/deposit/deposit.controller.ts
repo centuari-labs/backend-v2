@@ -21,12 +21,12 @@ import type {
 } from "./dto/deposit.dto";
 
 @Controller("deposit")
-@UseGuards(AuthGuard)
 export class DepositController {
     constructor(private readonly depositService: DepositService) {}
 
     @Post()
     @HttpCode(HttpStatus.OK)
+    @UseGuards(AuthGuard)
     async deposit(
         @Body() dto: CreateDepositDto,
         @Wallet() walletAddress: string,
@@ -46,6 +46,7 @@ export class DepositController {
     }
 
     @Get("balance/:assetId")
+    @UseGuards(AuthGuard)
     async getBalance(
         @Param("assetId", ParseUUIDPipe) assetId: string,
         @Wallet() walletAddress: string,

@@ -13,15 +13,15 @@ const BORROW_INSERT_INTERVAL_MS = Number.parseInt("3000", 10);
 const MAX_OPEN_ORDERS = Number.parseInt("10000", 10);
 const CACHE_REFRESH_INTERVAL_MS = Number.parseInt("60000", 10);
 
-const LEND_RATE_MIN = Number.parseInt("300", 10);
-const LEND_RATE_MAX = Number.parseInt("1200", 10);
-const BORROW_RATE_MIN = Number.parseInt("500", 10);
-const BORROW_RATE_MAX = Number.parseInt("1500", 10);
+const LEND_RATE_MIN = Number.parseInt("600", 10);
+const LEND_RATE_MAX = Number.parseInt("1500", 10);
+const BORROW_RATE_MIN = Number.parseInt("200", 10);
+const BORROW_RATE_MAX = Number.parseInt("800", 10);
 const LEND_QUANTITY_MIN = Number.parseFloat("500");
 const LEND_QUANTITY_MAX = Number.parseFloat("10000");
 const BORROW_QUANTITY_MIN = Number.parseFloat("100");
 const BORROW_QUANTITY_MAX = Number.parseFloat("5000");
-const MARKET_ORDER_PROBABILITY = 0.3;
+const MARKET_ORDER_PROBABILITY = 0.1;
 
 const ACCOUNTS = [
     {

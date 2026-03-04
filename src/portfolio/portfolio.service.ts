@@ -292,11 +292,7 @@ export class PortfolioService {
         }
 
         const assetIds = userAssets.map((ua) => ua.asset_id);
-        //@todo : move this into repository
-        const tokens = await this.tokenRepository
-            .createQueryBuilder('token')
-            .where('token.id IN (:...assetIds)', { assetIds })
-            .getMany();
+        const tokens = await this.portfolioRepository.getTokensByAssetIds(assetIds);
 
         const tokenMap = new Map(tokens.map((t) => [t.id, t]));
         const allPrices = this.priceService.getPrices();

@@ -50,16 +50,17 @@ BEGIN
                 CONTINUE;
             END IF;
 
-            -- Tiny human amounts (BTC max 0.0005, ETH max 0.001)
+            -- Enough collateral to support worker borrow orders ($100-$5000)
+            -- Each asset provides ~$10,000-$15,000 worth of collateral
             human_amount := CASE asset.symbol
-                WHEN 'BTC'    THEN 0.0001
-                WHEN 'ETH'    THEN 0.0005
-                WHEN 'XAUT'   THEN 0.001
-                WHEN 'SLVon'  THEN 0.005
-                WHEN 'NVDAon' THEN 0.005
-                WHEN 'AAPLon' THEN 0.005
-                WHEN 'TLTon'  THEN 0.005
-                ELSE 0.001
+                WHEN 'BTC'    THEN 0.15    -- ~$12,000 at $80k
+                WHEN 'ETH'    THEN 5.0     -- ~$15,000 at $3k
+                WHEN 'XAUT'   THEN 5.0     -- ~$15,000 at $3k
+                WHEN 'SLVon'  THEN 500.0   -- ~$15,000 at $30
+                WHEN 'NVDAon' THEN 100.0   -- ~$12,000 at $120
+                WHEN 'AAPLon' THEN 60.0    -- ~$12,000 at $200
+                WHEN 'TLTon'  THEN 150.0   -- ~$12,000 at $80
+                ELSE 10.0
             END;
 
             -- Convert to base units: human_amount * 10^decimals

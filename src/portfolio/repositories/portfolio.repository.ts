@@ -1,7 +1,8 @@
 import { Injectable } from "@nestjs/common";
 import { Portfolio } from "../entities/portfolio.entity";
-import { DataSource, Repository } from "typeorm";
+import { DataSource, In, Repository } from "typeorm";
 import { OrderSide, OrderStatus } from "../../orders/constants/order.constants";
+import { Token } from "../../tokens/entities/token.entity";
 
 export interface RawPosition {
     position_id: string;
@@ -199,6 +200,12 @@ export class PortfolioRepository extends Repository<Portfolio> {
             data,
             total: Number.parseInt(countResult[0]?.count || '0', 10)
         };
+    }
+
+    async getTokensByAssetIds(assetIds: string[]): Promise<Token[]> {
+        return this.dataSource.getRepository(Token).find({
+            where: { id: In(assetIds) },
+        });
     }
 
     async setAssetAsCollateral(accountId: string, assetIds: string[], isCollateral: boolean) {

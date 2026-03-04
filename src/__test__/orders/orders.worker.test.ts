@@ -6,7 +6,6 @@ import { OrderRepository } from '../../orders/repositories/order.repository';
 import { OrdersService } from '../../orders/orders.service';
 import { Market } from '../../market/entities/market.entity';
 import { Token } from '../../tokens/entities/token.entity';
-import { OrderStatus } from '../../orders/constants/order.constants';
 import { createMockMarket, createMockToken, MOCK_IDS } from '../helpers/mock-factories';
 import {
     createMockOrderRepository,
@@ -122,9 +121,8 @@ describe('OrdersWorker', () => {
         });
     });
 
-    describe('createLendOrder', () => {
+    describe('createLendOrders', () => {
         beforeEach(async () => {
-            // Populate the cache
             const market = createMockMarket();
             const token = createMockToken();
             marketRepository.find.mockResolvedValue([market]);
@@ -138,55 +136,43 @@ describe('OrdersWorker', () => {
             tokenRepository.find.mockResolvedValue([]);
             await worker.refreshAssetMarketCache();
 
-            await worker.createLendOrder();
+            await worker.createLendOrders();
 
             expect(ordersService.createLendLimitOrder).not.toHaveBeenCalled();
             expect(ordersService.createLendMarketOrder).not.toHaveBeenCalled();
         });
 
-        it('should skip when open orders >= MAX_OPEN_ORDERS', async () => {
-            orderRepository.count.mockResolvedValue(10000);
-
-            await worker.createLendOrder();
-
-            expect(ordersService.createLendLimitOrder).not.toHaveBeenCalled();
-            expect(ordersService.createLendMarketOrder).not.toHaveBeenCalled();
-        });
-
-        it('should create a lend order (limit or market) when under max open orders', async () => {
-            orderRepository.count.mockResolvedValue(0);
+        it('should create a lend order for each loan token', async () => {
             ordersService.createLendLimitOrder.mockResolvedValue({} as any);
             ordersService.createLendMarketOrder.mockResolvedValue({} as any);
 
-            await worker.createLendOrder();
+            await worker.createLendOrders();
 
             const limitCalls = ordersService.createLendLimitOrder.mock.calls.length;
             const marketCalls = ordersService.createLendMarketOrder.mock.calls.length;
-            expect(limitCalls + marketCalls).toBe(1);
+            expect(limitCalls + marketCalls).toBe(1); // 1 asset in cache
             expect(ordersService.createBorrowLimitOrder).not.toHaveBeenCalled();
             expect(ordersService.createBorrowMarketOrder).not.toHaveBeenCalled();
         });
 
         it('should handle creation error gracefully', async () => {
-            orderRepository.count.mockResolvedValue(0);
             ordersService.createLendLimitOrder.mockRejectedValue(new Error('Creation failed'));
             ordersService.createLendMarketOrder.mockRejectedValue(new Error('Creation failed'));
 
-            await expect(worker.createLendOrder()).resolves.not.toThrow();
+            await expect(worker.createLendOrders()).resolves.not.toThrow();
         });
 
         it('should skip when disabled', async () => {
             process.env.NODE_ENV = 'production';
 
-            await worker.createLendOrder();
+            await worker.createLendOrders();
 
-            expect(orderRepository.count).not.toHaveBeenCalled();
+            expect(ordersService.createLendLimitOrder).not.toHaveBeenCalled();
         });
     });
 
-    describe('createBorrowOrder', () => {
+    describe('createBorrowOrders', () => {
         beforeEach(async () => {
-            // Populate the cache
             const market = createMockMarket();
             const token = createMockToken();
             marketRepository.find.mockResolvedValue([market]);
@@ -200,49 +186,38 @@ describe('OrdersWorker', () => {
             tokenRepository.find.mockResolvedValue([]);
             await worker.refreshAssetMarketCache();
 
-            await worker.createBorrowOrder();
+            await worker.createBorrowOrders();
 
             expect(ordersService.createBorrowLimitOrder).not.toHaveBeenCalled();
             expect(ordersService.createBorrowMarketOrder).not.toHaveBeenCalled();
         });
 
-        it('should skip when open orders >= MAX_OPEN_ORDERS', async () => {
-            orderRepository.count.mockResolvedValue(10000);
-
-            await worker.createBorrowOrder();
-
-            expect(ordersService.createBorrowLimitOrder).not.toHaveBeenCalled();
-            expect(ordersService.createBorrowMarketOrder).not.toHaveBeenCalled();
-        });
-
-        it('should create a borrow order (limit or market) when under max open orders', async () => {
-            orderRepository.count.mockResolvedValue(0);
+        it('should create a borrow order for each loan token', async () => {
             ordersService.createBorrowLimitOrder.mockResolvedValue({} as any);
             ordersService.createBorrowMarketOrder.mockResolvedValue({} as any);
 
-            await worker.createBorrowOrder();
+            await worker.createBorrowOrders();
 
             const limitCalls = ordersService.createBorrowLimitOrder.mock.calls.length;
             const marketCalls = ordersService.createBorrowMarketOrder.mock.calls.length;
-            expect(limitCalls + marketCalls).toBe(1);
+            expect(limitCalls + marketCalls).toBe(1); // 1 asset in cache
             expect(ordersService.createLendLimitOrder).not.toHaveBeenCalled();
             expect(ordersService.createLendMarketOrder).not.toHaveBeenCalled();
         });
 
         it('should handle creation error gracefully', async () => {
-            orderRepository.count.mockResolvedValue(0);
             ordersService.createBorrowLimitOrder.mockRejectedValue(new Error('Creation failed'));
             ordersService.createBorrowMarketOrder.mockRejectedValue(new Error('Creation failed'));
 
-            await expect(worker.createBorrowOrder()).resolves.not.toThrow();
+            await expect(worker.createBorrowOrders()).resolves.not.toThrow();
         });
 
         it('should skip when disabled', async () => {
             process.env.NODE_ENV = 'production';
 
-            await worker.createBorrowOrder();
+            await worker.createBorrowOrders();
 
-            expect(orderRepository.count).not.toHaveBeenCalled();
+            expect(ordersService.createBorrowLimitOrder).not.toHaveBeenCalled();
         });
     });
 });

@@ -119,87 +119,96 @@ export class PortfolioRepository extends Repository<Portfolio> {
         page = 1,
         limit = 10
     ): Promise<{ data: RawPosition[]; total: number }> {
-        const offset = (page - 1) * limit;
         const includeLend = !positionType || positionType === 'LEND';
         const includeBorrow = !positionType || positionType === 'BORROW';
 
-        const queries: string[] = [];
-        const countQueries: string[] = [];
+        const lendResults: RawPosition[] = [];
+        const borrowResults: RawPosition[] = [];
+        let lendCount = 0;
+        let borrowCount = 0;
 
-        //@todo : use query builder instead of raw queries
-        //@todo : get rate base on the shares
         if (includeLend) {
-            queries.push(`
-                SELECT
-                    lp.id AS position_id,
-                    lp.asset_id AS asset_id,
-                    'LEND' AS side,
-                    '0' AS rate, -- Placeholder: should use lp.rate if exists
-                    lp.amount AS quantity,
-                    t.symbol AS symbol,
-                    t.name AS name,
-                    t.token_address AS token_address,
-                    t.image_url AS image_url,
-                    COALESCE(t.decimals, 0) AS decimals,
-                    m.maturity AS maturity,
-                    lp.created_at AS created_at
-                FROM lend_positions lp
-                INNER JOIN assets t ON lp.asset_id = t.id
-                LEFT JOIN markets m ON lp.market_id = m.id
-                WHERE lp.account_id = $1 AND lp.amount > 0
-            `);
-            countQueries.push(`
-                SELECT id FROM lend_positions WHERE account_id = $1 AND amount > 0
-            `);
+            const lendQuery = this.dataSource.createQueryBuilder()
+                .select('lp.id', 'position_id')
+                .addSelect('lp.asset_id', 'asset_id')
+                .addSelect("'LEND'", 'side')
+                .addSelect(
+                    'CASE WHEN lp.amount > 0 THEN ((lp.shares / lp.amount - 1) * 100) ELSE 0 END',
+                    'rate',
+                )
+                .addSelect('lp.amount', 'quantity')
+                .addSelect('t.symbol', 'symbol')
+                .addSelect('t.name', 'name')
+                .addSelect('t.token_address', 'token_address')
+                .addSelect('t.image_url', 'image_url')
+                .addSelect('COALESCE(t.decimals, 0)', 'decimals')
+                .addSelect('m.maturity', 'maturity')
+                .addSelect('lp.created_at', 'created_at')
+                .from('lend_positions', 'lp')
+                .innerJoin('assets', 't', 'lp.asset_id = t.id')
+                .leftJoin('markets', 'm', 'lp.market_id = m.id')
+                .where('lp.account_id = :accountId', { accountId })
+                .andWhere('lp.amount > 0');
+
+            const [rows, countResult] = await Promise.all([
+                lendQuery.getRawMany(),
+                this.dataSource.createQueryBuilder()
+                    .select('COUNT(*)', 'count')
+                    .from('lend_positions', 'lp')
+                    .where('lp.account_id = :accountId', { accountId })
+                    .andWhere('lp.amount > 0')
+                    .getRawOne(),
+            ]);
+
+            lendResults.push(...rows);
+            lendCount = Number.parseInt(countResult?.count || '0', 10);
         }
 
-        //@todo : get rate base on shares
         if (includeBorrow) {
-            queries.push(`
-                SELECT
-                    bp.id AS position_id,
-                    bp.asset_id AS asset_id,
-                    'BORROW' AS side,
-                    '0' AS rate, -- Placeholder
-                    bp.debt AS quantity,
-                    t.symbol AS symbol,
-                    t.name AS name,
-                    t.token_address AS token_address,
-                    t.image_url AS image_url,
-                    COALESCE(t.decimals, 0) AS decimals,
-                    m.maturity AS maturity,
-                    bp.created_at AS created_at
-                FROM borrow_positions bp
-                INNER JOIN assets t ON bp.asset_id = t.id
-                LEFT JOIN markets m ON bp.market_id = m.id
-                WHERE bp.account_id = $1 AND bp.debt > 0
-            `);
-            countQueries.push(`
-                SELECT id FROM borrow_positions WHERE account_id = $1 AND debt > 0
-            `);
+            const borrowQuery = this.dataSource.createQueryBuilder()
+                .select('bp.id', 'position_id')
+                .addSelect('bp.asset_id', 'asset_id')
+                .addSelect("'BORROW'", 'side')
+                .addSelect(
+                    'CASE WHEN bp.amount > 0 THEN ((bp.debt / bp.amount - 1) * 100) ELSE 0 END',
+                    'rate',
+                )
+                .addSelect('bp.debt', 'quantity')
+                .addSelect('t.symbol', 'symbol')
+                .addSelect('t.name', 'name')
+                .addSelect('t.token_address', 'token_address')
+                .addSelect('t.image_url', 'image_url')
+                .addSelect('COALESCE(t.decimals, 0)', 'decimals')
+                .addSelect('m.maturity', 'maturity')
+                .addSelect('bp.created_at', 'created_at')
+                .from('borrow_positions', 'bp')
+                .innerJoin('assets', 't', 'bp.asset_id = t.id')
+                .leftJoin('markets', 'm', 'bp.market_id = m.id')
+                .where('bp.account_id = :accountId', { accountId })
+                .andWhere('bp.debt > 0');
+
+            const [rows, countResult] = await Promise.all([
+                borrowQuery.getRawMany(),
+                this.dataSource.createQueryBuilder()
+                    .select('COUNT(*)', 'count')
+                    .from('borrow_positions', 'bp')
+                    .where('bp.account_id = :accountId', { accountId })
+                    .andWhere('bp.debt > 0')
+                    .getRawOne(),
+            ]);
+
+            borrowResults.push(...rows);
+            borrowCount = Number.parseInt(countResult?.count || '0', 10);
         }
 
-        if (queries.length === 0) {
-            return { data: [], total: 0 };
-        }
+        const combined = [...lendResults, ...borrowResults]
+            .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
-        const finalQuery = `
-            SELECT * FROM (
-                ${queries.join(' UNION ALL ')}
-            ) combined_positions
-            ORDER BY created_at DESC 
-            LIMIT $2 OFFSET $3
-        `;
+        const total = lendCount + borrowCount;
+        const offset = (page - 1) * limit;
+        const data = combined.slice(offset, offset + limit);
 
-        const countQuery = `SELECT COUNT(*) as count FROM (${countQueries.join(' UNION ALL ')}) as combined_count`;
-
-        const data = await this.dataSource.query(finalQuery, [accountId, limit, offset]);
-        const countResult = await this.dataSource.query(countQuery, [accountId]);
-
-        return {
-            data,
-            total: Number.parseInt(countResult[0]?.count || '0', 10)
-        };
+        return { data, total };
     }
 
     async getTokensByAssetIds(assetIds: string[]): Promise<Token[]> {

@@ -133,7 +133,7 @@ export class PortfolioRepository extends Repository<Portfolio> {
                 .addSelect('lp.asset_id', 'asset_id')
                 .addSelect("'LEND'", 'side')
                 .addSelect(
-                    'CASE WHEN lp.amount > 0 THEN (lp.shares / lp.amount - 1) ELSE 0 END',
+                    'CASE WHEN lp.amount > 0 THEN ((lp.shares / lp.amount - 1) * 100) ELSE 0 END',
                     'rate',
                 )
                 .addSelect('lp.amount', 'quantity')
@@ -170,7 +170,7 @@ export class PortfolioRepository extends Repository<Portfolio> {
                 .addSelect('bp.asset_id', 'asset_id')
                 .addSelect("'BORROW'", 'side')
                 .addSelect(
-                    'CASE WHEN bp.amount > 0 THEN (bp.debt / bp.amount - 1) ELSE 0 END',
+                    'CASE WHEN bp.amount > 0 THEN ((bp.debt / bp.amount - 1) * 100) ELSE 0 END',
                     'rate',
                 )
                 .addSelect('bp.debt', 'quantity')

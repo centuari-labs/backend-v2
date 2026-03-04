@@ -39,3 +39,5 @@ export class MarketResponseDto {
     active_loans: string;
     markets: MarketItemDto[];
 }
+
+export class MarketDetailResponseDto extends MarketItemDto { }

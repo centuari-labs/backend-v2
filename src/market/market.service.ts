@@ -1,5 +1,5 @@
-import { Injectable } from '@nestjs/common';
-import { MarketResponseDto } from './dto/market.dto';
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { MarketDetailResponseDto, MarketResponseDto } from './dto/market.dto';
 import { PriceService } from '../price/price.service';
 
 import { OrderRepository } from '../orders/repositories/order.repository';
@@ -98,6 +98,39 @@ export class MarketService {
             total_deposit: totalDepositUSD.toFixed(2),
             active_loans: activeLoansUSD.toFixed(2),
             markets,
+        };
+    }
+
+    async getMarketDetail(id: string): Promise<MarketDetailResponseDto> {
+        const market = await this.marketRepository.findOne({
+            where: { id },
+            relations: ['asset'],
+        });
+
+        if (!market) {
+            throw new NotFoundException(`Market with ID ${id} not found`);
+        }
+
+        const rateMap = await this.orderRepository.getBestRates();
+        const rates = rateMap.get(market.assetId) || { borrow: 0, lend: 0 };
+
+        return {
+            asset: {
+                id: market.asset.id,
+                name: market.asset.name,
+                symbol: market.asset.symbol,
+                decimals: market.asset.decimals ?? null,
+                imageUrl: market.asset.imageUrl ?? null,
+            },
+            market: {
+                market_id: market.id,
+                maturity: market.maturity
+                    ? Math.floor(new Date(market.maturity).getTime() / 1000)
+                    : null,
+            },
+            borrow_rate: toPercentage(rates.borrow),
+            lend_rate: toPercentage(rates.lend),
+            collateral_factor: toPercentage(market.asset.averageLTV),
         };
     }
 

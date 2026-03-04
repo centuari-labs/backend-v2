@@ -4,7 +4,12 @@
 
 -- +goose Up
 
--- Step 1: Create ENUM types
+-- Ensure types do not already exist
+DROP TYPE IF EXISTS order_side;
+DROP TYPE IF EXISTS order_type;
+DROP TYPE IF EXISTS order_status;
+DROP TYPE IF EXISTS settlement_batch_status;
+
 CREATE TYPE order_side AS ENUM ('LEND', 'BORROW');
 CREATE TYPE order_type AS ENUM ('MARKET', 'LIMIT');
 CREATE TYPE order_status AS ENUM ('OPEN', 'FILLED', 'CANCELLED', 'PARTIALLY_FILLED');

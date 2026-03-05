@@ -20,15 +20,15 @@ DECLARE
 
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM accounts WHERE user_wallet = test_wallet) THEN
-        INSERT INTO accounts (privy_user_id, user_wallet)
-        VALUES ('did:privy:cm1234567890', test_wallet);
+        INSERT INTO accounts (id, privy_user_id, user_wallet)
+        VALUES (gen_random_uuid(), 'did:privy:cm1234567890', test_wallet);
     END IF;
     SELECT id INTO test_account_id FROM accounts WHERE user_wallet = test_wallet;
 
     -- Create a counterparty for matches
     IF NOT EXISTS (SELECT 1 FROM accounts WHERE user_wallet = '0x0000000000000000000000000000000000000001') THEN
-        INSERT INTO accounts (privy_user_id, user_wallet)
-        VALUES ('did:privy:counterparty', '0x0000000000000000000000000000000000000001');
+        INSERT INTO accounts (id, privy_user_id, user_wallet)
+        VALUES (gen_random_uuid(), 'did:privy:counterparty', '0x0000000000000000000000000000000000000001');
     END IF;
     SELECT id INTO counterparty_account_id FROM accounts WHERE user_wallet = '0x0000000000000000000000000000000000000001';
 

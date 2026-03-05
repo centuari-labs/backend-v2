@@ -3,8 +3,8 @@ BEGIN;
 
 -- coingecko_id: CoinGecko coin ID for live prices; NULL for testnet-only tokens
 -- decimals: Token decimal places for amount conversion (e.g. 6 for USDC, 18 for ETH)
-INSERT INTO assets (name, symbol, token_address, is_loan_token, chain_id, coingecko_id, decimals, image_url)
-SELECT v.name, v.symbol, v.token_address, v.is_loan_token, v.chain_id, v.coingecko_id, v.decimals, v.image_url
+INSERT INTO assets (id, name, symbol, token_address, is_loan_token, chain_id, coingecko_id, decimals, image_url)
+SELECT gen_random_uuid(), v.name, v.symbol, v.token_address, v.is_loan_token, v.chain_id, v.coingecko_id, v.decimals, v.image_url
 FROM (VALUES
     ('Bitcoin',                                                'BTC',    '0xc2EFd38075d80e0bEfa7F4343c1102344B9aD44c', false, 421614, 'bitcoin',                                          8,  '/tokens/btc.svg'),
     ('Ethereum',                                               'ETH',    '0x80E70a7949f9657729d09e144f65812b90E16Cb4', false, 421614, 'ethereum',                                         18, '/tokens/eth.svg'),
@@ -22,8 +22,9 @@ WHERE NOT EXISTS (
     SELECT 1 FROM assets a WHERE a.symbol = v.symbol AND a.chain_id = v.chain_id::NUMERIC
 );
 
-INSERT INTO risk (collateral_token_id, loan_token_id, ltv, lt, lp)
+INSERT INTO risk (id, collateral_token_id, loan_token_id, ltv, lt, lp)
 SELECT 
+    gen_random_uuid(),
     collateral.id,
     loan.id,
     CASE collateral.symbol

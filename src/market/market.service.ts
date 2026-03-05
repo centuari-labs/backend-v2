@@ -71,7 +71,7 @@ export class MarketService {
 
         const markets = assets.map(asset => {
             const rates = rateMap.get(asset.id) || { borrow: 0, lend: 0 };
-            const earliest = earliestByAsset.get(asset.id);
+            const earliest = earliestByAsset.get(asset.id); //@todo : need to make sure only the closest earliest market is returned from current date
             return {
                 asset: {
                     id: asset.id,

@@ -4,12 +4,16 @@ import { AppModule } from "./app.module";
 import { AllExceptionsFilter } from "./common/filters/http-exception.filter";
 import { ResponseInterceptor } from "./common/interceptors/response.interceptor";
 import { runMigrations } from "./core/database/scripts/run-migration";
+import { runSeeds } from "./core/database/scripts/run-seed";
 
 async function bootstrap() {
-    //@todo : make testnet token seed always run when NODE_ENV is development
-    //@todo : make testnet seed data always run when NODE_ENV is development
-    //@todo : make production token seed always run when NODE_ENV is production
-    await runMigrations();
+    if (process.env.MIGRATIONS_ON_START === "true") {
+        await runMigrations();
+    }
+
+    if (process.env.SEED_ON_START === "true") {
+        await runSeeds();
+    }
 
     const app = await NestFactory.create(AppModule);
 

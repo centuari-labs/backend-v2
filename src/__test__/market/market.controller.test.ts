@@ -16,12 +16,19 @@ describe('MarketController', () => {
             imageUrl: 'http://image.url',
         },
         market: {
-            market_id: 'market-uuid',
-            maturity: 1700000000,
+            market_id: 'market-uuid-1',
+            maturity: 1711929600, // 1 Apr
         },
         borrow_rate: 5.5,
         lend_rate: 4.2,
         collateral_factor: 75,
+        total_deposit: 100000.00,
+        active_loans: 50000.00,
+        upcoming_maturities: [
+            { market_id: 'market-uuid-1', maturity: 1711929600 },
+            { market_id: 'market-uuid-2', maturity: 1714521600 },
+            { market_id: 'market-uuid-3', maturity: 1717200000 },
+        ],
     };
 
     beforeEach(async () => {
@@ -43,19 +50,19 @@ describe('MarketController', () => {
     });
 
     it('should return market detail when found', async () => {
-        const marketId = '550e8400-e29b-41d4-a716-446655440000';
-        jest.spyOn(service, 'getMarketDetail').mockResolvedValue(mockMarketDetail);
+        const assetId = '550e8400-e29b-41d4-a716-446655440000';
+        jest.spyOn(service, 'getMarketDetail').mockResolvedValue(mockMarketDetail as any);
 
-        const result = await controller.getMarketDetail(marketId);
+        const result = await controller.getMarketDetail(assetId);
 
         expect(result).toEqual(mockMarketDetail);
-        expect(service.getMarketDetail).toHaveBeenCalledWith(marketId);
+        expect(service.getMarketDetail).toHaveBeenCalledWith(assetId);
     });
 
-    it('should throw NotFoundException when market is not found', async () => {
-        const marketId = '550e8400-e29b-41d4-a716-446655440001';
+    it('should throw NotFoundException when asset is not found', async () => {
+        const assetId = '550e8400-e29b-41d4-a716-446655440001';
         jest.spyOn(service, 'getMarketDetail').mockRejectedValue(new NotFoundException());
 
-        await expect(controller.getMarketDetail(marketId)).rejects.toThrow(NotFoundException);
+        await expect(controller.getMarketDetail(assetId)).rejects.toThrow(NotFoundException);
     });
 });

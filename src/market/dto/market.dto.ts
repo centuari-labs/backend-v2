@@ -40,4 +40,11 @@ export class MarketResponseDto {
     markets: MarketItemDto[];
 }
 
-export class MarketDetailResponseDto extends MarketItemDto { }
+export class MarketDetailResponseDto extends MarketItemDto {
+    total_deposit: string;
+    active_loans: string;
+    upcoming_maturities: {
+        market_id: string;
+        maturity: number;
+    }[];
+}

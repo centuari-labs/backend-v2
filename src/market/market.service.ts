@@ -101,36 +101,53 @@ export class MarketService {
         };
     }
 
-    async getMarketDetail(id: string): Promise<MarketDetailResponseDto> {
-        const market = await this.marketRepository.findOne({
-            where: { id },
-            relations: ['asset'],
-        });
-
-        if (!market) {
-            throw new NotFoundException(`Market with ID ${id} not found`);
+    async getMarketDetail(assetId: string): Promise<MarketDetailResponseDto> {
+        const asset = await this.tokensRepository.findByAssetId(assetId);
+        if (!asset) {
+            throw new NotFoundException(`Asset with ID ${assetId} not found`);
         }
 
+        const price = await this.priceService.getPrice(assetId);
         const rateMap = await this.orderRepository.getBestRates();
-        const rates = rateMap.get(market.assetId) || { borrow: 0, lend: 0 };
+        const rates = rateMap.get(assetId) || { borrow: 0, lend: 0 };
+
+        const rawDeposit = await this.marketRepository.getSumDepositByAssetId(assetId);
+        const rawLoans = await this.marketRepository.getSumLoansByAssetId(assetId);
+
+        let totalDepositUSD = 0;
+        let activeLoansUSD = 0;
+
+        if (price !== null && asset.decimals) {
+            totalDepositUSD = (Number.parseFloat(rawDeposit) / Math.pow(10, asset.decimals)) * price;
+            activeLoansUSD = (Number.parseFloat(rawLoans) / Math.pow(10, asset.decimals)) * price;
+        }
+
+        const upcomingMarkets = await this.marketRepository.getUpcomingMarkets(assetId, 3);
+        const earliestMarket = upcomingMarkets[0] || null;
 
         return {
             asset: {
-                id: market.asset.id,
-                name: market.asset.name,
-                symbol: market.asset.symbol,
-                decimals: market.asset.decimals ?? null,
-                imageUrl: market.asset.imageUrl ?? null,
+                id: asset.id,
+                name: asset.name,
+                symbol: asset.symbol,
+                decimals: asset.decimals ?? null,
+                imageUrl: asset.imageUrl ?? null,
             },
             market: {
-                market_id: market.id,
-                maturity: market.maturity
-                    ? Math.floor(new Date(market.maturity).getTime() / 1000)
+                market_id: earliestMarket?.id ?? null,
+                maturity: earliestMarket?.maturity
+                    ? Math.floor(new Date(earliestMarket.maturity).getTime() / 1000)
                     : null,
             },
             borrow_rate: toPercentage(rates.borrow),
             lend_rate: toPercentage(rates.lend),
-            collateral_factor: toPercentage(market.asset.averageLTV),
+            collateral_factor: toPercentage(asset.averageLTV),
+            total_deposit: totalDepositUSD.toFixed(2),
+            active_loans: activeLoansUSD.toFixed(2),
+            upcoming_maturities: upcomingMarkets.map(m => ({
+                market_id: m.id,
+                maturity: Math.floor(new Date(m.maturity).getTime() / 1000),
+            })),
         };
     }
 

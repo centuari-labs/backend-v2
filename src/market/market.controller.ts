@@ -11,10 +11,10 @@ export class MarketController {
         return this.marketService.getMarketSnapshot();
     }
 
-    @Get(':id')
+    @Get(':assetId')
     async getMarketDetail(
-        @Param('id', ParseUUIDPipe) id: string,
+        @Param('assetId', ParseUUIDPipe) assetId: string,
     ): Promise<MarketDetailResponseDto> {
-        return this.marketService.getMarketDetail(id);
+        return this.marketService.getMarketDetail(assetId);
     }
 }

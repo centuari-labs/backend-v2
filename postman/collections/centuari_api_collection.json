@@ -561,36 +561,36 @@
         },
         {
           "name": "Market detail",
-          "id": "060b580b-035e-42bc-abc7-6debf6d6f0e3",
+          "id": "6c259971-85d0-4b0e-a9a5-f4c7a9947f70",
           "request": {
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/market/a6f7b1a3-b50a-4489-b249-fa9e0941ed4b",
+              "raw": "{{baseUrl}}/market/ac7ae153-ad3f-44aa-96e7-44c8d22e84ab",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "market",
-                "a6f7b1a3-b50a-4489-b249-fa9e0941ed4b"
+                "ac7ae153-ad3f-44aa-96e7-44c8d22e84ab"
               ]
             }
           },
           "response": [
             {
-              "id": "7fe89b48-686c-4acd-8de0-21453d172161",
+              "id": "6b2274eb-126d-4c4b-8dea-59dc0ee59698",
               "name": "200 OK",
               "originalRequest": {
                 "method": "GET",
                 "header": [],
                 "url": {
-                  "raw": "{{baseUrl}}/market/a6f7b1a3-b50a-4489-b249-fa9e0941ed4b",
+                  "raw": "{{baseUrl}}/market/ac7ae153-ad3f-44aa-96e7-44c8d22e84ab",
                   "host": [
                     "{{baseUrl}}"
                   ],
                   "path": [
                     "market",
-                    "a6f7b1a3-b50a-4489-b249-fa9e0941ed4b"
+                    "ac7ae153-ad3f-44aa-96e7-44c8d22e84ab"
                   ]
                 }
               },
@@ -612,15 +612,15 @@
                 },
                 {
                   "key": "Content-Length",
-                  "value": "309"
+                  "value": "616"
                 },
                 {
                   "key": "ETag",
-                  "value": "W/\"135-YzHWsTPNdEZY32bAncO2ysdPl98\""
+                  "value": "W/\"268-RmPPdCMtRaljo5AnifuTvBk0u2s\""
                 },
                 {
                   "key": "Date",
-                  "value": "Wed, 04 Mar 2026 18:26:13 GMT"
+                  "value": "Thu, 05 Mar 2026 11:20:27 GMT"
                 },
                 {
                   "key": "Connection",
@@ -632,8 +632,8 @@
                 }
               ],
               "cookie": [],
-              "responseTime": "2026-03-04T18:27:52.065Z",
-              "body": "{\n    \"statusCode\": 200,\n    \"data\": {\n        \"asset\": {\n            \"id\": \"ac7ae153-ad3f-44aa-96e7-44c8d22e84ab\",\n            \"name\": \"USD Coin\",\n            \"symbol\": \"USDC\",\n            \"decimals\": 6,\n            \"imageUrl\": \"/tokens/usdc-icon.svg\"\n        },\n        \"market\": {\n            \"market_id\": \"a6f7b1a3-b50a-4489-b249-fa9e0941ed4b\",\n            \"maturity\": 1777593600\n        },\n        \"borrow_rate\": 0.049,\n        \"lend_rate\": 0.0011,\n        \"collateral_factor\": 70\n    }\n}"
+              "responseTime": "2026-03-05T11:22:27.054Z",
+              "body": "{\n    \"statusCode\": 200,\n    \"data\": {\n        \"asset\": {\n            \"id\": \"ac7ae153-ad3f-44aa-96e7-44c8d22e84ab\",\n            \"name\": \"USD Coin\",\n            \"symbol\": \"USDC\",\n            \"decimals\": 6,\n            \"imageUrl\": \"/tokens/usdc-icon.svg\"\n        },\n        \"market\": {\n            \"market_id\": \"e5cab48f-ba9b-448f-b1eb-0947cb2e1078\",\n            \"maturity\": 1772323200\n        },\n        \"borrow_rate\": 0.049,\n        \"lend_rate\": 0.0011,\n        \"collateral_factor\": 70,\n        \"total_deposit\": 49.9951,\n        \"active_loans\": 499.95099999999996,\n        \"upcoming_maturities\": [\n            {\n                \"market_id\": \"e5cab48f-ba9b-448f-b1eb-0947cb2e1078\",\n                \"maturity\": 1772323200\n            },\n            {\n                \"market_id\": \"8583ad26-1273-46d0-9aa8-51149b104b85\",\n                \"maturity\": 1775001600\n            },\n            {\n                \"market_id\": \"a6f7b1a3-b50a-4489-b249-fa9e0941ed4b\",\n                \"maturity\": 1777593600\n            }\n        ]\n    }\n}"
             }
           ]
         }

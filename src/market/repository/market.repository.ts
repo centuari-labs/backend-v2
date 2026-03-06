@@ -101,10 +101,11 @@ export class MarketRepositories extends Repository<Market> {
         assetId: string,
         limit: number,
     ): Promise<Market[]> {
-        return this.find({
-            where: { assetId },
-            order: { maturity: "ASC" },
-            take: limit,
-        });
+        return this.createQueryBuilder("market")
+            .where("market.asset_id = :assetId", { assetId })
+            .andWhere("market.maturity > :now", { now: new Date() })
+            .orderBy("market.maturity", "ASC")
+            .take(limit)
+            .getMany();
     }
 }

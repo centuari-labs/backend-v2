@@ -40,7 +40,15 @@ export class MarketResponseDto {
     markets: MarketItemDto[];
 }
 
-export class MarketDetailResponseDto extends MarketItemDto {
+export class MarketDetailResponseDto {
+    asset: {
+        id: string;
+        name: string;
+        symbol: string;
+        decimals: number | null;
+        imageUrl: string | null;
+    };
+    collateral_factor: number;
     total_deposit: string;
     active_loans: string;
     upcoming_maturities: {

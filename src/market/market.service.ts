@@ -123,8 +123,6 @@ export class MarketService {
         }
 
         const upcomingMarkets = await this.marketRepository.getUpcomingMarkets(assetId, 3);
-        const earliestMarket = upcomingMarkets[0] || null;
-
         return {
             asset: {
                 id: asset.id,
@@ -133,14 +131,6 @@ export class MarketService {
                 decimals: asset.decimals ?? null,
                 imageUrl: asset.imageUrl ?? null,
             },
-            market: {
-                market_id: earliestMarket?.id ?? null,
-                maturity: earliestMarket?.maturity
-                    ? Math.floor(new Date(earliestMarket.maturity).getTime() / 1000)
-                    : null,
-            },
-            borrow_rate: toPercentage(rates.borrow),
-            lend_rate: toPercentage(rates.lend),
             collateral_factor: toPercentage(asset.averageLTV),
             total_deposit: totalDepositUSD.toFixed(2),
             active_loans: activeLoansUSD.toFixed(2),

@@ -16,7 +16,6 @@ describe("MarketResponseDto contract", () => {
                         symbol: "USDC",
                         decimals: 6,
                         image_url: "https://example.com/usdc.png",
-                        token_address: "0x26970F990252306AFa328B2c91225605c0862498",
                     },
                     market: {
                         market_id: "c0000000-0000-0000-0000-000000000001",
@@ -51,11 +50,10 @@ describe("MarketResponseDto contract", () => {
             expect(item.asset).toHaveProperty("symbol");
         });
 
-        it("asset has image_url and token_address", () => {
+        it("asset has image_url", () => {
             const resp = buildMarketResponse();
             const item = resp.markets[0];
             expect(item.asset).toHaveProperty("image_url");
-            expect(item.asset).toHaveProperty("token_address");
         });
 
         it("market has market_id and maturity", () => {

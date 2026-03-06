@@ -214,4 +214,16 @@ export class ViemService implements OnModuleInit {
         const client = this.getPublicClient(chainId);
         return await client.waitForTransactionReceipt({ hash });
     }
+
+    async getTransactionReceipt(chainId: number, hash: Hash): Promise<TransactionReceipt> {
+        const client = this.getPublicClient(chainId);
+        try {
+            return await client.getTransactionReceipt({ hash });
+        } catch (error) {
+            this.logger.error(
+                `Failed to get transaction receipt for ${hash} on chain ${chainId}: ${(error as Error).message}`,
+            );
+            throw error;
+        }
+    }
 }

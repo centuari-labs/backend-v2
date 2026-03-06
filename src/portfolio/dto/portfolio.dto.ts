@@ -64,6 +64,8 @@ export class MyAssetItemDto {
     amountInUsd: number;
     isCollateral: boolean;
     imageUrl?: string | null;
+    ltv: number;
+    liquidationThreshold: number;
 }
 
 export class MyAssetsResponseDto {

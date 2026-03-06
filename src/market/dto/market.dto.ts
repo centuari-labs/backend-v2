@@ -7,7 +7,7 @@ export class MarketItemDto {
         name: string;
         symbol: string;
         decimals?: number | null;
-        imageUrl?: string | null;
+        image_url?: string | null;
     };
     /**
      * Single earliest-maturity market for this asset (market_id and maturity), or null if none.

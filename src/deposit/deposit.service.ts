@@ -62,6 +62,7 @@ export class DepositService {
 
     async getDepositTokens(): Promise<DepositTokenDto[]> {
         const tokens = await this.tokensRepository.findDepositTokens();
+
         return tokens.map((t) => ({
             id: t.id,
             symbol: t.symbol,

@@ -46,9 +46,9 @@ program
     .action((name) => exec("create-seed", [name]));
 
 program
-    .command("seed:run")
-    .description("Run all seed files")
-    .action(() => exec("run-seed"));
+    .command("seed:run [target]")
+    .description("Run seed files (optionally filtered by target)")
+    .action((target) => exec("run-seed", target ? [target] : []));
 
 program
     .command("reset")

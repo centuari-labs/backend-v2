@@ -290,8 +290,8 @@ describe('PortfolioService', () => {
 
             portfolioRepositoryMock.getUserAssets.mockResolvedValue({
                 data: [
-                    { asset_id: 'token-uuid-001', amount: '1.5', is_collateral: true },
-                    { asset_id: 'token-uuid-002', amount: '0.25', is_collateral: false },
+                    { asset_id: 'token-uuid-001', amount: '1500000000000000000', is_collateral: true },
+                    { asset_id: 'token-uuid-002', amount: '25000000', is_collateral: false },
                 ],
                 total: 2,
             });
@@ -367,7 +367,7 @@ describe('PortfolioService', () => {
             orderRepositoryMock.findAccountByWallet.mockResolvedValue({ id: mockAccountId });
 
             portfolioRepositoryMock.getUserAssets.mockResolvedValue({
-                data: [{ asset_id: 'token-uuid-001', amount: '1.5', is_collateral: true }],
+                data: [{ asset_id: 'token-uuid-001', amount: '1500000000000000000', is_collateral: true }],
                 total: 1,
             });
 

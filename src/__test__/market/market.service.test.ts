@@ -1,9 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { MarketService } from '../../market/market.service';
-import { getRepositoryToken } from '@nestjs/typeorm';
 import { OrderRepository } from '../../orders/repositories/order.repository';
 import { MarketRepositories } from '../../market/repository/market.repository';
-import { Token } from '../../tokens/entities/token.entity';
+import { TokensRepository } from '../../tokens/repositories/tokens.repository';
 import { PriceService } from '../../price/price.service';
 
 describe('MarketService', () => {
@@ -15,8 +14,8 @@ describe('MarketService', () => {
 
     const mockAssets = [
         // averageLTV is stored as basis points in the DB (e.g. 7500 = 75%)
-        { id: 'asset1', symbol: 'BTC', name: 'Bitcoin', tokenAddress: '0x123', averageLTV: 7500 },
-        { id: 'asset2', symbol: 'ETH', name: 'Ethereum', tokenAddress: '0x456', averageLTV: 8000 },
+        { id: 'asset1', symbol: 'BTC', name: 'Bitcoin', tokenAddress: '0x123', averageLTV: 7500, decimals: 8 },
+        { id: 'asset2', symbol: 'ETH', name: 'Ethereum', tokenAddress: '0x456', averageLTV: 8000, decimals: 18 },
     ];
 
     beforeEach(async () => {
@@ -28,9 +27,11 @@ describe('MarketService', () => {
             getTotalDepositUsd: jest.fn().mockResolvedValue([]),
             getLendPositionTotalAmounts: jest.fn().mockResolvedValue([]),
             getActiveLoans: jest.fn().mockResolvedValue([]),
+            getEarliestMarketByAssetIds: jest.fn().mockResolvedValue([]),
         };
         tokenRepositoryMock = {
             find: jest.fn().mockResolvedValue(mockAssets),
+            findLoanTokens: jest.fn().mockResolvedValue(mockAssets),
         };
         priceServiceMock = {
             getPrice: jest.fn().mockResolvedValue(1000),
@@ -41,7 +42,7 @@ describe('MarketService', () => {
                 MarketService,
                 { provide: OrderRepository, useValue: orderRepositoryMock },
                 { provide: MarketRepositories, useValue: marketRepositoryMock },
-                { provide: getRepositoryToken(Token), useValue: tokenRepositoryMock },
+                { provide: TokensRepository, useValue: tokenRepositoryMock },
                 { provide: PriceService, useValue: priceServiceMock },
             ],
         }).compile();
@@ -78,14 +79,14 @@ describe('MarketService', () => {
 
         // Mock portfolio deposits: 2 BTC and 10 ETH
         marketRepositoryMock.getTotalDepositUsd.mockResolvedValue([
-            { asset_id: 'asset1', total_amount: '2' },
-            { asset_id: 'asset2', total_amount: '10' },
+            { asset_id: 'asset1', total_amount: '200000000' }, // 2 BTC (8 decimals)
+            { asset_id: 'asset2', total_amount: '10000000000000000000' }, // 10 ETH (18 decimals)
         ]);
 
         // Mock lend positions: 1 BTC and 5 ETH
         marketRepositoryMock.getActiveLoans.mockResolvedValue([
-            { asset_id: 'asset1', total_amount: '1' },
-            { asset_id: 'asset2', total_amount: '5' },
+            { asset_id: 'asset1', total_amount: '100000000' }, // 1 BTC
+            { asset_id: 'asset2', total_amount: '5000000000000000000' }, // 5 ETH
         ]);
 
         // Mock prices by assetId: BTC = 50000, ETH = 3000
@@ -102,5 +103,48 @@ describe('MarketService', () => {
 
         // Active Loans: (1 * 50000) + (5 * 3000) = 50000 + 15000 = 65000
         expect(result.active_loans).toBe('65000.00');
+    });
+
+    it('should return market detail with correct structure and filtered upcoming markets', async () => {
+        const assetId = 'asset1';
+        const mockAsset = { id: assetId, symbol: 'BTC', name: 'Bitcoin', decimals: 8, averageLTV: 7500 };
+
+        tokenRepositoryMock.findByAssetId = jest.fn().mockResolvedValue(mockAsset);
+        priceServiceMock.getPrice.mockResolvedValue(50000);
+        orderRepositoryMock.getBestRates.mockResolvedValue(new Map());
+        marketRepositoryMock.getSumDepositByAssetId = jest.fn().mockResolvedValue('100000000'); // 1 BTC
+        marketRepositoryMock.getSumLoansByAssetId = jest.fn().mockResolvedValue('50000000'); // 0.5 BTC
+
+        const futureDate = new Date();
+        futureDate.setFullYear(futureDate.getFullYear() + 1);
+
+        const mockUpcomingMarkets = [
+            { id: 'm1', maturity: futureDate },
+        ];
+        marketRepositoryMock.getUpcomingMarkets = jest.fn().mockResolvedValue(mockUpcomingMarkets);
+
+        const result = await service.getMarketDetail(assetId);
+
+        expect(result).toEqual({
+            asset: {
+                id: mockAsset.id,
+                name: mockAsset.name,
+                symbol: mockAsset.symbol,
+                decimals: mockAsset.decimals,
+                imageUrl: null,
+            },
+            collateral_factor: 75,
+            total_deposit: '50000.00',
+            active_loans: '25000.00',
+            upcoming_maturities: [
+                {
+                    market_id: 'm1',
+                    maturity: Math.floor(futureDate.getTime() / 1000),
+                },
+            ],
+        });
+
+        // Ensure it called getUpcomingMarkets
+        expect(marketRepositoryMock.getUpcomingMarkets).toHaveBeenCalledWith(assetId, 3);
     });
 });

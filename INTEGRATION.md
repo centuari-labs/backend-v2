@@ -34,7 +34,78 @@ The Portfolio module behavior is controlled by the `NODE_ENV` environment variab
   ```
 - **Prices:** Fetches live prices from CoinGecko API.
 
-## 2. Testing with Postman
+## 2. Database migrations and seeding configuration
+
+### Automatic migrations on app start
+
+Migrations can be automatically triggered when the backend starts by using the `MIGRATIONS_ON_START` environment variable.
+
+- **Enabled when:** `MIGRATIONS_ON_START=true`
+- **Behavior:** On bootstrap, the app will run all pending migrations via the `runMigrations` script before any seeding or HTTP startup.
+- **Idempotency:** Migrations are tracked in the `migrations_log` table, so each migration file is applied only once.
+
+Example:
+
+```env
+DATABASE_URL=postgres://...
+NODE_ENV=development
+MIGRATIONS_ON_START=true
+```
+
+You can still run migrations manually (independent of `MIGRATIONS_ON_START`):
+
+```bash
+pnpm migrate
+# or
+pnpm db up
+```
+
+### Automatic seeding on app start
+
+Seeding can be automatically triggered when the backend starts by using the `SEED_ON_START` environment variable.
+
+- **Enabled when:** `SEED_ON_START=true`
+- **Behavior:** On bootstrap, after running migrations, the app will execute all seed SQL files under `src/core/database/seeds` via the `runSeeds` script.
+- **Idempotency:** Executed seeds are recorded in a `seeds_log` table, so the same seed file will not be applied twice. Re-running the app or the seed command will **skip already-applied seeds**.
+
+Example:
+
+```env
+DATABASE_URL=postgres://...
+NODE_ENV=development
+MIGRATIONS_ON_START=true
+SEED_ON_START=true
+```
+
+Then start the app as usual (for example):
+
+```bash
+pnpm start:dev
+```
+
+### Manual seeding
+
+You can still run seeds manually; they are also idempotent because of `seeds_log`:
+
+- Run all seeds:
+
+```bash
+pnpm seed
+```
+
+- Run all seeds via the DB CLI:
+
+```bash
+pnpm db seed:run
+```
+
+- Run a specific seed (match by full or partial filename):
+
+```bash
+pnpm db seed:run portfolio_extended_seed
+```
+
+## 3. Testing with Postman
 
 ### Prerequisites
 1. Ensure the server is running (`npm run start:dev` typically sets `NODE_ENV=development` by default in NestJS, potentially overriding `.env` if not careful. Check your `package.json`).

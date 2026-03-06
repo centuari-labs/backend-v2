@@ -68,6 +68,7 @@ export class OrdersService {
         walletAddress: string,
         privyUserId: string,
     ): Promise<OrderResponse> {
+        //@todo : when place order check if users balance is available or not, dont forget to get the balance from portofolio - total open order
         const accountId = await this.getOrCreateAccount(
             walletAddress,
             privyUserId,
@@ -120,6 +121,7 @@ export class OrdersService {
         walletAddress: string,
         privyUserId: string,
     ): Promise<OrderResponse> {
+        //@todo : when place order check if users balance is available or not, dont forget to get the balance from portofolio - total open order
         const accountId = await this.getOrCreateAccount(
             walletAddress,
             privyUserId,

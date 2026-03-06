@@ -34,9 +34,14 @@
           "raw": "{ \n    \n}"
         },
         "url": {
-          "raw": "{{localhost}}market",
+          "raw": "http://localhost:3000/market",
+          "protocol": "http",
           "host": [
-            "{{localhost}}market"
+            "localhost"
+          ],
+          "port": "3000",
+          "path": [
+            "market"
           ],
           "query": [
             {
@@ -60,6 +65,27 @@
               "uuid": "37613ff4-1f60-4ddb-a3e3-2e890c5fc621",
               "disabled": true
             }
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Market detail",
+      "id": "c9c22349-5e18-4b5e-be14-a51ef9a93c5d",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:3000/market/ac7ae153-ad3f-44aa-96e7-44c8d22e84ab",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "3000",
+          "path": [
+            "market",
+            "ac7ae153-ad3f-44aa-96e7-44c8d22e84ab"
           ]
         }
       },

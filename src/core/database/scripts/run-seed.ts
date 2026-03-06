@@ -7,6 +7,14 @@ export async function runSeeds(targetFile?: string) {
     const client = new Client({ connectionString: process.env.DATABASE_URL });
     await client.connect();
 
+    await client.query(`
+    CREATE TABLE IF NOT EXISTS seeds_log (
+      id SERIAL PRIMARY KEY,
+      filename VARCHAR(255) UNIQUE NOT NULL,
+      executed_at TIMESTAMP DEFAULT NOW()
+    );
+  `);
+
     const dir = join(__dirname, "../seeds");
     let files: string[];
 
@@ -39,11 +47,27 @@ export async function runSeeds(targetFile?: string) {
     }
 
     for (const file of files) {
+        const {
+            rows: [existing],
+        } = await client.query(
+            "SELECT id FROM seeds_log WHERE filename = $1",
+            [file],
+        );
+
+        if (existing) {
+            console.log(`⏭️ Skipping seed ${file} (already applied).`);
+            continue;
+        }
+
         const sql = readFileSync(join(dir, file), "utf8");
         console.log(`🌱 Running seed: ${file}`);
         try {
             await client.query("BEGIN");
             await client.query(sql);
+            await client.query(
+                "INSERT INTO seeds_log (filename) VALUES ($1)",
+                [file],
+            );
             await client.query("COMMIT");
             console.log(`✅ Seed ${file} executed successfully.`);
         } catch (err) {

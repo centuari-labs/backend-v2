@@ -76,4 +76,36 @@ export class MarketRepositories extends Repository<Market> {
                     : new Date(row.maturity),
         }));
     }
+
+    async getSumDepositByAssetId(assetId: string): Promise<string> {
+        const result = await this.dataSource
+            .createQueryBuilder()
+            .select("SUM(portfolio.amount)", "total_amount")
+            .from("portfolio", "portfolio")
+            .where("portfolio.asset_id = :assetId", { assetId })
+            .getRawOne();
+        return result?.total_amount || "0";
+    }
+
+    async getSumLoansByAssetId(assetId: string): Promise<string> {
+        const result = await this.dataSource
+            .createQueryBuilder()
+            .select("SUM(lend_positions.amount)", "total_amount")
+            .from("lend_positions", "lend_positions")
+            .where("lend_positions.asset_id = :assetId", { assetId })
+            .getRawOne();
+        return result?.total_amount || "0";
+    }
+
+    async getUpcomingMarkets(
+        assetId: string,
+        limit: number,
+    ): Promise<Market[]> {
+        return this.createQueryBuilder("market")
+            .where("market.asset_id = :assetId", { assetId })
+            .andWhere("market.maturity > :now", { now: new Date() })
+            .orderBy("market.maturity", "ASC")
+            .take(limit)
+            .getMany();
+    }
 }

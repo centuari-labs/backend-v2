@@ -39,3 +39,20 @@ export class MarketResponseDto {
     active_loans: string;
     markets: MarketItemDto[];
 }
+
+export class MarketDetailResponseDto {
+    asset: {
+        id: string;
+        name: string;
+        symbol: string;
+        decimals: number | null;
+        imageUrl: string | null;
+    };
+    collateral_factor: number;
+    total_deposit: string;
+    active_loans: string;
+    upcoming_maturities: {
+        market_id: string;
+        maturity: number;
+    }[];
+}

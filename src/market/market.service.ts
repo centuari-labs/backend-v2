@@ -1,5 +1,5 @@
-import { Injectable } from '@nestjs/common';
-import { MarketResponseDto } from './dto/market.dto';
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { MarketDetailResponseDto, MarketResponseDto } from './dto/market.dto';
 import { PriceService } from '../price/price.service';
 
 import { OrderRepository } from '../orders/repositories/order.repository';
@@ -98,6 +98,46 @@ export class MarketService {
             total_deposit: totalDepositUSD.toFixed(2),
             active_loans: activeLoansUSD.toFixed(2),
             markets,
+        };
+    }
+
+    async getMarketDetail(assetId: string): Promise<MarketDetailResponseDto> {
+        const asset = await this.tokensRepository.findByAssetId(assetId);
+        if (!asset) {
+            throw new NotFoundException(`Asset with ID ${assetId} not found`);
+        }
+
+        const price = await this.priceService.getPrice(assetId);
+        const rateMap = await this.orderRepository.getBestRates();
+        const rates = rateMap.get(assetId) || { borrow: 0, lend: 0 };
+
+        const rawDeposit = await this.marketRepository.getSumDepositByAssetId(assetId);
+        const rawLoans = await this.marketRepository.getSumLoansByAssetId(assetId);
+
+        let totalDepositUSD = 0;
+        let activeLoansUSD = 0;
+
+        if (price !== null && asset.decimals) {
+            totalDepositUSD = (Number.parseFloat(rawDeposit) / Math.pow(10, asset.decimals)) * price;
+            activeLoansUSD = (Number.parseFloat(rawLoans) / Math.pow(10, asset.decimals)) * price;
+        }
+
+        const upcomingMarkets = await this.marketRepository.getUpcomingMarkets(assetId, 3);
+        return {
+            asset: {
+                id: asset.id,
+                name: asset.name,
+                symbol: asset.symbol,
+                decimals: asset.decimals ?? null,
+                imageUrl: asset.imageUrl ?? null,
+            },
+            collateral_factor: toPercentage(asset.averageLTV),
+            total_deposit: totalDepositUSD.toFixed(2),
+            active_loans: activeLoansUSD.toFixed(2),
+            upcoming_maturities: upcomingMarkets.map(m => ({
+                market_id: m.id,
+                maturity: Math.floor(new Date(m.maturity).getTime() / 1000),
+            })),
         };
     }
 

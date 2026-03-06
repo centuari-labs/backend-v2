@@ -53,6 +53,7 @@ describe('PortfolioService', () => {
             getUserCollateralAssets: jest.fn(),
             getUserAssets: jest.fn(),
             getUserPositions: jest.fn(),
+            getRiskParamsByCollateralTokenIds: jest.fn().mockResolvedValue([]),
         };
 
         orderRepositoryMock = {
@@ -317,6 +318,8 @@ describe('PortfolioService', () => {
                 amountInUsd: 4500,
                 isCollateral: true,
                 imageUrl: null,
+                ltv: 0,
+                liquidationThreshold: 0,
             });
             expect(result.data[1]).toEqual({
                 symbol: 'BTC',
@@ -325,6 +328,8 @@ describe('PortfolioService', () => {
                 amountInUsd: 12500,
                 isCollateral: false,
                 imageUrl: null,
+                ltv: 0,
+                liquidationThreshold: 0,
             });
             expect(result.totalData).toBe(2);
             expect(result.totalPages).toBe(1);

@@ -16,6 +16,8 @@ describe("MyAssetsResponseDto contract", () => {
                     amountInUsd: 5000,
                     isCollateral: false,
                     imageUrl: "https://example.com/usdc.png",
+                    ltv: 0.75,
+                    liquidationThreshold: 0.80,
                 },
                 {
                     symbol: "ETH",
@@ -24,6 +26,8 @@ describe("MyAssetsResponseDto contract", () => {
                     amountInUsd: 7500,
                     isCollateral: true,
                     imageUrl: null,
+                    ltv: 0.80,
+                    liquidationThreshold: 0.82,
                 },
             ],
             page: 1,
@@ -60,6 +64,8 @@ describe("MyAssetsResponseDto contract", () => {
                 amountInUsd: 5000,
                 isCollateral: false,
                 imageUrl: null,
+                ltv: 0.75,
+                liquidationThreshold: 0.80,
             };
             expect(item).toHaveProperty("symbol");
             expect(item).toHaveProperty("name");

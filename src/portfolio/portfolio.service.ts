@@ -293,19 +293,27 @@ export class PortfolioService {
 
         const assetIds = userAssets.map((ua) => ua.asset_id);
         //@todo : move this into repository
-        const tokens = await this.tokenRepository
-            .createQueryBuilder('token')
-            .where('token.id IN (:...assetIds)', { assetIds })
-            .getMany();
+        const [tokens, riskParams] = await Promise.all([
+            this.tokenRepository
+                .createQueryBuilder('token')
+                .where('token.id IN (:...assetIds)', { assetIds })
+                .getMany(),
+            this.portfolioRepository.getRiskParamsByCollateralTokenIds(assetIds),
+        ]);
 
         const tokenMap = new Map(tokens.map((t) => [t.id, t]));
+        const riskMap = new Map(riskParams.map((r) => [r.asset_id, r]));
         const allPrices = this.priceService.getPrices();
 
         const data = userAssets.map((ua) => {
             const token = tokenMap.get(ua.asset_id);
+            const risk = riskMap.get(ua.asset_id);
             const price = allPrices[ua.asset_id.toLowerCase()];
             const decimals = token?.decimals ?? 0;
             const amountHuman = Number(baseUnitsToHuman(ua.amount, decimals));
+            // risk table stores basis points (e.g. 7500 = 75%)
+            const ltv = risk ? Number(risk.avg_ltv) / 10000 : 0;
+            const liquidationThreshold = risk ? Number(risk.avg_lt) / 10000 : 0;
             return {
                 symbol: token?.symbol || "UNKNOWN",
                 name: token?.name || "Unknown Token",
@@ -313,6 +321,8 @@ export class PortfolioService {
                 amountInUsd: calculateUsdAmount(amountHuman, price ?? 0),
                 isCollateral: !!ua.is_collateral,
                 imageUrl: token?.imageUrl ?? null,
+                ltv,
+                liquidationThreshold,
             };
         });
 

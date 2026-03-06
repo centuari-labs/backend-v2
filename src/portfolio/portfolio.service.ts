@@ -293,7 +293,7 @@ export class PortfolioService {
 
         const assetIds = userAssets.map((ua) => ua.asset_id);
         const [tokens, riskParams] = await Promise.all([
-            const tokens = await this.portfolioRepository.getTokensByAssetIds(assetIds),
+            this.portfolioRepository.getTokensByAssetIds(assetIds),
             this.portfolioRepository.getRiskParamsByCollateralTokenIds(assetIds),
         ]);
 

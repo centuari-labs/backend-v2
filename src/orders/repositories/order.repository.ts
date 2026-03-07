@@ -132,3 +132,4 @@ export class OrderRepository extends Repository<Order> {
             .groupBy("order.assetId")
             .getRawMany();
     }
+}

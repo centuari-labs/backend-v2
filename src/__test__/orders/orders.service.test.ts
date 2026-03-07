@@ -23,16 +23,16 @@ describe('OrdersService', () => {
     let priceService: { getPrice: jest.MockedFunction<PriceService["getPrice"]> };
     let portfolioService: jest.Mocked<PortfolioService>;
 
-    const mockWalletAddress = '0xLender1234567890abcdef1234567890abcdef12';
+    const mockWalletAddress = '0x1234567890abcdef1234567890abcdef12345678';
     const mockPrivyUserId = 'did:privy:mock-user-id';
     const mockAccountId = 'uuid-account-001';
-    const mockAssetId = 'uuid-asset-001';
+    const mockAssetId = '550e8400-e29b-41d4-a716-446655440003';
     const mockMarketId = '550e8400-e29b-41d4-a716-446655440000';
     const mockMaturityDate = new Date('2025-06-01T00:00:00.000Z');
     const mockMaturityUnix = Math.floor(mockMaturityDate.getTime() / 1000);
 
     const createMockOrder = (overrides: Partial<Order> = {}): Order => ({
-        id: 'uuid-order-001',
+        id: '550e8400-e29b-41d4-a716-446655440001',
         accountId: mockAccountId,
         assetId: mockAssetId,
         quantity: '1000',
@@ -57,12 +57,14 @@ describe('OrdersService', () => {
             getOrCreateAccount: jest.fn(),
             getOpenOrders: jest.fn(),
             findAccountByWallet: jest.fn(),
+            getTotalOpenQuantity: jest.fn().mockResolvedValue(0n),
+            getOpenBorrowOrders: jest.fn().mockResolvedValue([]),
         };
 
         const mockTokensService: jest.Mocked<TokensService> = {
             validateTokenByAssetId: jest.fn(),
             getTokenDecimalsByAssetId: jest.fn(),
-            getTokenByAssetId: jest.fn(),
+            getTokenByAssetId: jest.fn().mockResolvedValue({ tokenAddress: '0xabcdef1234567890abcdef1234567890abcdef12' } as any),
         } as any;
 
         const mockNatsService = {
@@ -81,6 +83,7 @@ describe('OrdersService', () => {
 
         const mockPortfolioService = {
             getHealthFactorForAccount: jest.fn().mockResolvedValue({ healthFactor: 2 }),
+            getAssetBalance: jest.fn().mockResolvedValue('1000000000'),
         };
 
         const module: TestingModule = await Test.createTestingModule({
@@ -237,8 +240,11 @@ describe('OrdersService', () => {
             expect(natsService.publish).toHaveBeenCalledWith(
                 'orders.lend.limit',
                 expect.objectContaining({
-                    event: 'orders.lend.limit',
-                    data: expectedOrder,
+                    orderId: expectedOrder.id,
+                    walletAddress: mockWalletAddress,
+                    assetId: expectedOrder.assetId,
+                    side: OrderSide.Lend,
+                    type: OrderType.Limit,
                 }),
             );
         });
@@ -280,6 +286,20 @@ describe('OrdersService', () => {
             await expect(
                 service.createLendLimitOrder(lendLimitDto, mockWalletAddress, mockPrivyUserId),
             ).rejects.toThrow(BadRequestException);
+        });
+
+        it('should throw BadRequestException if available balance is insufficient', async () => {
+            tokensService.validateTokenByAssetId.mockResolvedValue({} as any);
+            tokensService.getTokenDecimalsByAssetId.mockResolvedValue(6); // 1000 * 10^6 = 1000000000
+            orderRepository.getOrCreateAccount.mockResolvedValue({ id: mockAccountId } as any);
+
+            portfolioService.getAssetBalance.mockResolvedValueOnce('500000000'); // Less than required
+            orderRepository.getTotalOpenQuantity.mockResolvedValueOnce(0n);
+
+            await expect(
+                service.createLendLimitOrder(lendLimitDto, mockWalletAddress, mockPrivyUserId),
+            ).rejects.toThrow('Insufficient portfolio balance for this order');
+            expect(orderRepository.saveOrderWithMarkets).not.toHaveBeenCalled();
         });
     });
 
@@ -364,6 +384,20 @@ describe('OrdersService', () => {
                 'orders.lend.market',
                 expect.anything(),
             );
+        });
+
+        it('should throw BadRequestException if available balance is insufficient', async () => {
+            tokensService.validateTokenByAssetId.mockResolvedValue({} as any);
+            tokensService.getTokenDecimalsByAssetId.mockResolvedValue(6); // 1000 * 10^6 = 1000000000
+            orderRepository.getOrCreateAccount.mockResolvedValue({ id: mockAccountId } as any);
+
+            portfolioService.getAssetBalance.mockResolvedValueOnce('1500000000');
+            orderRepository.getTotalOpenQuantity.mockResolvedValueOnce(1000000000n); // 1.5b balance - 1b open = 0.5b available, requires 1b
+
+            await expect(
+                service.createLendMarketOrder(lendMarketDto, mockWalletAddress, mockPrivyUserId),
+            ).rejects.toThrow('Insufficient portfolio balance for this order');
+            expect(orderRepository.saveOrderWithMarkets).not.toHaveBeenCalled();
         });
     });
 
@@ -465,7 +499,7 @@ describe('OrdersService', () => {
 
             await expect(
                 service.createBorrowLimitOrder(borrowLimitDto, mockWalletAddress, mockPrivyUserId),
-            ).rejects.toThrow('Borrow would reduce health factor below 1; position not allowed.');
+            ).rejects.toThrow('Borrow would reduce health factor below 1 (considering open orders); position not allowed.');
             expect(orderRepository.saveOrderWithMarkets).not.toHaveBeenCalled();
         });
     });
@@ -567,7 +601,7 @@ describe('OrdersService', () => {
 
             await expect(
                 service.createBorrowMarketOrder(borrowMarketDto, mockWalletAddress, mockPrivyUserId),
-            ).rejects.toThrow('Borrow would reduce health factor below 1; position not allowed.');
+            ).rejects.toThrow('Borrow would reduce health factor below 1 (considering open orders); position not allowed.');
             expect(orderRepository.saveOrderWithMarkets).not.toHaveBeenCalled();
         });
     });
@@ -687,11 +721,8 @@ describe('OrdersService', () => {
             expect(natsService.publish).toHaveBeenCalledWith(
                 'orders.cancel',
                 expect.objectContaining({
-                    event: 'orders.cancel',
-                    data: expect.objectContaining({
-                        orderId: 'uuid-cancel-007',
-                        walletAddress: mockWalletAddress,
-                    }),
+                    orderId: 'uuid-cancel-007',
+                    walletAddress: mockWalletAddress,
                 }),
             );
         });

@@ -370,4 +370,9 @@ export class PortfolioService {
         await this.portfolioRepository.setAssetAsCollateral(account.id, body.assetIds, body.isCollateral);
     }
 
+    async getAssetBalance(accountId: string, assetId: string): Promise<string> {
+        const balances = await this.portfolioRepository.getUserTotalBalances(accountId);
+        const match = balances.find(b => b.asset_id === assetId);
+        return match ? match.total_amount : "0";
+    }
 }

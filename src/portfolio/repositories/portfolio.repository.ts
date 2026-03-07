@@ -217,6 +217,18 @@ export class PortfolioRepository extends Repository<Portfolio> {
         });
     }
 
+    async getRiskParamsByCollateralTokenIds(
+        assetIds: string[],
+    ): Promise<{ asset_id: string; avg_ltv: string; avg_lt: string }[]> {
+        return this.dataSource.query(
+            `SELECT collateral_token_id AS asset_id, AVG(ltv) AS avg_ltv, AVG(lt) AS avg_lt
+             FROM risk
+             WHERE collateral_token_id = ANY($1)
+             GROUP BY collateral_token_id`,
+            [assetIds],
+        );
+    }
+
     async setAssetAsCollateral(accountId: string, assetIds: string[], isCollateral: boolean) {
         return this.createQueryBuilder('portfolio')
             .update({ isCollateral })

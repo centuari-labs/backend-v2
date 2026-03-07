@@ -113,4 +113,22 @@ export class OrderRepository extends Repository<Order> {
             },
         });
     }
-}
+
+    /**
+     * Returns the sum of (quantity - filled_quantity) for all open/partially-filled
+     * lend orders belonging to the given account, grouped by asset_id.
+     */
+    async getOpenLendAmountsByAccount(
+        accountId: string,
+    ): Promise<{ assetId: string; lockedAmount: string }[]> {
+        return this.createQueryBuilder("order")
+            .select("order.assetId", "assetId")
+            .addSelect("SUM(order.quantity::numeric - order.filled_quantity::numeric)", "lockedAmount")
+            .where("order.account_id = :accountId", { accountId })
+            .andWhere("order.side = :side", { side: OrderSide.Lend })
+            .andWhere("order.status IN (:...statuses)", {
+                statuses: [OrderStatus.Open, OrderStatus.PartiallyFilled],
+            })
+            .groupBy("order.assetId")
+            .getRawMany();
+    }

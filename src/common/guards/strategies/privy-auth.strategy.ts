@@ -28,12 +28,21 @@ export class PrivyAuthStrategy implements IAuthStrategy {
     private async extractWalletAddress(userId: string): Promise<string> {
         try {
             const user = await this.privyService.getUser(userId);
-            const walletAccount = user.linkedAccounts.find(
+            const walletAccounts = user.linkedAccounts.filter(
                 (account: any) => account.type === 'wallet'
             );
 
-            if (walletAccount && (walletAccount as any).address) {
-                return (walletAccount as any).address;
+            // Prefer external wallet over Privy embedded wallet
+            const externalWallet = walletAccounts.find(
+                (w: any) => w.walletClientType !== 'privy',
+            );
+            const embeddedWallet = walletAccounts.find(
+                (w: any) => w.walletClientType === 'privy',
+            );
+            const wallet = externalWallet ?? embeddedWallet;
+
+            if (wallet && (wallet as any).address) {
+                return (wallet as any).address;
             }
 
             return userId;

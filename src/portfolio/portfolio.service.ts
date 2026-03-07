@@ -311,6 +311,7 @@ export class PortfolioService {
             const ltv = risk ? Number(risk.avg_ltv) / 10000 : 0;
             const liquidationThreshold = risk ? Number(risk.avg_lt) / 10000 : 0;
             return {
+                assetId: ua.asset_id,
                 symbol: token?.symbol || "UNKNOWN",
                 name: token?.name || "Unknown Token",
                 walletBalance: amountHuman,

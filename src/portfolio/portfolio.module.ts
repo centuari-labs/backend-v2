@@ -24,6 +24,6 @@ import { TokensModule } from "../tokens/tokens.module";
         PortfolioRepository,
 
     ],
-    exports: [PortfolioService],
+    exports: [PortfolioService, PortfolioRepository],
 })
 export class PortfolioModule { }

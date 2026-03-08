@@ -58,6 +58,7 @@ export class GetMyAssetsQueryDto {
 }
 
 export class MyAssetItemDto {
+    assetId: string;
     symbol: string;
     name: string;
     walletBalance: number;

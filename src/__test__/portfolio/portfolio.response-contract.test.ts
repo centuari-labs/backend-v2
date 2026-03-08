@@ -10,6 +10,7 @@ describe("MyAssetsResponseDto contract", () => {
         return {
             data: [
                 {
+                    assetId: "asset-usdc-id",
                     symbol: "USDC",
                     name: "USD Coin",
                     walletBalance: 5000,
@@ -20,6 +21,7 @@ describe("MyAssetsResponseDto contract", () => {
                     liquidationThreshold: 0.80,
                 },
                 {
+                    assetId: "asset-eth-id",
                     symbol: "ETH",
                     name: "Ethereum",
                     walletBalance: 2.5,
@@ -58,6 +60,7 @@ describe("MyAssetsResponseDto contract", () => {
     describe("MyAssetItemDto fields", () => {
         it("has all required fields", () => {
             const item: MyAssetItemDto = {
+                assetId: "asset-usdc-id",
                 symbol: "USDC",
                 name: "USD Coin",
                 walletBalance: 5000,

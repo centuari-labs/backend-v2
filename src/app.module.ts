@@ -12,6 +12,7 @@ import { PortfolioModule } from "./portfolio/portfolio.module";
 import { FaucetModule } from "./faucet/faucet.module";
 import { DepositModule } from "./deposit/deposit.module";
 import { RateModule } from "./rate-history/rate-history.module";
+import { WithdrawModule } from "./withdraw/withdraw.module";
 import { EventsGateway } from "./core/websocket/websocket.gateway";
 
 @Module({
@@ -36,6 +37,7 @@ import { EventsGateway } from "./core/websocket/websocket.gateway";
         PortfolioModule,
         FaucetModule,
         DepositModule,
+        WithdrawModule,
         RateModule,
     ],
     controllers: [],

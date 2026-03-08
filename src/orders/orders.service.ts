@@ -80,22 +80,11 @@ export class OrdersService {
         );
         const quantityBaseUnits = humanToBaseUnits(dto.amount, decimals!);
 
-        const portfolioBalanceRaw = await this.portfolioService.getAssetBalance(
+        await this.portfolioService.checkAvailableBalanceForLend(
             accountId,
             dto.assetId,
+            quantityBaseUnits,
         );
-        const portfolioBalance = BigInt(portfolioBalanceRaw);
-
-        const totalOpenOrders = await this.orderRepository.getTotalOpenQuantity(
-            accountId,
-            dto.assetId,
-            OrderSide.Lend,
-        );
-
-        const availableBalance = portfolioBalance - totalOpenOrders;
-        if (BigInt(quantityBaseUnits) > availableBalance) {
-            throw new BadRequestException("Insufficient portfolio balance for this order");
-        }
 
         const settlementFee = await this.computeSettlementFee(
             dto.assetId,
@@ -150,22 +139,11 @@ export class OrdersService {
         );
         const quantityBaseUnits = humanToBaseUnits(dto.amount, decimals!);
 
-        const portfolioBalanceRaw = await this.portfolioService.getAssetBalance(
+        await this.portfolioService.checkAvailableBalanceForLend(
             accountId,
             dto.assetId,
+            quantityBaseUnits,
         );
-        const portfolioBalance = BigInt(portfolioBalanceRaw);
-
-        const totalOpenOrders = await this.orderRepository.getTotalOpenQuantity(
-            accountId,
-            dto.assetId,
-            OrderSide.Lend,
-        );
-
-        const availableBalance = portfolioBalance - totalOpenOrders;
-        if (BigInt(quantityBaseUnits) > availableBalance) {
-            throw new BadRequestException("Insufficient portfolio balance for this order");
-        }
 
         const settlementFee = await this.computeSettlementFee(
             dto.assetId,
@@ -224,24 +202,16 @@ export class OrdersService {
             decimals!,
         );
 
-        const baseHfResult = await this.portfolioService.getHealthFactorForAccount(accountId);
-        const openOrdersUsd = await this.calculateOpenBorrowOrdersUsd(accountId);
         const assetPrice = await this.priceService.getPrice(dto.assetId);
         if (assetPrice == null || assetPrice <= 0) {
             throw new BadRequestException("Price not available for this asset");
         }
         const newOrderUsd = Number(dto.amount) * assetPrice;
-        const totalSimulatedDebt = baseHfResult.debtUsd + openOrdersUsd + newOrderUsd;
 
-        let simulatedHf = HEALTH_FACTOR_NO_DEBT;
-        if (totalSimulatedDebt > 0) {
-            simulatedHf =
-                ((baseHfResult.collateralUsd - baseHfResult.debtUsd) *
-                    baseHfResult.weightedLtvDecimal) /
-                totalSimulatedDebt;
-        }
-
-        const hfResult = { healthFactor: simulatedHf };
+        const hfResult = await this.portfolioService.getHealthFactorForAccount(accountId, {
+            additionalBorrowUsd: newOrderUsd,
+            includeOpenOrders: true,
+        });
         if (
             hfResult.healthFactor !== HEALTH_FACTOR_NO_DEBT &&
             Number.isFinite(hfResult.healthFactor) &&
@@ -304,24 +274,16 @@ export class OrdersService {
             decimals!,
         );
 
-        const baseHfResult = await this.portfolioService.getHealthFactorForAccount(accountId);
-        const openOrdersUsd = await this.calculateOpenBorrowOrdersUsd(accountId);
         const assetPrice = await this.priceService.getPrice(dto.assetId);
         if (assetPrice == null || assetPrice <= 0) {
             throw new BadRequestException("Price not available for this asset");
         }
         const newOrderUsd = Number(dto.amount) * assetPrice;
-        const totalSimulatedDebt = baseHfResult.debtUsd + openOrdersUsd + newOrderUsd;
 
-        let simulatedHf = HEALTH_FACTOR_NO_DEBT;
-        if (totalSimulatedDebt > 0) {
-            simulatedHf =
-                ((baseHfResult.collateralUsd - baseHfResult.debtUsd) *
-                    baseHfResult.weightedLtvDecimal) /
-                totalSimulatedDebt;
-        }
-
-        const hfResult = { healthFactor: simulatedHf };
+        const hfResult = await this.portfolioService.getHealthFactorForAccount(accountId, {
+            additionalBorrowUsd: newOrderUsd,
+            includeOpenOrders: true,
+        });
         if (
             hfResult.healthFactor !== HEALTH_FACTOR_NO_DEBT &&
             Number.isFinite(hfResult.healthFactor) &&
@@ -583,24 +545,7 @@ export class OrdersService {
         }
     }
 
-    private async calculateOpenBorrowOrdersUsd(accountId: string): Promise<number> {
-        const openOrders = await this.orderRepository.getOpenBorrowOrders(accountId);
-        let totalUsd = 0;
 
-        for (const order of openOrders) {
-            const price = await this.priceService.getPrice(order.assetId);
-            const decimals = await this.tokensService.getTokenDecimalsByAssetId(order.assetId);
-            if (price != null && decimals != null) {
-                const remainingAmountHuman = Number(baseUnitsToHuman(
-                    (BigInt(order.quantity) - BigInt(order.filledQuantity)).toString(),
-                    decimals
-                ));
-                totalUsd += remainingAmountHuman * price;
-            }
-        }
-
-        return totalUsd;
-    }
 
     private async publishCancelOrderToNats(
         orderId: string,

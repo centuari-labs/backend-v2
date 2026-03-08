@@ -84,6 +84,7 @@ describe('OrdersService', () => {
         const mockPortfolioService = {
             getHealthFactorForAccount: jest.fn().mockResolvedValue({ healthFactor: 2 }),
             getAssetBalance: jest.fn().mockResolvedValue('1000000000'),
+            checkAvailableBalanceForLend: jest.fn().mockResolvedValue(undefined),
         };
 
         const module: TestingModule = await Test.createTestingModule({
@@ -293,8 +294,9 @@ describe('OrdersService', () => {
             tokensService.getTokenDecimalsByAssetId.mockResolvedValue(6); // 1000 * 10^6 = 1000000000
             orderRepository.getOrCreateAccount.mockResolvedValue({ id: mockAccountId } as any);
 
-            portfolioService.getAssetBalance.mockResolvedValueOnce('500000000'); // Less than required
-            orderRepository.getTotalOpenQuantity.mockResolvedValueOnce(0n);
+            portfolioService.checkAvailableBalanceForLend.mockRejectedValueOnce(
+                new BadRequestException('Insufficient portfolio balance for this order'),
+            );
 
             await expect(
                 service.createLendLimitOrder(lendLimitDto, mockWalletAddress, mockPrivyUserId),
@@ -391,8 +393,9 @@ describe('OrdersService', () => {
             tokensService.getTokenDecimalsByAssetId.mockResolvedValue(6); // 1000 * 10^6 = 1000000000
             orderRepository.getOrCreateAccount.mockResolvedValue({ id: mockAccountId } as any);
 
-            portfolioService.getAssetBalance.mockResolvedValueOnce('1500000000');
-            orderRepository.getTotalOpenQuantity.mockResolvedValueOnce(1000000000n); // 1.5b balance - 1b open = 0.5b available, requires 1b
+            portfolioService.checkAvailableBalanceForLend.mockRejectedValueOnce(
+                new BadRequestException('Insufficient portfolio balance for this order'),
+            );
 
             await expect(
                 service.createLendMarketOrder(lendMarketDto, mockWalletAddress, mockPrivyUserId),

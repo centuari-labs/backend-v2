@@ -3,6 +3,7 @@ import { join } from "node:path";
 import "dotenv/config";
 import { spawnSync } from "node:child_process";
 import { Client } from "pg";
+import { getMigrationsDir } from "./migrations-dir";
 
 async function resetMigrations() {
     console.log("🧨 Resetting all migrations...");
@@ -38,7 +39,7 @@ async function resetMigrations() {
 
     for (const row of rows) {
         const file = row.filename;
-        const filePath = join(__dirname, "../migrations", file);
+        const filePath = join(getMigrationsDir(__dirname), file);
 
         try {
             const content = readFileSync(filePath, "utf8");

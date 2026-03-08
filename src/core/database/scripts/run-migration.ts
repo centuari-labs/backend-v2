@@ -2,6 +2,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { Client } from "pg";
 import "dotenv/config";
+import { getMigrationsDir } from "./migrations-dir";
 
 export async function runMigrations() {
     const client = new Client({ connectionString: process.env.DATABASE_URL });
@@ -15,7 +16,7 @@ export async function runMigrations() {
     );
   `);
 
-    const dir = join(__dirname, "../migrations");
+    const dir = getMigrationsDir(__dirname);
     const files = readdirSync(dir)
         .filter((f) => f.endsWith(".sql"))
         .sort();

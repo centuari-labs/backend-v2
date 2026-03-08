@@ -2,6 +2,7 @@ import { join } from "node:path";
 import "dotenv/config";
 import { readdirSync, readFileSync } from "node:fs";
 import { Client } from "pg";
+import { getSeedsDir } from "./migrations-dir";
 
 export async function runSeeds(targetFile?: string) {
     const client = new Client({ connectionString: process.env.DATABASE_URL });
@@ -15,7 +16,7 @@ export async function runSeeds(targetFile?: string) {
     );
   `);
 
-    const dir = join(__dirname, "../seeds");
+    const dir = getSeedsDir(__dirname);
     let files: string[];
 
     if (targetFile) {

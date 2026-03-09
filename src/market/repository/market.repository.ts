@@ -63,7 +63,7 @@ export class MarketRepositories extends Repository<Market> {
         }[]>(
             `SELECT DISTINCT ON (asset_id) id, asset_id, maturity
              FROM markets
-             WHERE asset_id = ANY($1::uuid[])
+             WHERE asset_id = ANY($1::uuid[]) AND maturity >= NOW()
              ORDER BY asset_id, maturity ASC`,
             [assetIds],
         );

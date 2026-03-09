@@ -27,6 +27,7 @@ import { Order } from "./entities/order.entity";
 import {
     toPercentage,
     humanToBaseUnits,
+    baseUnitsToHuman,
     calculateSettlementFee,
 } from "../common/utils/number.utils";
 import { OrderRepository } from "./repositories/order.repository";
@@ -50,7 +51,7 @@ export class OrdersService {
         private readonly priceService: PriceService,
         private readonly marketRepository: MarketRepositories,
         private readonly portfolioService: PortfolioService,
-    ) {}
+    ) { }
 
     async getOrCreateAccount(
         walletAddress: string,
@@ -68,7 +69,6 @@ export class OrdersService {
         walletAddress: string,
         privyUserId: string,
     ): Promise<OrderResponse> {
-        //@todo : when place order check if users balance is available or not, dont forget to get the balance from portofolio - total open order
         const accountId = await this.getOrCreateAccount(
             walletAddress,
             privyUserId,
@@ -79,6 +79,13 @@ export class OrdersService {
             dto.assetId,
         );
         const quantityBaseUnits = humanToBaseUnits(dto.amount, decimals!);
+
+        await this.portfolioService.checkAvailableBalanceForLend(
+            accountId,
+            dto.assetId,
+            quantityBaseUnits,
+        );
+
         const settlementFee = await this.computeSettlementFee(
             dto.assetId,
             dto.amount,
@@ -121,7 +128,6 @@ export class OrdersService {
         walletAddress: string,
         privyUserId: string,
     ): Promise<OrderResponse> {
-        //@todo : when place order check if users balance is available or not, dont forget to get the balance from portofolio - total open order
         const accountId = await this.getOrCreateAccount(
             walletAddress,
             privyUserId,
@@ -132,6 +138,13 @@ export class OrdersService {
             dto.assetId,
         );
         const quantityBaseUnits = humanToBaseUnits(dto.amount, decimals!);
+
+        await this.portfolioService.checkAvailableBalanceForLend(
+            accountId,
+            dto.assetId,
+            quantityBaseUnits,
+        );
+
         const settlementFee = await this.computeSettlementFee(
             dto.assetId,
             dto.amount,
@@ -173,7 +186,6 @@ export class OrdersService {
         walletAddress: string,
         privyUserId: string,
     ): Promise<OrderResponse> {
-        //@todo : need to consider current open orders and reject if the new order would reduce health factor below 1
         const accountId = await this.getOrCreateAccount(
             walletAddress,
             privyUserId,
@@ -190,20 +202,23 @@ export class OrdersService {
             decimals!,
         );
 
-        const hfResult = await this.portfolioService.getHealthFactorForAccount(
-            accountId,
-            {
-                assetId: dto.assetId,
-                amountBaseUnits: quantityBaseUnits,
-            },
-        );
+        const assetPrice = await this.priceService.getPrice(dto.assetId);
+        if (assetPrice == null || assetPrice <= 0) {
+            throw new BadRequestException("Price not available for this asset");
+        }
+        const newOrderUsd = Number(dto.amount) * assetPrice;
+
+        const hfResult = await this.portfolioService.getHealthFactorForAccount(accountId, {
+            additionalBorrowUsd: newOrderUsd,
+            includeOpenOrders: true,
+        });
         if (
             hfResult.healthFactor !== HEALTH_FACTOR_NO_DEBT &&
             Number.isFinite(hfResult.healthFactor) &&
             hfResult.healthFactor < MIN_HEALTH_FACTOR
         ) {
             throw new BadRequestException(
-                "Borrow would reduce health factor below 1; position not allowed.",
+                "Borrow would reduce health factor below 1 (considering open orders); position not allowed.",
             );
         }
 
@@ -243,7 +258,6 @@ export class OrdersService {
         walletAddress: string,
         privyUserId: string,
     ): Promise<OrderResponse> {
-        //@todo : need to consider current open orders and reject if the new order would reduce health factor below 1
         const accountId = await this.getOrCreateAccount(
             walletAddress,
             privyUserId,
@@ -260,20 +274,23 @@ export class OrdersService {
             decimals!,
         );
 
-        const hfResult = await this.portfolioService.getHealthFactorForAccount(
-            accountId,
-            {
-                assetId: dto.assetId,
-                amountBaseUnits: quantityBaseUnits,
-            },
-        );
+        const assetPrice = await this.priceService.getPrice(dto.assetId);
+        if (assetPrice == null || assetPrice <= 0) {
+            throw new BadRequestException("Price not available for this asset");
+        }
+        const newOrderUsd = Number(dto.amount) * assetPrice;
+
+        const hfResult = await this.portfolioService.getHealthFactorForAccount(accountId, {
+            additionalBorrowUsd: newOrderUsd,
+            includeOpenOrders: true,
+        });
         if (
             hfResult.healthFactor !== HEALTH_FACTOR_NO_DEBT &&
             Number.isFinite(hfResult.healthFactor) &&
             hfResult.healthFactor < MIN_HEALTH_FACTOR
         ) {
             throw new BadRequestException(
-                "Borrow would reduce health factor below 1; position not allowed.",
+                "Borrow would reduce health factor below 1 (considering open orders); position not allowed.",
             );
         }
 
@@ -527,6 +544,8 @@ export class OrdersService {
             );
         }
     }
+
+
 
     private async publishCancelOrderToNats(
         orderId: string,

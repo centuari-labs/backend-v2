@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
 import { Token } from "../tokens/entities/token.entity";
@@ -15,7 +15,9 @@ import {
     type CollateralPositionInput,
     type DebtPositionInput,
     type HealthFactorResult,
+    type HealthFactorOptions,
 } from "./helpers/health-factor.helpers";
+import { OrderSide, OrderStatus } from "../orders/constants/order.constants";
 
 @Injectable()
 export class PortfolioService {
@@ -183,16 +185,21 @@ export class PortfolioService {
     }
 
     /**
-     * Returns health factor for the given account, optionally including a prospective extra debt position.
+     * Returns health factor for the given account, optionally including a prospective extra debt position and open orders.
      * Used by GET my-health-factor and by borrow order validation.
      */
     async getHealthFactorForAccount(
         accountId: string,
-        additionalDebt?: { assetId: string; amountBaseUnits: string },
+        options?: HealthFactorOptions,
     ): Promise<HealthFactorResult> {
         const { collateralPositions, debtPositions, additionalDebtPositions } =
-            await this.buildHealthFactorInputs(accountId, additionalDebt);
-        return computeHealthFactor(collateralPositions, debtPositions, additionalDebtPositions);
+            await this.buildHealthFactorInputs(accountId, options);
+        return computeHealthFactor(
+            collateralPositions,
+            debtPositions,
+            additionalDebtPositions,
+            options?.additionalBorrowUsd,
+        );
     }
 
     async getMyHealthFactor(wallet: string): Promise<MyHealthFactorResponseDto> {
@@ -207,7 +214,7 @@ export class PortfolioService {
 
     private async buildHealthFactorInputs(
         accountId: string,
-        additionalDebt?: { assetId: string; amountBaseUnits: string },
+        options?: HealthFactorOptions,
     ): Promise<{
         collateralPositions: CollateralPositionInput[];
         debtPositions: DebtPositionInput[];
@@ -255,22 +262,84 @@ export class PortfolioService {
             });
         }
 
-        let additionalDebtPositions: DebtPositionInput[] | undefined;
-        if (additionalDebt) {
-            const token = tokenMap.get(additionalDebt.assetId);
+        const additionalDebtPositions: DebtPositionInput[] = [];
+
+        if (options?.additionalDebt) {
+            const token = tokenMap.get(options.additionalDebt.assetId);
             const decimals = token?.decimals ?? 0;
-            const priceUsd = priceMap.get(additionalDebt.assetId) ?? 0;
-            additionalDebtPositions = [
-                {
-                    assetId: additionalDebt.assetId,
-                    amountBaseUnits: additionalDebt.amountBaseUnits,
-                    decimals,
-                    priceUsd,
-                },
-            ];
+            const priceUsd = priceMap.get(options.additionalDebt.assetId) ?? 0;
+            additionalDebtPositions.push({
+                assetId: options.additionalDebt.assetId,
+                amountBaseUnits: options.additionalDebt.amountBaseUnits,
+                decimals,
+                priceUsd,
+            });
         }
 
-        return { collateralPositions, debtPositions, additionalDebtPositions };
+        if (options?.includeOpenOrders) {
+            const openOrders = await this.orderRepository.getOpenBorrowOrders(accountId);
+            for (const order of openOrders) {
+                const token = tokenMap.get(order.assetId);
+                const decimals = token?.decimals ?? 0;
+                const priceUsd = priceMap.get(order.assetId) ?? 0;
+
+                const remainingAmountBaseUnits = (BigInt(order.quantity) - BigInt(order.filledQuantity)).toString();
+
+                additionalDebtPositions.push({
+                    assetId: order.assetId,
+                    amountBaseUnits: remainingAmountBaseUnits,
+                    decimals,
+                    priceUsd,
+                });
+            }
+        }
+
+        return {
+            collateralPositions,
+            debtPositions,
+            additionalDebtPositions: additionalDebtPositions.length > 0 ? additionalDebtPositions : undefined
+        };
+    }
+
+    async calculateOpenBorrowOrdersUsd(accountId: string): Promise<number> {
+        const openOrders = await this.orderRepository.getOpenBorrowOrders(accountId);
+        let totalUsd = 0;
+        const allPrices = this.priceService.getPrices();
+
+        for (const order of openOrders) {
+            const price = allPrices[order.assetId.toLowerCase()];
+            const decimals = await this.tokensService.getTokenDecimalsByAssetId(order.assetId);
+            if (price != null && decimals != null) {
+                const remainingAmountHuman = Number(baseUnitsToHuman(
+                    (BigInt(order.quantity) - BigInt(order.filledQuantity)).toString(),
+                    decimals
+                ));
+                totalUsd += remainingAmountHuman * price;
+            }
+        }
+
+        return totalUsd;
+    }
+
+    async checkAvailableBalanceForLend(
+        accountId: string,
+        assetId: string,
+        quantityBaseUnits: string
+    ): Promise<void> {
+        const portfolioBalanceRaw = await this.getAssetBalance(accountId, assetId);
+        const portfolioBalance = BigInt(portfolioBalanceRaw);
+
+        const totalOpenOrders = await this.orderRepository.getTotalOpenQuantity(
+            accountId,
+            assetId,
+            OrderSide.Lend,
+        );
+
+        const availableBalance = portfolioBalance - totalOpenOrders;
+
+        if (BigInt(quantityBaseUnits) > availableBalance) {
+            throw new BadRequestException("Insufficient portfolio balance for this order");
+        }
     }
 
     async getMyAssets(wallet: string, query: GetMyAssetsQueryDto): Promise<MyAssetsResponseDto> {
@@ -381,4 +450,9 @@ export class PortfolioService {
         await this.portfolioRepository.setAssetAsCollateral(account.id, body.assetIds, body.isCollateral);
     }
 
+    async getAssetBalance(accountId: string, assetId: string): Promise<string> {
+        const balances = await this.portfolioRepository.getUserTotalBalances(accountId);
+        const match = balances.find(b => b.asset_id === assetId);
+        return match ? match.total_amount : "0";
+    }
 }

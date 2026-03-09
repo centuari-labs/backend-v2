@@ -25,6 +25,12 @@ export interface HealthFactorResult {
     healthFactor: number;
 }
 
+export interface HealthFactorOptions {
+    additionalDebt?: { assetId: string; amountBaseUnits: string };
+    additionalBorrowUsd?: number;
+    includeOpenOrders?: boolean;
+}
+
 /** When debt is zero, we return this sentinel so callers can format as needed. */
 export const HEALTH_FACTOR_NO_DEBT = Number.POSITIVE_INFINITY;
 
@@ -47,6 +53,7 @@ export function computeHealthFactor(
     collateralPositions: CollateralPositionInput[],
     debtPositions: DebtPositionInput[],
     additionalDebtPositions?: DebtPositionInput[],
+    additionalDebtUsd?: number,
 ): HealthFactorResult {
     let collateralUsd = 0;
     let weightedLtvSum = 0;
@@ -69,14 +76,14 @@ export function computeHealthFactor(
     }
 
     const additional = additionalDebtPositions ?? [];
-    let additionalDebtUsd = 0;
+    let additionalDebtUsdSum = additionalDebtUsd ?? 0;
     for (const pos of additional) {
         const decimals = decimalsSafe(pos.decimals);
         const amountHuman = Number.parseFloat(baseUnitsToHuman(pos.amountBaseUnits, decimals));
-        additionalDebtUsd += amountHuman * (Number.isFinite(pos.priceUsd) ? pos.priceUsd : 0);
+        additionalDebtUsdSum += amountHuman * (Number.isFinite(pos.priceUsd) ? pos.priceUsd : 0);
     }
 
-    const totalDebtUsd = existingDebtUsd + additionalDebtUsd;
+    const totalDebtUsd = existingDebtUsd + additionalDebtUsdSum;
     const totalCollateralValue = collateralUsd;
     const weightedLtvDecimal =
         totalCollateralValue > 0 ? weightedLtvSum / totalCollateralValue : 0;

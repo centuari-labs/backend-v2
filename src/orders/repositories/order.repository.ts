@@ -1,6 +1,6 @@
 import { InjectRepository } from '@nestjs/typeorm';
 import { Injectable } from '@nestjs/common';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, In, Repository } from 'typeorm';
 import { Order } from '../entities/order.entity';
 import { OrderMarket } from '../entities/order-market.entity';
 import { OrderSide, OrderStatus } from '../constants/order.constants';
@@ -85,6 +85,35 @@ export class OrderRepository extends Repository<Order> {
             .getOne();
     }
 
+    async getTotalOpenQuantity(accountId: string, assetId: string, side: OrderSide): Promise<bigint> {
+        const result = await this.createQueryBuilder('order')
+            .select('SUM(order.quantity - COALESCE(order.filled_quantity, 0))', 'total')
+            .where('order.accountId = :accountId', { accountId })
+            .andWhere('order.assetId = :assetId', { assetId })
+            .andWhere('order.side = :side', { side })
+            .andWhere('order.status IN (:...statuses)', {
+                statuses: [OrderStatus.Open, OrderStatus.PartiallyFilled]
+            })
+            .getRawOne();
+
+        if (!result || !result.total) {
+            return 0n;
+        }
+
+        const totalStr = String(result.total).split('.')[0];
+        return BigInt(totalStr);
+    }
+
+    async getOpenBorrowOrders(accountId: string): Promise<Order[]> {
+        return this.find({
+            where: {
+                accountId,
+                side: OrderSide.Borrow,
+                status: In([OrderStatus.Open, OrderStatus.PartiallyFilled]),
+            },
+        });
+    }
+
     /**
      * Returns the sum of (quantity - filled_quantity) for all open/partially-filled
      * lend orders belonging to the given account, grouped by asset_id.
@@ -103,5 +132,4 @@ export class OrderRepository extends Repository<Order> {
             .groupBy("order.assetId")
             .getRawMany();
     }
-
 }

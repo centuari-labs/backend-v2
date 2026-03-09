@@ -61,6 +61,8 @@ export function createMockMarketRepository(): Partial<jest.Mocked<MarketReposito
 export function createMockPortfolioService(): Partial<jest.Mocked<PortfolioService>> {
     return {
         getHealthFactorForAccount: jest.fn().mockResolvedValue({ healthFactor: 2 }),
+        calculateOpenBorrowOrdersUsd: jest.fn().mockResolvedValue(0),
+        checkAvailableBalanceForLend: jest.fn().mockResolvedValue(undefined),
     } as any;
 }
 

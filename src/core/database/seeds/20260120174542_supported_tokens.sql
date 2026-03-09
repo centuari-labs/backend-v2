@@ -13,7 +13,7 @@ FROM (VALUES
     ('Tether USD',                                             'USDT',   '0xe1e9f8aDFBee861d1173850d692dD3863B7f2b61', true,  421614, 'tether',                                           6,  '/tokens/usdt-icon.svg'),
     ('Indonesian Rupiah',                                      'IDRX',   '0xDB0683a2A3d85B07f35F7eD4413E88C28Da26C7C', true,  421614, 'idrx',                                             18, '/tokens/idrx-icon.png'),
     ('StraitsX SGD',                                           'XSGD',   '0x612CFED4026384AF12c573A64F4d2996620D911e', true,  421614, 'xsgd',                                             6,  '/tokens/xsgd-icon.png'),
-    ('iShares Silver Trust (Ondo)',                            'SLVon',  '0x1E202e2Ffc478C408cc5A13663a0390ee5a416E2', false, 421614, 'ishares-silver-trust-ondo',         18, '/tokens/slvon-icon.png'),
+    ('iShares Silver Trust (Ondo)',                            'SLVon',  '0x1E202e2Ffc478C408cc5A13663a0390ee5a416E2', false, 421614, 'ishares-silver-trust-ondo-tokenized-stock',         18, '/tokens/slvon-icon.png'),
     ('NVIDIA (Ondo)',                                          'NVDAon', '0x35a0291104408e9eeC3e343583A7b1aD8c7A5496', false, 421614, 'nvidia-ondo-tokenized-stock',                      18, '/tokens/nvda-icon.svg'),
     ('Apple (Ondo)',                                           'AAPLon', '0xf554E2813B5959B6896aDc650231b76d716F3812', false, 421614, 'apple-ondo-tokenized-stock',                       18, '/tokens/aaplon-icon.png'),
     ('iShares 20+ Year Treasury Bond ETF (Ondo)',              'TLTon',  '0xf6c3b7Db9cdAA6429D62C040bFF3Ff3c443c1EEf', false, 421614, 'ishares-20-year-treasury-bond-etf-ondo-tokenized-etf', 18, '/tokens/tlton-icon.png')

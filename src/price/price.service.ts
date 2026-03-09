@@ -1,6 +1,7 @@
 import { Inject, Injectable, Logger, OnModuleInit } from "@nestjs/common";
 import { PRICE_PROVIDER, type IPriceProvider } from "./interfaces/price-provider.interface";
 import { TokensRepository } from "../tokens/repositories/tokens.repository";
+import { EventsGateway } from "../core/websocket/websocket.gateway";
 
 interface CacheEntry {
     price: number;
@@ -24,6 +25,7 @@ export class PriceService implements OnModuleInit {
     constructor(
         private readonly tokensRepository: TokensRepository,
         @Inject(PRICE_PROVIDER) private readonly priceProvider: IPriceProvider,
+        private readonly eventsGateway: EventsGateway,
     ) { }
 
     async onModuleInit(): Promise<void> {
@@ -106,6 +108,9 @@ export class PriceService implements OnModuleInit {
             // Replace cache atomically - keep stale data on failure, update on success
             this.cache = newCache;
             this.logger.log(`Price cache updated: ${this.cache.size} tokens`);
+
+            // Broadcast updated prices over WebSocket so gateway stays in sync
+            this.eventsGateway.broadcastPrices(this.getPrices());
         } catch (error) {
             this.logger.error(
                 `Failed to fetch and update prices: ${(error as Error).message}`,

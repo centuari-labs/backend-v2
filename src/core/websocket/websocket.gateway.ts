@@ -27,6 +27,7 @@ import type {
     RecentTradeDto,
     SubscribeRecentTradesDto,
 } from "./dto/recent-trades.dto";
+import type { PricesDto } from "./dto/prices.dto";
 
 /** Shape of order creation messages published by backend-v2 to NATS (flat, no envelope) */
 interface OrderCreationMessage {
@@ -105,6 +106,9 @@ export class EventsGateway
     /** Cached recent trades per assetId room (max 20 per room) */
     private recentTradesCache = new Map<string, RecentTradeDto[]>();
     private readonly maxRecentTrades = 20;
+
+    /** Cached latest prices keyed by assetId */
+    private pricesCache: PricesDto["prices"] = {};
 
     constructor(private readonly natsService: NatsService) {}
 
@@ -253,6 +257,26 @@ export class EventsGateway
         this.emitUserPosition(tracked, "orders.cancel");
     }
 
+    // ─── Prices ────────────────────────────────────────────────────────────
+
+    /**
+     * Broadcast the latest prices to all clients subscribed to the prices room.
+     * Intended to be called by the PriceWorker after each successful price fetch.
+     */
+    public broadcastPrices(prices: PricesDto["prices"]) {
+        this.pricesCache = prices;
+
+        const room = "prices";
+        const socketsInRoom = this.server.sockets.adapter.rooms.get(room);
+        this.logger.log(
+            `prices-update → room=${room}, clients=${socketsInRoom?.size ?? 0}, assets=${Object.keys(
+                prices,
+            ).length}`,
+        );
+
+        this.server.to(room).emit("prices-update", prices);
+    }
+
     private emitUserPosition(tracked: TrackedOrder, subject: string) {
         const room = `user:${tracked.accountId}`;
         const payload = {
@@ -338,6 +362,27 @@ export class EventsGateway
                 amount: amount.toString(),
                 orders: count,
             }));
+    }
+
+    @SubscribeMessage("subscribe-prices")
+    handleSubscribePrices(@ConnectedSocket() client: Socket) {
+        const room = "prices";
+        client.join(room);
+        this.logger.log(`Client ${client.id} joined ${room}`);
+
+        if (Object.keys(this.pricesCache).length > 0) {
+            client.emit("prices-snapshot", this.pricesCache);
+        }
+
+        return { success: true, room };
+    }
+
+    @SubscribeMessage("unsubscribe-prices")
+    handleUnsubscribePrices(@ConnectedSocket() client: Socket) {
+        const room = "prices";
+        client.leave(room);
+        this.logger.log(`Client ${client.id} left ${room}`);
+        return { success: true, room };
     }
 
     @SubscribeMessage("subscribe-orderbook")

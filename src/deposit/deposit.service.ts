@@ -4,6 +4,7 @@ import { parseUnits, formatUnits } from "viem";
 import { ViemService } from "../core/viem/viem.service";
 import { TokensService } from "../tokens/tokens.service";
 import { TokensRepository } from "../tokens/repositories/tokens.repository";
+import { compareTokensByPriority } from "../tokens/token-order.config";
 import { erc20Abi } from "../abis/ERC20";
 import type { DepositTokenDto, BalanceResponseDto } from "./dto/deposit.dto";
 
@@ -62,8 +63,9 @@ export class DepositService {
 
     async getDepositTokens(): Promise<DepositTokenDto[]> {
         const tokens = await this.tokensRepository.findDepositTokens();
+        const sorted = tokens.slice().sort(compareTokensByPriority);
 
-        return tokens.map((t) => ({
+        return sorted.map((t) => ({
             id: t.id,
             symbol: t.symbol,
             name: t.name,

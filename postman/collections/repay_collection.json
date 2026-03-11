@@ -1,0 +1,45 @@
+{
+  "info": {
+    "_postman_id": "bf7181dc-0d6b-4565-b240-1f50c2b4285d",
+    "name": "Repay",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "repay",
+      "id": "764cfcc2-f689-4a6b-9faf-261e36c559ca",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6IjJsR0pIc2VidkJPeHkxNWRUY2hkaTV2OU5xM2NvRVBsYlFDelFDbDlSeDAifQ.eyJzaWQiOiJjbW1tYzduYmIwMGpyMGNqcjNudncyb2g2IiwiaXNzIjoicHJpdnkuaW8iLCJpYXQiOjE3NzMyNTE1ODksImF1ZCI6ImNtZm1tb213dzAxNmZqbDBiZWU5aTJkczQiLCJzdWIiOiJkaWQ6cHJpdnk6Y21tZjNpZWcyMDEwdDBjanVia2VtdnR0aiIsImV4cCI6MTc3MzI1NTE4OX0.JHQxsLDshgdadyBqbyxPA1_rLEjYysXXO_xN035UA7VtEdZynXw4oZVmd5CORAPYgVFeGsvvkcXkvS9KXK-9yQ",
+            "type": "text",
+            "uuid": "f022242b-f0ac-4826-8725-dc159814365b"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"assetId\": \"ac7ae153-ad3f-44aa-96e7-44c8d22e84ab\", \n  \"amount\": \"10.5\" \n}\n",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "http://localhost:3000/repay",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "3000",
+          "path": [
+            "repay"
+          ]
+        }
+      },
+      "response": []
+    }
+  ]
+}

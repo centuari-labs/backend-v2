@@ -43,10 +43,10 @@ BEGIN
 
     IF target_market_id IS NULL THEN
         target_market_id := gen_random_uuid();
-        -- Use a fixed maturity for predictable testing (e.g., 2026-12-31)
+        -- Use a fixed maturity for predictable testing (1710240000 = 2024-03-12 10:40:00)
         INSERT INTO markets (id, asset_id, maturity, created_at)
-        VALUES (target_market_id, target_asset_id, '2026-12-31 00:00:00+00', NOW());
-        RAISE NOTICE 'Created test market % for asset % with maturity 2026-12-31', target_market_id, target_asset_id;
+        VALUES (target_market_id, target_asset_id, '2024-03-12 10:40:00+00', NOW());
+        RAISE NOTICE 'Created test market % for asset % with maturity 2024-03-12', target_market_id, target_asset_id;
     END IF;
 
     -- Iterate over test wallets

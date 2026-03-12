@@ -1,0 +1,45 @@
+{
+  "info": {
+    "_postman_id": "0ef703ed-5a04-49b6-ba91-40acee2ac73c",
+    "name": "Repay",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "repay",
+      "id": "c59132ba-52b0-4f0d-b984-795529cc6bfd",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6IjJsR0pIc2VidkJPeHkxNWRUY2hkaTV2OU5xM2NvRVBsYlFDelFDbDlSeDAifQ.eyJzaWQiOiJjbW1ucnNhenAwMDZ0MGNqdjVnYmttbDN1IiwiaXNzIjoicHJpdnkuaW8iLCJpYXQiOjE3NzMzMzgyMTMsImF1ZCI6ImNtZm1tb213dzAxNmZqbDBiZWU5aTJkczQiLCJzdWIiOiJkaWQ6cHJpdnk6Y21tamFhNmlqMDA4ODBkam9oa2JoNW4wYSIsImV4cCI6MTc3MzM0MTgxM30.Gv8ssQQw4hi3qqZDWa1h4xfEk-1AB46KP49pfPzMGk0wEfv_0_FD7TwjxXXN_LI9VpwAJTs-syAmAyfLbpDjfQ",
+            "type": "text",
+            "uuid": "5c744b5f-4428-4772-ad90-1c99c7f9c214"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"borrowerAddress\": \"0x3Ebf8ffC3F1517f9760dD2BfF36f934d19fa6cD8\",\n  \"assetId\": \"ac7ae153-ad3f-44aa-96e7-44c8d22e84ab\",\n  \"maturity\": 1780297200,\n  \"amount\": \"10\"\n}\n",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "http://localhost:3000/repay",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "3000",
+          "path": [
+            "repay"
+          ]
+        }
+      },
+      "response": []
+    }
+  ]
+}

@@ -12,8 +12,7 @@ export class RepayController {
     @UseGuards(AuthGuard)
     async repay(
         @Body() dto: RepayRequestDto,
-        @Wallet() walletAddress: string,
     ): Promise<RepayResponseDto> {
-        return this.repayService.repay(dto, walletAddress);
+        return this.repayService.repay(dto);
     }
 }

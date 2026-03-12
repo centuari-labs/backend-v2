@@ -1,60 +1,90 @@
 import { Injectable } from "@nestjs/common";
-import { DataSource, QueryRunner } from "typeorm";
+import { DataSource, EntityManager } from "typeorm";
+import { Token } from "../../tokens/entities/token.entity";
 
 @Injectable()
 export class RepayRepository {
-    constructor(private readonly dataSource: DataSource) {}
+    constructor(private readonly dataSource: DataSource) { }
 
-    createQueryRunner(): QueryRunner {
-        return this.dataSource.createQueryRunner();
+    async getAssetIdByTokenAddress(tokenAddress: string): Promise<string | null> {
+        const result = await this.dataSource.getRepository(Token)
+            .createQueryBuilder("token")
+            .select("token.id", "id")
+            .where("LOWER(token.token_address) = LOWER(:tokenAddress)", { tokenAddress })
+            .getRawOne();
+        return result?.id || null;
     }
+
 
     async getUserTotalDebt(
         accountId: string,
         assetId: string,
     ): Promise<string> {
-        const result = await this.dataSource.query(
-            `SELECT SUM(debt) as total_debt 
-             FROM borrow_positions 
-             WHERE account_id = $1 AND asset_id = $2`,
-            [accountId, assetId],
-        );
-        return result[0]?.total_debt || "0";
+        const result = await this.dataSource.createQueryBuilder()
+            .select("SUM(debt)", "total_debt")
+            .from("borrow_positions", "bp")
+            .where("bp.account_id = :accountId", { accountId })
+            .andWhere("bp.asset_id = :assetId", { assetId })
+            .getRawOne();
+        return result?.total_debt || "0";
     }
 
-    async getBorrowPositionsForUpdate(
-        queryRunner: QueryRunner,
+    async getBorrowPositions(
         accountId: string,
         assetId: string,
     ): Promise<any[]> {
-        return queryRunner.query(
-            `SELECT bp.id, bp.debt, m.maturity
-             FROM borrow_positions bp
-             JOIN markets m ON bp.market_id = m.id
-             WHERE bp.account_id = $1 AND bp.asset_id = $2 AND bp.debt > 0
-             ORDER BY bp.created_at ASC
-             FOR UPDATE OF bp`,
-            [accountId, assetId],
-        );
+        return this.dataSource.createQueryBuilder()
+            .select("bp.id", "id")
+            .addSelect("bp.debt", "debt")
+            .addSelect("CAST(EXTRACT(EPOCH FROM m.maturity AT TIME ZONE 'UTC') AS BIGINT)", "maturity")
+            .from("borrow_positions", "bp")
+            .innerJoin("markets", "m", "bp.market_id = m.id")
+            .where("bp.account_id = :accountId", { accountId })
+            .andWhere("bp.asset_id = :assetId", { assetId })
+            .andWhere("bp.debt > 0")
+            .orderBy("bp.created_at", "ASC")
+            .getRawMany();
+    }
+
+    async getBorrowPositionsForUpdate(
+        manager: EntityManager,
+        accountId: string,
+        assetId: string,
+    ): Promise<any[]> {
+        return manager.createQueryBuilder()
+            .select("bp.id", "id")
+            .addSelect("bp.debt", "debt")
+            .addSelect("CAST(EXTRACT(EPOCH FROM m.maturity AT TIME ZONE 'UTC') AS BIGINT)", "maturity")
+            .from("borrow_positions", "bp")
+            .innerJoin("markets", "m", "bp.market_id = m.id")
+            .where("bp.account_id = :accountId", { accountId })
+            .andWhere("bp.asset_id = :assetId", { assetId })
+            .andWhere("bp.debt > 0")
+            .orderBy("bp.created_at", "ASC")
+            .setLock("pessimistic_write")
+            .getRawMany();
     }
 
     async deleteBorrowPosition(
-        queryRunner: QueryRunner,
+        manager: EntityManager,
         positionId: string,
     ): Promise<void> {
-        await queryRunner.query(`DELETE FROM borrow_positions WHERE id = $1`, [
-            positionId,
-        ]);
+        await manager.createQueryBuilder()
+            .delete()
+            .from("borrow_positions")
+            .where("id = :positionId", { positionId })
+            .execute();
     }
 
     async updateBorrowPositionDebt(
-        queryRunner: QueryRunner,
+        manager: EntityManager,
         positionId: string,
         debt: string,
     ): Promise<void> {
-        await queryRunner.query(
-            `UPDATE borrow_positions SET debt = $1, updated_at = NOW() WHERE id = $2`,
-            [debt, positionId],
-        );
+        await manager.createQueryBuilder()
+            .update("borrow_positions")
+            .set({ debt, updatedAt: () => "NOW()" })
+            .where("id = :positionId", { positionId })
+            .execute();
     }
 }

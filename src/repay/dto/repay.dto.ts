@@ -1,12 +1,8 @@
-import { IsNotEmpty, IsString, IsUUID } from "class-validator";
-
 export class RepayRequestDto {
-    @IsUUID()
+    borrowerAddress: string;
     assetId: string;
-
-    @IsString()
-    @IsNotEmpty()
-    amount: string; // human-readable token units (e.g. "100.5")
+    maturity: number;
+    amount: string;
 }
 
 export interface RepayResponseDto {

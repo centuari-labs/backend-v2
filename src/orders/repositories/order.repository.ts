@@ -121,15 +121,15 @@ export class OrderRepository extends Repository<Order> {
     async getOpenLendAmountsByAccount(
         accountId: string,
     ): Promise<{ assetId: string; lockedAmount: string }[]> {
-        return this.createQueryBuilder("order")
-            .select("order.assetId", "assetId")
-            .addSelect("SUM(order.quantity::numeric - order.filled_quantity::numeric)", "lockedAmount")
-            .where("order.account_id = :accountId", { accountId })
-            .andWhere("order.side = :side", { side: OrderSide.Lend })
-            .andWhere("order.status IN (:...statuses)", {
+        return this.createQueryBuilder("o")
+            .select("o.assetId", "assetId")
+            .addSelect("SUM(o.quantity::numeric - o.filled_quantity::numeric)", "lockedAmount")
+            .where("o.account_id = :accountId", { accountId })
+            .andWhere("o.side = :side", { side: OrderSide.Lend })
+            .andWhere("o.status IN (:...statuses)", {
                 statuses: [OrderStatus.Open, OrderStatus.PartiallyFilled],
             })
-            .groupBy("order.assetId")
+            .groupBy("o.assetId")
             .getRawMany();
     }
 }

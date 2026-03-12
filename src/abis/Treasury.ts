@@ -1,34 +1,15 @@
-export const erc20Abi = [
-    {
-        type: "function",
-        name: "transfer",
-        inputs: [
-            {
-                name: "to",
-                type: "address",
-                internalType: "address",
-            },
-            {
-                name: "amount",
-                type: "uint256",
-                internalType: "uint256",
-            },
-        ],
-        outputs: [
-            {
-                name: "",
-                type: "bool",
-                internalType: "bool",
-            },
-        ],
-        stateMutability: "nonpayable",
-    },
+export const treasuryAbi = [
     {
         type: "function",
         name: "balanceOf",
         inputs: [
             {
-                name: "account",
+                name: "user",
+                type: "address",
+                internalType: "address",
+            },
+            {
+                name: "token",
                 type: "address",
                 internalType: "address",
             },
@@ -44,17 +25,12 @@ export const erc20Abi = [
     },
     {
         type: "function",
-        name: "approve",
+        name: "supportedToken",
         inputs: [
             {
-                name: "spender",
+                name: "",
                 type: "address",
                 internalType: "address",
-            },
-            {
-                name: "amount",
-                type: "uint256",
-                internalType: "uint256",
             },
         ],
         outputs: [
@@ -64,30 +40,25 @@ export const erc20Abi = [
                 internalType: "bool",
             },
         ],
-        stateMutability: "nonpayable",
+        stateMutability: "view",
     },
     {
         type: "function",
-        name: "allowance",
+        name: "deposit",
         inputs: [
             {
-                name: "owner",
+                name: "token",
                 type: "address",
                 internalType: "address",
             },
             {
-                name: "spender",
-                type: "address",
-                internalType: "address",
-            },
-        ],
-        outputs: [
-            {
-                name: "",
+                name: "amount",
                 type: "uint256",
                 internalType: "uint256",
             },
         ],
-        stateMutability: "view",
+        outputs: [],
+        stateMutability: "nonpayable",
     },
 ] as const;
+

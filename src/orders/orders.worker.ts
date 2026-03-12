@@ -2,14 +2,23 @@ import { Injectable, Logger, OnModuleInit } from "@nestjs/common";
 import { Interval } from "@nestjs/schedule";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
+import { ConfigService } from "@nestjs/config";
+import { ViemService } from "../core/viem/viem.service";
+import { FaucetService } from "../faucet/faucet.service";
+import { erc20Abi } from "../abis/ERC20";
+import { treasuryAbi } from "../abis/Treasury";
+import { privateKeyToAccount } from "viem/accounts";
+import { keccak256, toHex } from "viem";
 import { OrderRepository } from "./repositories/order.repository";
 import { OrdersService } from "./orders.service";
 import { Market } from "../market/entities/market.entity";
 import { Token } from "../tokens/entities/token.entity";
+import { PortfolioService } from "../portfolio/portfolio.service";
 
 const LEND_INSERT_INTERVAL_MS = 15000;
 const BORROW_INSERT_INTERVAL_MS = 15000;
 const CACHE_REFRESH_INTERVAL_MS = 60000;
+const FUNDING_INTERVAL_MS = 5 * 60 * 1000;
 
 const LEND_RATE_MIN = 600;
 const LEND_RATE_MAX = 1500;
@@ -21,32 +30,15 @@ const BORROW_QUANTITY_MIN = 100;
 const BORROW_QUANTITY_MAX = 5000;
 const MARKET_ORDER_PROBABILITY = 0.05;
 
-const ACCOUNTS = [
-    {
-        wallet: "0xcA2E021f8FEA9E3fb5F86A68A3158315404e6157",
-        privyUserId: "did:privy:clx8f2a7k000001",
-    },
-    {
-        wallet: "0xAb9A004468A39cCC07e1f62B59F990f45304a222",
-        privyUserId: "did:privy:clx8f2a7k000002",
-    },
-    {
-        wallet: "0x43765641b3632f45366cD91D9F128CFeb34b218F",
-        privyUserId: "did:privy:clx8f2a7k000003",
-    },
-    {
-        wallet: "0x103D2146DE8E682ca21eb2fbF9CF9a3e8a127749",
-        privyUserId: "did:privy:clx8f2a7k000004",
-    },
-    {
-        wallet: "0xCeCe52a44e9e6E57051791E7472CA87b3D789c3e",
-        privyUserId: "did:privy:clx8f2a7k000005",
-    },
-    {
-        wallet: "0xd0c75db43eBa0512D84e6f77104646809f1cac99",
-        privyUserId: "did:privy:clx8f2a7k000006",
-    },
-];
+const NUM_BOT_ACCOUNTS = 6;
+const MIN_TREASURY_BALANCE_HUMAN = 50_000;
+const MIN_GAS_BALANCE_WEI = BigInt(1e15); // ~0.001 ETH
+
+interface BotAccount {
+    privateKey: string;
+    wallet: string;
+    privyUserId: string;
+}
 
 @Injectable()
 export class OrdersWorker implements OnModuleInit {
@@ -56,6 +48,9 @@ export class OrdersWorker implements OnModuleInit {
         symbol: string;
         marketIds: string[];
     }> = [];
+    private botAccounts: BotAccount[] = [];
+    private chainId: number;
+    private treasuryAddress: string;
 
     constructor(
         private readonly orderRepository: OrderRepository,
@@ -64,6 +59,10 @@ export class OrdersWorker implements OnModuleInit {
         @InjectRepository(Token)
         private readonly tokenRepository: Repository<Token>,
         private readonly ordersService: OrdersService,
+        private readonly viemService: ViemService,
+        private readonly faucetService: FaucetService,
+        private readonly configService: ConfigService,
+        private readonly portfolioService: PortfolioService,
     ) {}
 
     async onModuleInit(): Promise<void> {
@@ -73,13 +72,230 @@ export class OrdersWorker implements OnModuleInit {
             );
             return;
         }
-        this.logger.log("OrdersWorker enabled — loading asset/market cache.");
+        this.logger.log("OrdersWorker enabled — initializing bot accounts and cache.");
+
+        this.chainId = Number(this.configService.get<string>("DEPOSIT_CHAIN_ID") ?? "421614");
+        this.treasuryAddress =
+            this.configService.get<string>("TREASURY_ADDRESS") ??
+            (() => {
+                throw new Error("TREASURY_ADDRESS is not configured");
+            })();
+
+        this.botAccounts = this.deriveBotAccounts();
+        await this.ensureAccountsExist();
         await this.refreshAssetMarketCache();
+        await this.ensureFunding();
     }
 
     private get isEnabled(): boolean {
         if (process.env.NODE_ENV === "production") return false;
         return process.env.ORDER_WORKER_ENABLED === "true";
+    }
+
+    private deriveBotAccounts(): BotAccount[] {
+        const operatorKey = this.configService.get<string>("OPERATOR_PRIVATE_KEY");
+        if (!operatorKey) {
+            throw new Error("OPERATOR_PRIVATE_KEY is not configured");
+        }
+        const formattedKey = operatorKey.startsWith("0x") ? operatorKey : `0x${operatorKey}`;
+        return Array.from({ length: NUM_BOT_ACCOUNTS }, (_, i) => {
+            const derivedKey = keccak256(toHex(`${formattedKey}-bot-${i}`));
+            const account = privateKeyToAccount(derivedKey as `0x${string}`);
+            return {
+                privateKey: derivedKey,
+                wallet: account.address,
+                privyUserId: `did:privy:worker-bot-${i}`,
+            };
+        });
+    }
+
+    private async ensureAccountsExist(): Promise<void> {
+        for (const bot of this.botAccounts) {
+            await this.orderRepository.getOrCreateAccount(bot.wallet, bot.privyUserId);
+        }
+        this.logger.log(`Ensured ${this.botAccounts.length} bot accounts exist in DB`);
+    }
+
+    @Interval(FUNDING_INTERVAL_MS)
+    private async ensureFunding(): Promise<void> {
+        if (!this.isEnabled || this.assetMarketCache.length === 0) return;
+
+        const operatorKey = this.configService.get<string>("OPERATOR_PRIVATE_KEY");
+        if (!operatorKey) {
+            this.logger.error("OPERATOR_PRIVATE_KEY is not configured; cannot fund bots");
+            return;
+        }
+        const formattedKey = operatorKey.startsWith("0x") ? operatorKey : `0x${operatorKey}`;
+
+        // Pick loan tokens from current cache
+        const assetIds = Array.from(new Set(this.assetMarketCache.map((e) => e.assetId)));
+        const tokens = await this.tokenRepository.findByIds(assetIds);
+        const tokenById = new Map(tokens.map((t) => [t.id, t]));
+
+        for (const bot of this.botAccounts) {
+            try {
+                // 1. Gas funding
+                await this.ensureGasForBot(formattedKey, bot.wallet);
+
+                // 2. Per-token funding (isolated per token so one failure doesn't block others)
+                for (const assetId of assetIds) {
+                    const token = tokenById.get(assetId);
+                    if (!token?.tokenAddress || token.decimals == null) continue;
+
+                    try {
+                        await this.ensureTokenFundingForBot(
+                            formattedKey,
+                            bot,
+                            token.tokenAddress,
+                            token.decimals,
+                        );
+                    } catch (tokenErr) {
+                        this.logger.warn(
+                            `Funding token ${token.symbol ?? token.tokenAddress} for bot ${bot.wallet} failed: ${(tokenErr as Error).message?.slice(0, 120)}`,
+                        );
+                    }
+                }
+            } catch (e) {
+                this.logger.error(
+                    `Failed to ensure funding for bot ${bot.wallet}: ${(e as Error).message}`,
+                );
+            }
+        }
+    }
+
+    private async ensureGasForBot(operatorKey: string, botAddress: string): Promise<void> {
+        try {
+            const publicClient = this.viemService.getPublicClient(this.chainId);
+            const balance = await publicClient.getBalance({
+                address: botAddress as `0x${string}`,
+            });
+            if (balance >= MIN_GAS_BALANCE_WEI) return;
+
+            const operatorAccount = privateKeyToAccount(
+                (operatorKey.startsWith("0x") ? operatorKey : `0x${operatorKey}`) as `0x${string}`,
+            );
+            const walletClient = this.viemService.getWalletClient(operatorKey, this.chainId);
+            await walletClient.sendTransaction({
+                account: operatorAccount,
+                to: botAddress as `0x${string}`,
+                value: MIN_GAS_BALANCE_WEI,
+            });
+            this.logger.log(`Sent gas to bot ${botAddress}`);
+        } catch (e) {
+            this.logger.error(
+                `Failed to fund gas for bot ${botAddress}: ${(e as Error).message}`,
+            );
+        }
+    }
+
+    private async ensureTokenFundingForBot(
+        operatorKey: string,
+        bot: BotAccount,
+        tokenAddress: string,
+        decimals: number,
+    ): Promise<void> {
+        // Skip tokens that Treasury does not support
+        const isSupported = await this.viemService.readContract<boolean>(
+            this.chainId,
+            this.treasuryAddress,
+            treasuryAbi,
+            "supportedToken",
+            [tokenAddress],
+        );
+        if (!isSupported) {
+            this.logger.debug(
+                `Token ${tokenAddress} is not supported by Treasury; skipping funding for bot ${bot.wallet}`,
+            );
+            return;
+        }
+
+        const minBalanceBaseUnits =
+            BigInt(MIN_TREASURY_BALANCE_HUMAN) * 10n ** BigInt(decimals);
+
+        const currentTreasuryBalance = await this.viemService.readContract<bigint>(
+            this.chainId,
+            this.treasuryAddress,
+            treasuryAbi,
+            "balanceOf",
+            [bot.wallet, tokenAddress],
+        );
+        if (currentTreasuryBalance >= minBalanceBaseUnits) {
+            return;
+        }
+
+        const shortfall = minBalanceBaseUnits - currentTreasuryBalance;
+
+        // Mint to bot via Faucet (operator mints to bot)
+        await this.faucetService.requestTokens(this.chainId, bot.wallet, tokenAddress);
+
+        // Check actual wallet balance after mint
+        const walletBalance = await this.viemService.readContract<bigint>(
+            this.chainId,
+            tokenAddress,
+            erc20Abi,
+            "balanceOf",
+            [bot.wallet],
+        );
+        if (walletBalance === 0n) {
+            this.logger.warn(
+                `Bot ${bot.wallet} has zero ${tokenAddress} balance after faucet mint; skipping deposit`,
+            );
+            return;
+        }
+
+        const depositAmount = walletBalance < shortfall ? walletBalance : shortfall;
+        if (depositAmount === 0n) {
+            return;
+        }
+
+        // Ensure allowance
+        const allowance = await this.viemService.readContract<bigint>(
+            this.chainId,
+            tokenAddress,
+            erc20Abi,
+            "allowance",
+            [bot.wallet, this.treasuryAddress],
+        );
+        if (allowance < depositAmount) {
+            await this.writeContractWithNonceRetry(
+                bot.privateKey,
+                tokenAddress,
+                erc20Abi,
+                "approve",
+                [this.treasuryAddress, BigInt("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")],
+            );
+            // Allow RPC to reflect the updated nonce before the next tx
+            await new Promise((r) => setTimeout(r, 3000));
+        }
+
+        await this.writeContractWithNonceRetry(
+            bot.privateKey,
+            this.treasuryAddress,
+            treasuryAbi,
+            "deposit",
+            [tokenAddress, depositAmount],
+        );
+
+        this.logger.log(
+            `Ensured treasury balance for bot ${bot.wallet} token ${tokenAddress} up to ${MIN_TREASURY_BALANCE_HUMAN}`,
+        );
+
+        // Mark asset as collateral to support borrow health factor, if not already
+        try {
+            const asset = await this.tokenRepository.findOne({
+                where: { tokenAddress },
+            });
+            if (asset?.id) {
+                await this.portfolioService.setAssetAsCollateral(bot.wallet, {
+                    assetIds: [asset.id],
+                    isCollateral: true,
+                });
+            }
+        } catch (e) {
+            this.logger.error(
+                `Failed to mark asset ${tokenAddress} as collateral for bot ${bot.wallet}: ${(e as Error).message}`,
+            );
+        }
     }
 
     // ─── Cache ───────────────────────────────────────────────────────────
@@ -191,6 +407,49 @@ export class OrdersWorker implements OnModuleInit {
         }
     }
 
+    // ─── On-chain helpers ─────────────────────────────────────────────────
+
+    private isNonceError(error: unknown): boolean {
+        const msg = ((error as Error).message ?? "").toLowerCase();
+        return msg.includes("nonce too low") || msg.includes("lower than the current nonce");
+    }
+
+    private async writeContractWithNonceRetry(
+        privateKey: string,
+        address: string,
+        abi: readonly any[],
+        functionName: string,
+        args: any[],
+    ): Promise<void> {
+        try {
+            await this.viemService.writeContract(
+                this.chainId,
+                privateKey,
+                address,
+                abi,
+                functionName,
+                args,
+                { waitForReceipt: true },
+            );
+        } catch (e) {
+            if (!this.isNonceError(e)) throw e;
+
+            this.logger.warn(
+                `Nonce error on ${functionName}; retrying once after short delay`,
+            );
+            await new Promise((r) => setTimeout(r, 2000));
+            await this.viemService.writeContract(
+                this.chainId,
+                privateKey,
+                address,
+                abi,
+                functionName,
+                args,
+                { waitForReceipt: true },
+            );
+        }
+    }
+
     // ─── Helpers ─────────────────────────────────────────────────────────
 
     private randomRate(min: number, max: number): number {
@@ -202,6 +461,6 @@ export class OrdersWorker implements OnModuleInit {
     }
 
     private randomAccount() {
-        return ACCOUNTS[Math.floor(Math.random() * ACCOUNTS.length)];
+        return this.botAccounts[Math.floor(Math.random() * this.botAccounts.length)];
     }
 }

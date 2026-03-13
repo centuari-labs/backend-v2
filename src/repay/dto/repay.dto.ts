@@ -1,7 +1,12 @@
+import { IsNotEmpty, IsString, IsUUID } from "class-validator";
+
 export class RepayRequestDto {
-    borrowerAddress: string;
-    assetId: string;
-    maturity: number;
+    @IsUUID()
+    @IsNotEmpty()
+    marketId: string;
+
+    @IsString()
+    @IsNotEmpty()
     amount: string;
 }
 

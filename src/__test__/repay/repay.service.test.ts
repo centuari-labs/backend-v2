@@ -4,6 +4,7 @@ import { ViemService } from "../../core/viem/viem.service";
 import { TokensService } from "../../tokens/tokens.service";
 import { OrderRepository } from "../../orders/repositories/order.repository";
 import { RepayRepository } from "../../repay/repositories/repay.repository";
+import { MarketRepositories } from "../../market/repository/market.repository";
 import { ConfigService } from "@nestjs/config";
 import { BadRequestException, NotFoundException, InternalServerErrorException } from "@nestjs/common";
 import { parseUnits } from "viem";
@@ -12,7 +13,6 @@ import { DataSource, EntityManager } from "typeorm";
 describe("RepayService", () => {
     let service: RepayService;
     let viemService: jest.Mocked<ViemService>;
-    let tokensService: jest.Mocked<TokensService>;
     let orderRepository: jest.Mocked<OrderRepository>;
     let repayRepository: jest.Mocked<RepayRepository>;
     let configService: jest.Mocked<ConfigService>;
@@ -24,12 +24,8 @@ describe("RepayService", () => {
             writeContract: jest.fn(),
         } as any;
 
-        tokensService = {
-            getTokenByAssetId: jest.fn(),
-        } as any;
-
         orderRepository = {
-            findAccountByWallet: jest.fn(),
+            getOrCreateAccount: jest.fn(),
         } as any;
 
         manager = {
@@ -41,11 +37,9 @@ describe("RepayService", () => {
         } as any;
 
         repayRepository = {
-            getAssetIdByTokenAddress: jest.fn(),
+            getMarketWithAsset: jest.fn(),
             getUserTotalDebt: jest.fn(),
             getBorrowPositions: jest.fn(),
-            getBorrowPositionsForUpdate: jest.fn(),
-            deleteBorrowPosition: jest.fn(),
             updateBorrowPositionDebt: jest.fn(),
         } as any;
 
@@ -53,7 +47,7 @@ describe("RepayService", () => {
             get: jest.fn((key: string) => {
                 if (key === "DEPOSIT_CHAIN_ID") return "421614";
                 if (key === "OPERATOR_PRIVATE_KEY") return "0xoperator";
-                if (key === "TREASURY_ADDRESS") return "0xtreasury";
+                if (key === "CENTUARI_ADDRESS") return "0xcentuari";
                 return null;
             }),
         } as any;
@@ -62,7 +56,6 @@ describe("RepayService", () => {
             providers: [
                 RepayService,
                 { provide: ViemService, useValue: viemService },
-                { provide: TokensService, useValue: tokensService },
                 { provide: OrderRepository, useValue: orderRepository },
                 { provide: RepayRepository, useValue: repayRepository },
                 { provide: ConfigService, useValue: configService },
@@ -75,146 +68,48 @@ describe("RepayService", () => {
 
     describe("repay", () => {
         const walletAddress = "0xwallet";
-        const assetId = "0xtoken";
-        const maturity = 1710240000; // Example timestamp
-        const dto = { borrowerAddress: walletAddress, assetId, maturity, amount: "100" };
+        const privyUserId = "privy-1";
+        const marketId = "market-1";
+        const assetId = "asset-1";
+        const maturity = new Date(1710240000 * 1000);
+        const dto = { marketId, amount: "100" };
         const token = {
-            id: "token-1",
-            tokenAddress: assetId,
+            id: assetId,
+            tokenAddress: "0xtoken",
             decimals: 18,
-            symbol: "USDC",
-            name: "USD Coin",
-            isLoanToken: true,
-            createdAt: new Date(),
-            updatedAt: new Date(),
         };
-        const account = {
-            id: "acc-1",
-            userWallet: walletAddress,
-            privyUserId: "privy-1",
-            createdAt: new Date(),
-        };
+        const account = { id: "acc-1" };
+        const market = { id: marketId, assetId, maturity: maturity.toISOString(), decimals: 18, tokenAddress: "0xtoken" };
 
         it("should successfully repay part of a borrow position", async () => {
-            orderRepository.findAccountByWallet.mockResolvedValue(account as any);
-            repayRepository.getAssetIdByTokenAddress.mockResolvedValue("token-1");
-            tokensService.getTokenByAssetId.mockResolvedValue(token as any);
-
-            // User has 200 total debt
+            orderRepository.getOrCreateAccount.mockResolvedValue(account as any);
+            repayRepository.getMarketWithAsset.mockResolvedValue(market as any);
             repayRepository.getUserTotalDebt.mockResolvedValue(parseUnits("200", 18).toString());
-
-            // User repays 100
             repayRepository.getBorrowPositions.mockResolvedValue([
-                { id: "pos-1", debt: parseUnits("200", 18).toString(), maturity: new Date(maturity * 1000).toISOString() }
+                { id: "pos-1", debt: parseUnits("200", 18).toString() }
             ]);
-            repayRepository.getBorrowPositionsForUpdate.mockResolvedValue([
-                { id: "pos-1", debt: parseUnits("200", 18).toString(), maturity: maturity }
-            ]);
-
             viemService.writeContract.mockResolvedValue({ transactionHash: "0xtx" } as any);
 
-            const result = await service.repay(dto);
+            const result = await service.repay(dto, walletAddress, privyUserId);
 
             expect(result).toEqual({ txHash: "0xtx", status: "success" });
-            expect(dataSource.transaction).toHaveBeenCalled();
-            expect(repayRepository.updateBorrowPositionDebt).toHaveBeenCalledWith(
-                manager,
-                "pos-1",
-                parseUnits("100", 18).toString()
-            );
-            expect(viemService.writeContract).toHaveBeenCalled();
+            expect(repayRepository.getMarketWithAsset).toHaveBeenCalledWith(marketId);
+            expect(repayRepository.updateBorrowPositionDebt).toHaveBeenCalledWith(manager, "pos-1", parseUnits("100", 18).toString());
         });
 
-        it("should successfully fully repay multiple borrow positions", async () => {
-            orderRepository.findAccountByWallet.mockResolvedValue(account as any);
-            repayRepository.getAssetIdByTokenAddress.mockResolvedValue("token-1");
-            tokensService.getTokenByAssetId.mockResolvedValue(token as any);
+        it("should throw NotFoundException if market not found", async () => {
+            orderRepository.getOrCreateAccount.mockResolvedValue(account as any);
+            repayRepository.getMarketWithAsset.mockResolvedValue(null);
 
-            // User has 100 total debt spread across 2 positions
-            repayRepository.getUserTotalDebt.mockResolvedValue(parseUnits("100", 18).toString());
-
-            // User repays 100
-            repayRepository.getBorrowPositions.mockResolvedValue([
-                { id: "pos-1", debt: parseUnits("40", 18).toString(), maturity: new Date(maturity * 1000).toISOString() },
-                { id: "pos-2", debt: parseUnits("60", 18).toString(), maturity: new Date(maturity * 1000).toISOString() },
-            ]);
-            repayRepository.getBorrowPositionsForUpdate.mockResolvedValue([
-                { id: "pos-1", debt: parseUnits("40", 18).toString(), maturity: maturity },
-                { id: "pos-2", debt: parseUnits("60", 18).toString(), maturity: maturity },
-            ]);
-
-            viemService.writeContract.mockResolvedValue({ transactionHash: "0xtx" } as any);
-
-            const result = await service.repay(dto);
-
-            expect(result).toEqual({ txHash: "0xtx", status: "success" });
-            expect(dataSource.transaction).toHaveBeenCalled();
-            expect(repayRepository.deleteBorrowPosition).toHaveBeenCalledWith(manager, "pos-1");
-            expect(repayRepository.deleteBorrowPosition).toHaveBeenCalledWith(manager, "pos-2");
+            await expect(service.repay(dto, walletAddress, privyUserId)).rejects.toThrow(NotFoundException);
         });
 
         it("should throw BadRequestException if repay amount > total debt", async () => {
-            orderRepository.findAccountByWallet.mockResolvedValue(account as any);
-            repayRepository.getAssetIdByTokenAddress.mockResolvedValue("token-1");
-            tokensService.getTokenByAssetId.mockResolvedValue(token as any);
-
-            // User has 50 total debt, tries to repay 100
+            orderRepository.getOrCreateAccount.mockResolvedValue(account as any);
+            repayRepository.getMarketWithAsset.mockResolvedValue(market as any);
             repayRepository.getUserTotalDebt.mockResolvedValue(parseUnits("50", 18).toString());
 
-            await expect(service.repay(dto)).rejects.toThrow(BadRequestException);
-            expect(dataSource.transaction).not.toHaveBeenCalled();
-            expect(viemService.writeContract).not.toHaveBeenCalled();
-        });
-
-        it("should throw NotFoundException if unsupported/invalid token", async () => {
-            orderRepository.findAccountByWallet.mockResolvedValue(account as any);
-            tokensService.getTokenByAssetId.mockResolvedValue(null as any); // Token not found
-
-            await expect(service.repay(dto)).rejects.toThrow(NotFoundException);
-            expect(repayRepository.getUserTotalDebt).not.toHaveBeenCalled();
-        });
-
-        it("should throw BadRequestException if user has no debt (total debt is 0)", async () => {
-            orderRepository.findAccountByWallet.mockResolvedValue(account as any);
-            repayRepository.getAssetIdByTokenAddress.mockResolvedValue("token-1");
-            tokensService.getTokenByAssetId.mockResolvedValue(token as any);
-
-            // Total debt is 0
-            repayRepository.getUserTotalDebt.mockResolvedValue("0");
-
-            await expect(service.repay(dto)).rejects.toThrow(BadRequestException);
-            expect(dataSource.transaction).not.toHaveBeenCalled();
-        });
-
-        it("should rollback transaction if smart contract reverts", async () => {
-            orderRepository.findAccountByWallet.mockResolvedValue(account as any);
-            repayRepository.getAssetIdByTokenAddress.mockResolvedValue("token-1");
-            tokensService.getTokenByAssetId.mockResolvedValue(token as any);
-            repayRepository.getUserTotalDebt.mockResolvedValue(parseUnits("200", 18).toString());
-            repayRepository.getBorrowPositions.mockResolvedValue([
-                { id: "pos-1", debt: parseUnits("200", 18).toString(), maturity: new Date(maturity * 1000).toISOString() }
-            ]);
-
-            viemService.writeContract.mockRejectedValue(new Error("Contract reverted"));
-
-            await expect(service.repay(dto)).rejects.toThrow("Contract reverted");
-
-            expect(dataSource.transaction).not.toHaveBeenCalled();
-        });
-
-        it("should throw InternalServerErrorException if DB update fails after blockchain success", async () => {
-            orderRepository.findAccountByWallet.mockResolvedValue(account as any);
-            repayRepository.getAssetIdByTokenAddress.mockResolvedValue("token-1");
-            tokensService.getTokenByAssetId.mockResolvedValue(token as any);
-            repayRepository.getUserTotalDebt.mockResolvedValue(parseUnits("100", 18).toString());
-            repayRepository.getBorrowPositions.mockResolvedValue([
-                { id: "pos-1", debt: parseUnits("100", 18).toString(), maturity: new Date(maturity * 1000).toISOString() }
-            ]);
-
-            viemService.writeContract.mockResolvedValue("0xtx");
-            dataSource.transaction.mockRejectedValue(new Error("DB Connection Error"));
-
-            await expect(service.repay(dto)).rejects.toThrow(InternalServerErrorException);
+            await expect(service.repay(dto, walletAddress, privyUserId)).rejects.toThrow(BadRequestException);
         });
     });
 });

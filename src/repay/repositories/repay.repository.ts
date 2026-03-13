@@ -6,74 +6,51 @@ import { Token } from "../../tokens/entities/token.entity";
 export class RepayRepository {
     constructor(private readonly dataSource: DataSource) { }
 
-    async getAssetIdByTokenAddress(tokenAddress: string): Promise<string | null> {
-        const result = await this.dataSource.getRepository(Token)
-            .createQueryBuilder("token")
-            .select("token.id", "id")
-            .where("LOWER(token.token_address) = LOWER(:tokenAddress)", { tokenAddress })
-            .getRawOne();
-        return result?.id || null;
-    }
-
 
     async getUserTotalDebt(
         accountId: string,
-        assetId: string,
+        marketId: string,
     ): Promise<string> {
         const result = await this.dataSource.createQueryBuilder()
             .select("SUM(debt)", "total_debt")
             .from("borrow_positions", "bp")
             .where("bp.account_id = :accountId", { accountId })
-            .andWhere("bp.asset_id = :assetId", { assetId })
+            .andWhere("bp.market_id = :marketId", { marketId })
             .getRawOne();
         return result?.total_debt || "0";
     }
 
+    async getMarketWithAsset(marketId: string): Promise<any> {
+        return this.dataSource.createQueryBuilder()
+            .select("m.id", "id")
+            .addSelect("m.maturity", "maturity")
+            .addSelect("a.decimals", "decimals")
+            .addSelect("a.token_address", "tokenAddress")
+            .from("markets", "m")
+            .innerJoin("assets", "a", "m.asset_id = a.id")
+            .where("m.id = :marketId", { marketId })
+            .getRawOne();
+    }
+
     async getBorrowPositions(
         accountId: string,
-        assetId: string,
+        marketId: string,
+        manager?: EntityManager,
     ): Promise<any[]> {
-        return this.dataSource.createQueryBuilder()
+        const qb = (manager || this.dataSource).createQueryBuilder()
             .select("bp.id", "id")
             .addSelect("bp.debt", "debt")
-            .addSelect("CAST(EXTRACT(EPOCH FROM m.maturity AT TIME ZONE 'UTC') AS BIGINT)", "maturity")
             .from("borrow_positions", "bp")
-            .innerJoin("markets", "m", "bp.market_id = m.id")
             .where("bp.account_id = :accountId", { accountId })
-            .andWhere("bp.asset_id = :assetId", { assetId })
+            .andWhere("bp.market_id = :marketId", { marketId })
             .andWhere("bp.debt > 0")
-            .orderBy("bp.created_at", "ASC")
-            .getRawMany();
-    }
+            .orderBy("bp.created_at", "ASC");
 
-    async getBorrowPositionsForUpdate(
-        manager: EntityManager,
-        accountId: string,
-        assetId: string,
-    ): Promise<any[]> {
-        return manager.createQueryBuilder()
-            .select("bp.id", "id")
-            .addSelect("bp.debt", "debt")
-            .addSelect("CAST(EXTRACT(EPOCH FROM m.maturity AT TIME ZONE 'UTC') AS BIGINT)", "maturity")
-            .from("borrow_positions", "bp")
-            .innerJoin("markets", "m", "bp.market_id = m.id")
-            .where("bp.account_id = :accountId", { accountId })
-            .andWhere("bp.asset_id = :assetId", { assetId })
-            .andWhere("bp.debt > 0")
-            .orderBy("bp.created_at", "ASC")
-            .setLock("pessimistic_write")
-            .getRawMany();
-    }
+        if (manager) {
+            qb.setLock("pessimistic_write");
+        }
 
-    async deleteBorrowPosition(
-        manager: EntityManager,
-        positionId: string,
-    ): Promise<void> {
-        await manager.createQueryBuilder()
-            .delete()
-            .from("borrow_positions")
-            .where("id = :positionId", { positionId })
-            .execute();
+        return qb.getRawMany();
     }
 
     async updateBorrowPositionDebt(

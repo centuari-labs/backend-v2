@@ -1,5 +1,5 @@
 import { Body, Controller, Post, UseGuards } from "@nestjs/common";
-import { Wallet } from "../common/decorators/wallet.decorator";
+import { Wallet, CurrentUser } from "../common/decorators/wallet.decorator";
 import { AuthGuard } from "../common/guards/auth.guard";
 import { RepayService } from "./repay.service";
 import type { RepayRequestDto, RepayResponseDto } from "./dto/repay.dto";
@@ -12,7 +12,9 @@ export class RepayController {
     @UseGuards(AuthGuard)
     async repay(
         @Body() dto: RepayRequestDto,
+        @Wallet() walletAddress: string,
+        @CurrentUser() user: { userId: string },
     ): Promise<RepayResponseDto> {
-        return this.repayService.repay(dto);
+        return this.repayService.repay(dto, walletAddress, user.userId);
     }
 }

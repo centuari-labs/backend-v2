@@ -191,6 +191,7 @@ export class ViemService implements OnModuleInit {
                 args,
                 value: options.value,
                 gas: options.gas,
+                type: 'eip1559',
             });
 
             this.logger.log(`Transaction sent: ${hash} (Chain: ${chainId}, Function: ${functionName})`);

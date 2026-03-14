@@ -236,4 +236,45 @@ export class PortfolioRepository extends Repository<Portfolio> {
             .andWhere('portfolio.asset_id IN (:...assetIds)', { assetIds })
             .execute();
     }
+
+    /**
+     * Upserts portfolio: insert or on conflict add amount.
+     * Matches indexer Treasury:Deposited behavior.
+     */
+    async upsertPortfolio(
+        id: string,
+        accountId: string,
+        assetId: string,
+        amountDelta: string,
+    ): Promise<void> {
+        await this.dataSource.query(
+            `INSERT INTO portfolio (id, account_id, asset_id, amount, is_collateral)
+             VALUES ($1, $2, $3, $4, false)
+             ON CONFLICT (id) DO UPDATE SET
+               amount = portfolio.amount + EXCLUDED.amount::numeric,
+               updated_at = NOW()`,
+            [id, accountId, assetId, amountDelta],
+        );
+    }
+
+    /**
+     * Syncs portfolio balance from on-chain treasury balance.
+     * Replaces amount on conflict (SET) rather than adding (upsertPortfolio).
+     * Used by OrdersWorker to ensure DB reflects on-chain state regardless of event parsing.
+     */
+    async syncPortfolioBalance(
+        id: string,
+        accountId: string,
+        assetId: string,
+        amount: string,
+    ): Promise<void> {
+        await this.dataSource.query(
+            `INSERT INTO portfolio (id, account_id, asset_id, amount, is_collateral)
+             VALUES ($1, $2, $3, $4, false)
+             ON CONFLICT (id) DO UPDATE SET
+               amount = $4::numeric,
+               updated_at = NOW()`,
+            [id, accountId, assetId, amount],
+        );
+    }
 }

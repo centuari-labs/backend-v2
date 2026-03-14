@@ -60,5 +60,30 @@ export const treasuryAbi = [
         outputs: [],
         stateMutability: "nonpayable",
     },
+    {
+        type: "event",
+        name: "Deposited",
+        inputs: [
+            {
+                name: "user",
+                type: "address",
+                indexed: true,
+                internalType: "address",
+            },
+            {
+                name: "token",
+                type: "address",
+                indexed: true,
+                internalType: "address",
+            },
+            {
+                name: "amount",
+                type: "uint256",
+                indexed: false,
+                internalType: "uint256",
+            },
+        ],
+        anonymous: false,
+    },
 ] as const;
 

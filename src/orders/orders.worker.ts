@@ -1,15 +1,18 @@
 import { Injectable, Logger, OnModuleInit } from "@nestjs/common";
 import { Interval } from "@nestjs/schedule";
 import { InjectRepository } from "@nestjs/typeorm";
-import { Repository } from "typeorm";
+import { In, Repository } from "typeorm";
 import { ConfigService } from "@nestjs/config";
+import type { TransactionReceipt } from "viem";
 import { ViemService } from "../core/viem/viem.service";
 import { FaucetService } from "../faucet/faucet.service";
 import { erc20Abi } from "../abis/ERC20";
 import { treasuryAbi } from "../abis/Treasury";
 import { privateKeyToAccount } from "viem/accounts";
-import { keccak256, toHex } from "viem";
+import { keccak256, parseEventLogs, toHex } from "viem";
 import { OrderRepository } from "./repositories/order.repository";
+import { PortfolioRepository } from "../portfolio/repositories/portfolio.repository";
+import { portfolioUuidFor } from "../common/utils/uuid.utils";
 import { OrdersService } from "./orders.service";
 import { Market } from "../market/entities/market.entity";
 import { Token } from "../tokens/entities/token.entity";
@@ -32,6 +35,7 @@ const MARKET_ORDER_PROBABILITY = 0.05;
 
 const NUM_BOT_ACCOUNTS = 6;
 const MIN_TREASURY_BALANCE_HUMAN = 50_000;
+const MIN_COLLATERAL_BALANCE_HUMAN = 1; // For BTC/ETH etc. - 1 unit to provide USD-value collateral
 const MIN_GAS_BALANCE_WEI = BigInt(1e15); // ~0.001 ETH
 
 interface BotAccount {
@@ -63,6 +67,7 @@ export class OrdersWorker implements OnModuleInit {
         private readonly faucetService: FaucetService,
         private readonly configService: ConfigService,
         private readonly portfolioService: PortfolioService,
+        private readonly portfolioRepository: PortfolioRepository,
     ) {}
 
     async onModuleInit(): Promise<void> {
@@ -129,7 +134,9 @@ export class OrdersWorker implements OnModuleInit {
 
         // Pick loan tokens from current cache
         const assetIds = Array.from(new Set(this.assetMarketCache.map((e) => e.assetId)));
-        const tokens = await this.tokenRepository.findByIds(assetIds);
+        const tokens = await this.tokenRepository.find({
+            where: { id: In(assetIds) },
+        });
         const tokenById = new Map(tokens.map((t) => [t.id, t]));
 
         for (const bot of this.botAccounts) {
@@ -137,7 +144,7 @@ export class OrdersWorker implements OnModuleInit {
                 // 1. Gas funding
                 await this.ensureGasForBot(formattedKey, bot.wallet);
 
-                // 2. Per-token funding (isolated per token so one failure doesn't block others)
+                // 2. Loan token funding (isolated per token so one failure doesn't block others)
                 for (const assetId of assetIds) {
                     const token = tokenById.get(assetId);
                     if (!token?.tokenAddress || token.decimals == null) continue;
@@ -146,12 +153,39 @@ export class OrdersWorker implements OnModuleInit {
                         await this.ensureTokenFundingForBot(
                             formattedKey,
                             bot,
+                            token.id,
                             token.tokenAddress,
                             token.decimals,
                         );
                     } catch (tokenErr) {
                         this.logger.warn(
                             `Funding token ${token.symbol ?? token.tokenAddress} for bot ${bot.wallet} failed: ${(tokenErr as Error).message?.slice(0, 120)}`,
+                        );
+                    }
+                }
+
+                // 3. Collateral token funding (BTC, ETH, etc.) for borrow health factor
+                const collateralTokens = await this.tokenRepository.find({
+                    where: {
+                        isLoanToken: false,
+                        chainId: this.chainId as unknown as number,
+                    },
+                });
+                for (const token of collateralTokens) {
+                    if (!token.tokenAddress || token.decimals == null) continue;
+
+                    try {
+                        await this.ensureTokenFundingForBot(
+                            formattedKey,
+                            bot,
+                            token.id,
+                            token.tokenAddress,
+                            token.decimals,
+                            MIN_COLLATERAL_BALANCE_HUMAN,
+                        );
+                    } catch (tokenErr) {
+                        this.logger.warn(
+                            `Funding collateral ${token.symbol ?? token.tokenAddress} for bot ${bot.wallet} failed: ${(tokenErr as Error).message?.slice(0, 120)}`,
                         );
                     }
                 }
@@ -191,8 +225,10 @@ export class OrdersWorker implements OnModuleInit {
     private async ensureTokenFundingForBot(
         operatorKey: string,
         bot: BotAccount,
+        assetId: string,
         tokenAddress: string,
         decimals: number,
+        minBalanceHuman: number = MIN_TREASURY_BALANCE_HUMAN,
     ): Promise<void> {
         // Skip tokens that Treasury does not support
         const isSupported = await this.viemService.readContract<boolean>(
@@ -210,9 +246,9 @@ export class OrdersWorker implements OnModuleInit {
         }
 
         const minBalanceBaseUnits =
-            BigInt(MIN_TREASURY_BALANCE_HUMAN) * 10n ** BigInt(decimals);
+            BigInt(minBalanceHuman) * 10n ** BigInt(decimals);
 
-        const currentTreasuryBalance = await this.viemService.readContract<bigint>(
+        let currentTreasuryBalance = await this.viemService.readContract<bigint>(
             this.chainId,
             this.treasuryAddress,
             treasuryAbi,
@@ -220,6 +256,10 @@ export class OrdersWorker implements OnModuleInit {
             [bot.wallet, tokenAddress],
         );
         if (currentTreasuryBalance >= minBalanceBaseUnits) {
+            this.logger.debug(
+                `Treasury balance already sufficient for bot ${bot.wallet} token ${tokenAddress}`,
+            );
+            await this.syncPortfolioFromOnChainBalance(bot, assetId, tokenAddress);
             return;
         }
 
@@ -268,13 +308,49 @@ export class OrdersWorker implements OnModuleInit {
             await new Promise((r) => setTimeout(r, 3000));
         }
 
-        await this.writeContractWithNonceRetry(
+        const receipt = await this.writeContractWithNonceRetry(
             bot.privateKey,
             this.treasuryAddress,
             treasuryAbi,
             "deposit",
             [tokenAddress, depositAmount],
         );
+
+        // Parse Deposited event from receipt and upsert portfolio immediately
+        try {
+            const depositedLogs = parseEventLogs({
+                abi: treasuryAbi,
+                eventName: "Deposited",
+                logs: receipt.logs,
+            }).filter((log) => log.address?.toLowerCase() === this.treasuryAddress.toLowerCase());
+
+            const account = await this.orderRepository.findAccountByWallet(bot.wallet);
+            this.logger.debug(
+                `Portfolio upsert from events: depositedLogs=${depositedLogs.length}, accountFound=${!!account}`,
+            );
+            if (account) {
+                for (const log of depositedLogs) {
+                    const userWallet = (log.args as { user: string }).user.toLowerCase();
+                    const tokenAddr = (log.args as { token: string }).token.toLowerCase();
+                    const amount = (log.args as { amount: bigint }).amount.toString();
+                    this.logger.debug(`Upserting portfolio from Deposited event: amount=${amount}`);
+                    const portfolioId = portfolioUuidFor(userWallet, tokenAddr);
+                    await this.portfolioRepository.upsertPortfolio(
+                        portfolioId,
+                        account.id,
+                        assetId,
+                        amount,
+                    );
+                }
+            }
+        } catch (e) {
+            this.logger.error(
+                `Failed to upsert portfolio after deposit for bot ${bot.wallet}: ${(e as Error).message}`,
+            );
+        }
+
+        // Always sync portfolio from on-chain balance (event parsing may have been skipped)
+        await this.syncPortfolioFromOnChainBalance(bot, assetId, tokenAddress);
 
         this.logger.log(
             `Ensured treasury balance for bot ${bot.wallet} token ${tokenAddress} up to ${MIN_TREASURY_BALANCE_HUMAN}`,
@@ -294,6 +370,48 @@ export class OrdersWorker implements OnModuleInit {
         } catch (e) {
             this.logger.error(
                 `Failed to mark asset ${tokenAddress} as collateral for bot ${bot.wallet}: ${(e as Error).message}`,
+            );
+        }
+    }
+
+    /**
+     * Syncs portfolio DB row from on-chain treasury balance.
+     * Ensures DB reflects on-chain state regardless of event parsing.
+     */
+    private async syncPortfolioFromOnChainBalance(
+        bot: BotAccount,
+        assetId: string,
+        tokenAddress: string,
+    ): Promise<void> {
+        try {
+            const onChainBalance = await this.viemService.readContract<bigint>(
+                this.chainId,
+                this.treasuryAddress,
+                treasuryAbi,
+                "balanceOf",
+                [bot.wallet, tokenAddress],
+            );
+            if (onChainBalance === 0n) return;
+
+            const account = await this.orderRepository.findAccountByWallet(bot.wallet);
+            if (!account) return;
+
+            const portfolioId = portfolioUuidFor(
+                bot.wallet.toLowerCase(),
+                tokenAddress.toLowerCase(),
+            );
+            await this.portfolioRepository.syncPortfolioBalance(
+                portfolioId,
+                account.id,
+                assetId,
+                onChainBalance.toString(),
+            );
+            this.logger.debug(
+                `Synced portfolio for bot ${bot.wallet} token ${tokenAddress}: amount=${onChainBalance.toString()}`,
+            );
+        } catch (e) {
+            this.logger.error(
+                `Failed to sync portfolio from on-chain balance for bot ${bot.wallet} token ${tokenAddress}: ${(e as Error).message}`,
             );
         }
     }
@@ -420,9 +538,9 @@ export class OrdersWorker implements OnModuleInit {
         abi: readonly any[],
         functionName: string,
         args: any[],
-    ): Promise<void> {
+    ): Promise<TransactionReceipt> {
         try {
-            await this.viemService.writeContract(
+            const receipt = await this.viemService.writeContract(
                 this.chainId,
                 privateKey,
                 address,
@@ -431,6 +549,7 @@ export class OrdersWorker implements OnModuleInit {
                 args,
                 { waitForReceipt: true },
             );
+            return receipt as TransactionReceipt;
         } catch (e) {
             if (!this.isNonceError(e)) throw e;
 
@@ -438,7 +557,7 @@ export class OrdersWorker implements OnModuleInit {
                 `Nonce error on ${functionName}; retrying once after short delay`,
             );
             await new Promise((r) => setTimeout(r, 2000));
-            await this.viemService.writeContract(
+            const receipt = await this.viemService.writeContract(
                 this.chainId,
                 privateKey,
                 address,
@@ -447,6 +566,7 @@ export class OrdersWorker implements OnModuleInit {
                 args,
                 { waitForReceipt: true },
             );
+            return receipt as TransactionReceipt;
         }
     }
 

@@ -8,7 +8,7 @@ import { Token } from "../tokens/entities/token.entity";
 import { getAllowedMaturitiesUtcSeconds } from "../orders/utils/maturity.utils";
 
 const MARKET_MATURITIES_REFRESH_INTERVAL_MS = 24 * 60 * 60 * 1000; // once per day
-
+//@todo : fix inconsistent maturity not start with 1
 @Injectable()
 export class MarketWorker implements OnModuleInit {
     private readonly logger = new Logger(MarketWorker.name);

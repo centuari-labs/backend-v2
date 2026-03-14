@@ -152,41 +152,41 @@ BEGIN
 
     -- FILLED lend order 1: 5000 USDC at 4.5%
     INSERT INTO orders (id, account_id, asset_id, side, type, rate, quantity, filled_quantity, settlement_fee, status, created_at)
-    VALUES (lend_order_1_id, test_account_id, usdc_id, 'LEND', 'LIMIT', 4.5, 5000000000, 5000000000, 0, 'FILLED', NOW() - INTERVAL '10 days');
+    VALUES (lend_order_1_id, test_account_id, usdc_id, 'LEND', 'LIMIT', 450, 5000000000, 5000000000, 0, 'FILLED', NOW() - INTERVAL '10 days');
 
     INSERT INTO order_markets (order_market_id, order_id, market_id)
     VALUES (om_lend_1, lend_order_1_id, usdc_market_30d_id);
 
     -- FILLED lend order 2: 3000 USDC at 5.0%
     INSERT INTO orders (id, account_id, asset_id, side, type, rate, quantity, filled_quantity, settlement_fee, status, created_at)
-    VALUES (lend_order_2_id, test_account_id, usdc_id, 'LEND', 'LIMIT', 5.0, 3000000000, 3000000000, 0, 'FILLED', NOW() - INTERVAL '5 days');
+    VALUES (lend_order_2_id, test_account_id, usdc_id, 'LEND', 'LIMIT', 500, 3000000000, 3000000000, 0, 'FILLED', NOW() - INTERVAL '5 days');
 
     INSERT INTO order_markets (order_market_id, order_id, market_id)
     VALUES (om_lend_2, lend_order_2_id, usdc_market_90d_id);
 
     -- Counterparty FILLED borrow orders (matching the lend orders)
     INSERT INTO orders (id, account_id, asset_id, side, type, rate, quantity, filled_quantity, settlement_fee, status, created_at)
-    VALUES (borrow_order_cp_1, counterparty_id, usdc_id, 'BORROW', 'LIMIT', 4.5, 5000000000, 5000000000, 0, 'FILLED', NOW() - INTERVAL '10 days');
+    VALUES (borrow_order_cp_1, counterparty_id, usdc_id, 'BORROW', 'LIMIT', 450, 5000000000, 5000000000, 0, 'FILLED', NOW() - INTERVAL '10 days');
 
     INSERT INTO order_markets (order_market_id, order_id, market_id)
     VALUES (om_borrow_cp_1, borrow_order_cp_1, usdc_market_30d_id);
 
     INSERT INTO orders (id, account_id, asset_id, side, type, rate, quantity, filled_quantity, settlement_fee, status, created_at)
-    VALUES (borrow_order_cp_2, counterparty_id, usdc_id, 'BORROW', 'LIMIT', 5.0, 3000000000, 3000000000, 0, 'FILLED', NOW() - INTERVAL '5 days');
+    VALUES (borrow_order_cp_2, counterparty_id, usdc_id, 'BORROW', 'LIMIT', 500, 3000000000, 3000000000, 0, 'FILLED', NOW() - INTERVAL '5 days');
 
     INSERT INTO order_markets (order_market_id, order_id, market_id)
     VALUES (om_borrow_cp_2, borrow_order_cp_2, usdc_market_90d_id);
 
     -- User FILLED borrow order: 8000 USDT at 3.8%
     INSERT INTO orders (id, account_id, asset_id, side, type, rate, quantity, filled_quantity, settlement_fee, status, created_at)
-    VALUES (borrow_order_user, test_account_id, usdt_id, 'BORROW', 'LIMIT', 3.8, 8000000000, 8000000000, 0, 'FILLED', NOW() - INTERVAL '7 days');
+    VALUES (borrow_order_user, test_account_id, usdt_id, 'BORROW', 'LIMIT', 380, 8000000000, 8000000000, 0, 'FILLED', NOW() - INTERVAL '7 days');
 
     INSERT INTO order_markets (order_market_id, order_id, market_id)
     VALUES (om_borrow_user, borrow_order_user, usdt_market_60d_id);
 
     -- Counterparty lend order matching user's borrow
     INSERT INTO orders (id, account_id, asset_id, side, type, rate, quantity, filled_quantity, settlement_fee, status, created_at)
-    VALUES (lend_order_cp_usdt, counterparty_id, usdt_id, 'LEND', 'LIMIT', 3.8, 8000000000, 8000000000, 0, 'FILLED', NOW() - INTERVAL '7 days');
+    VALUES (lend_order_cp_usdt, counterparty_id, usdt_id, 'LEND', 'LIMIT', 380, 8000000000, 8000000000, 0, 'FILLED', NOW() - INTERVAL '7 days');
 
     INSERT INTO order_markets (order_market_id, order_id, market_id)
     VALUES (om_lend_cp_usdt, lend_order_cp_usdt, usdt_market_60d_id);
@@ -194,9 +194,9 @@ BEGIN
     -- OPEN lend orders
     INSERT INTO orders (id, account_id, asset_id, side, type, rate, quantity, filled_quantity, settlement_fee, status, created_at)
     VALUES
-        (open_lend_1, test_account_id, usdc_id, 'LEND', 'LIMIT', 4.5, 500000000, 0, 0, 'OPEN', NOW() - INTERVAL '2 days'),
-        (open_lend_2, test_account_id, usdc_id, 'LEND', 'LIMIT', 4.8, 750000000, 0, 0, 'OPEN', NOW() - INTERVAL '1 day'),
-        (open_lend_3, test_account_id, usdc_id, 'LEND', 'LIMIT', 5.0, 1000000000, 0, 0, 'OPEN', NOW() - INTERVAL '3 hours');
+        (open_lend_1, test_account_id, usdc_id, 'LEND', 'LIMIT', 450, 500000000, 0, 0, 'OPEN', NOW() - INTERVAL '2 days'),
+        (open_lend_2, test_account_id, usdc_id, 'LEND', 'LIMIT', 480, 750000000, 0, 0, 'OPEN', NOW() - INTERVAL '1 day'),
+        (open_lend_3, test_account_id, usdc_id, 'LEND', 'LIMIT', 500, 1000000000, 0, 0, 'OPEN', NOW() - INTERVAL '3 hours');
 
     INSERT INTO order_markets (order_market_id, order_id, market_id)
     VALUES
@@ -207,8 +207,8 @@ BEGIN
     -- OPEN borrow orders
     INSERT INTO orders (id, account_id, asset_id, side, type, rate, quantity, filled_quantity, settlement_fee, status, created_at)
     VALUES
-        (open_borrow_1, test_account_id, usdt_id, 'BORROW', 'LIMIT', 3.5, 1000000000, 0, 0, 'OPEN', NOW() - INTERVAL '1 day'),
-        (open_borrow_2, test_account_id, usdt_id, 'BORROW', 'LIMIT', 3.2, 500000000, 0, 0, 'OPEN', NOW() - INTERVAL '6 hours');
+        (open_borrow_1, test_account_id, usdt_id, 'BORROW', 'LIMIT', 350, 1000000000, 0, 0, 'OPEN', NOW() - INTERVAL '1 day'),
+        (open_borrow_2, test_account_id, usdt_id, 'BORROW', 'LIMIT', 320, 500000000, 0, 0, 'OPEN', NOW() - INTERVAL '6 hours');
 
     INSERT INTO order_markets (order_market_id, order_id, market_id)
     VALUES
@@ -217,7 +217,7 @@ BEGIN
 
     -- PARTIALLY_FILLED lend order: 2000 USDC, 800 filled
     INSERT INTO orders (id, account_id, asset_id, side, type, rate, quantity, filled_quantity, settlement_fee, status, created_at)
-    VALUES (partial_lend, test_account_id, usdc_id, 'LEND', 'LIMIT', 4.7, 2000000000, 800000000, 0, 'PARTIALLY_FILLED', NOW() - INTERVAL '4 days');
+    VALUES (partial_lend, test_account_id, usdc_id, 'LEND', 'LIMIT', 470, 2000000000, 800000000, 0, 'PARTIALLY_FILLED', NOW() - INTERVAL '4 days');
 
     INSERT INTO order_markets (order_market_id, order_id, market_id)
     VALUES (gen_random_uuid(), partial_lend, usdc_market_30d_id);
@@ -225,15 +225,15 @@ BEGIN
     -- 7. Matches
     -- Match 1: User lends 5000 USDC at 4.5%, 30-day maturity
     INSERT INTO matches (id, lend_order_market_id, borrow_order_market_id, asset_id, lender_account_id, borrower_account_id, match_amount, rate, is_borrower_taker, maker_fee, taker_fee, lender_settlement_fee, borrower_settlement_fee, maturity, created_at)
-    VALUES (match_1_id, om_lend_1, om_borrow_cp_1, usdc_id, test_account_id, counterparty_id, 5000000000, 4.5, true, 0, 0.001, 0.005, 0.005, NOW() + INTERVAL '30 days', NOW() - INTERVAL '10 days');
+    VALUES (match_1_id, om_lend_1, om_borrow_cp_1, usdc_id, test_account_id, counterparty_id, 5000000000, 450, true, 0, 0.001, 0.005, 0.005, NOW() + INTERVAL '30 days', NOW() - INTERVAL '10 days');
 
     -- Match 2: User lends 3000 USDC at 5.0%, 90-day maturity
     INSERT INTO matches (id, lend_order_market_id, borrow_order_market_id, asset_id, lender_account_id, borrower_account_id, match_amount, rate, is_borrower_taker, maker_fee, taker_fee, lender_settlement_fee, borrower_settlement_fee, maturity, created_at)
-    VALUES (match_2_id, om_lend_2, om_borrow_cp_2, usdc_id, test_account_id, counterparty_id, 3000000000, 5.0, true, 0, 0.001, 0.005, 0.005, NOW() + INTERVAL '90 days', NOW() - INTERVAL '5 days');
+    VALUES (match_2_id, om_lend_2, om_borrow_cp_2, usdc_id, test_account_id, counterparty_id, 3000000000, 500, true, 0, 0.001, 0.005, 0.005, NOW() + INTERVAL '90 days', NOW() - INTERVAL '5 days');
 
     -- Match 3: User borrows 8000 USDT at 3.8%, 60-day maturity
     INSERT INTO matches (id, lend_order_market_id, borrow_order_market_id, asset_id, lender_account_id, borrower_account_id, match_amount, rate, is_borrower_taker, maker_fee, taker_fee, lender_settlement_fee, borrower_settlement_fee, maturity, created_at)
-    VALUES (match_3_id, om_lend_cp_usdt, om_borrow_user, usdt_id, counterparty_id, test_account_id, 8000000000, 3.8, true, 0, 0.001, 0.005, 0.005, NOW() + INTERVAL '60 days', NOW() - INTERVAL '7 days');
+    VALUES (match_3_id, om_lend_cp_usdt, om_borrow_user, usdt_id, counterparty_id, test_account_id, 8000000000, 380, true, 0, 0.001, 0.005, 0.005, NOW() + INTERVAL '60 days', NOW() - INTERVAL '7 days');
 
     -- 8. Lend Positions
     -- 5000 USDC: shares > amount to show accrued interest (APR = shares/amount - 1)

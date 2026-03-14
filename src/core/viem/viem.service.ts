@@ -135,6 +135,14 @@ export class ViemService implements OnModuleInit {
         return client;
     }
 
+    resetWalletClient(privateKey: string, chainId: number): void {
+        const formattedKey = privateKey.startsWith("0x") ? privateKey : `0x${privateKey}`;
+        const account = privateKeyToAccount(formattedKey as `0x${string}`);
+        const key = `${chainId}-${account.address}`;
+        this.walletClients.delete(key);
+        this.logger.warn(`Reset wallet client for ${account.address} on chain ${chainId} (nonce resync)`);
+    }
+
     generateWallet(): { address: string; privateKey: string } {
         const privateKey = generatePrivateKey();
         const account = privateKeyToAccount(privateKey);

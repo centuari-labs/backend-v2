@@ -392,7 +392,9 @@ export class FaucetService {
         const msg = ((error as Error).message ?? "").toLowerCase();
         return (
             msg.includes("nonce too low") ||
-            msg.includes("lower than the current nonce")
+            msg.includes("nonce too high") ||
+            msg.includes("lower than the current nonce") ||
+            msg.includes("higher than the next one expected")
         );
     }
 
@@ -418,8 +420,9 @@ export class FaucetService {
             if (!this.isNonceError(e)) throw e;
 
             this.logger.warn(
-                `Nonce error on ${functionName}; retrying after short delay`,
+                `Nonce error on ${functionName}; resetting wallet client and retrying`,
             );
+            this.viemService.resetWalletClient(privateKey, chainId);
             await new Promise((r) => setTimeout(r, 2000));
             return (await this.viemService.writeContract(
                 chainId,

@@ -26,10 +26,10 @@ const BORROW_INSERT_INTERVAL_MS = 15000;
 const CACHE_REFRESH_INTERVAL_MS = 60000;
 const FUNDING_INTERVAL_MS = 5 * 60 * 1000;
 
-const LEND_RATE_MIN = 600;
+const LEND_RATE_MIN = 500;
 const LEND_RATE_MAX = 1500;
-const BORROW_RATE_MIN = 200;
-const BORROW_RATE_MAX = 800;
+const BORROW_RATE_MIN = 500;
+const BORROW_RATE_MAX = 1500;
 const LEND_QUANTITY_MIN = 10;
 const LEND_QUANTITY_MAX = 500;
 const BORROW_QUANTITY_MIN = 10;
@@ -83,6 +83,7 @@ export class OrdersWorker implements OnModuleInit {
     ) {}
 
     private initialized = false;
+    private fundingInProgress = false;
 
     async onModuleInit(): Promise<void> {
         if (!this.isEnabled) {
@@ -164,6 +165,16 @@ export class OrdersWorker implements OnModuleInit {
     @Interval(FUNDING_INTERVAL_MS)
     private async ensureFunding(): Promise<void> {
         if (!this.isEnabled || !this.initialized || this.assetMarketCache.length === 0) return;
+        if (this.fundingInProgress) return;
+        this.fundingInProgress = true;
+        try {
+            await this.ensureFundingInternal();
+        } finally {
+            this.fundingInProgress = false;
+        }
+    }
+
+    private async ensureFundingInternal(): Promise<void> {
 
         const operatorKey = this.configService.get<string>("OPERATOR_PRIVATE_KEY");
         if (!operatorKey) {
@@ -233,12 +244,13 @@ export class OrdersWorker implements OnModuleInit {
                 (operatorKey.startsWith("0x") ? operatorKey : `0x${operatorKey}`) as `0x${string}`,
             );
             const walletClient = this.viemService.getWalletClient(operatorKey, this.chainId);
-            await walletClient.sendTransaction({
+            const hash = await walletClient.sendTransaction({
                 account: operatorAccount,
                 to: botAddress as `0x${string}`,
                 value: MIN_GAS_BALANCE_WEI,
             });
-            this.logger.log(`Sent gas to bot ${botAddress}`);
+            await publicClient.waitForTransactionReceipt({ hash });
+            this.logger.log(`Sent gas to bot ${botAddress} (tx: ${hash})`);
         } catch (e) {
             this.logger.error(
                 `Failed to fund gas for bot ${botAddress}: ${(e as Error).message}`,
@@ -829,7 +841,12 @@ export class OrdersWorker implements OnModuleInit {
 
     private isNonceError(error: unknown): boolean {
         const msg = ((error as Error).message ?? "").toLowerCase();
-        return msg.includes("nonce too low") || msg.includes("lower than the current nonce");
+        return (
+            msg.includes("nonce too low") ||
+            msg.includes("nonce too high") ||
+            msg.includes("lower than the current nonce") ||
+            msg.includes("higher than the next one expected")
+        );
     }
 
     private async writeContractWithNonceRetry(
@@ -854,8 +871,9 @@ export class OrdersWorker implements OnModuleInit {
             if (!this.isNonceError(e)) throw e;
 
             this.logger.warn(
-                `Nonce error on ${functionName}; retrying once after short delay`,
+                `Nonce error on ${functionName}; resetting wallet client and retrying`,
             );
+            this.viemService.resetWalletClient(privateKey, this.chainId);
             await new Promise((r) => setTimeout(r, 2000));
             const receipt = await this.viemService.writeContract(
                 this.chainId,

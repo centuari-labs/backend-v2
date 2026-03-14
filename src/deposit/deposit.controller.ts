@@ -1,14 +1,19 @@
 import {
+    Body,
     Controller,
     Get,
     Param,
     ParseUUIDPipe,
+    Post,
     UseGuards,
+    UsePipes,
+    ValidationPipe,
 } from "@nestjs/common";
 import { Wallet } from "../common/decorators/wallet.decorator";
 import { AuthGuard } from "../common/guards/auth.guard";
 import { DepositService } from "./deposit.service";
-import type { DepositTokenDto, BalanceResponseDto } from "./dto/deposit.dto";
+import { ConfirmDepositDto } from "./dto/deposit.dto";
+import type { DepositTokenDto, BalanceResponseDto, ConfirmDepositResponseDto } from "./dto/deposit.dto";
 
 @Controller("deposit")
 export class DepositController {
@@ -26,5 +31,14 @@ export class DepositController {
         @Wallet() walletAddress: string,
     ): Promise<BalanceResponseDto> {
         return this.depositService.getBalance(assetId, walletAddress);
+    }
+
+    @Post("confirm")
+    @UseGuards(AuthGuard)
+    @UsePipes(new ValidationPipe({ whitelist: true }))
+    async confirmDeposit(
+        @Body() dto: ConfirmDepositDto,
+    ): Promise<ConfirmDepositResponseDto> {
+        return this.depositService.confirmDeposit(dto.txHash);
     }
 }

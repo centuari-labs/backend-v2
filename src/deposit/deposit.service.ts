@@ -4,9 +4,10 @@ import { parseUnits, formatUnits } from "viem";
 import { ViemService } from "../core/viem/viem.service";
 import { TokensService } from "../tokens/tokens.service";
 import { TokensRepository } from "../tokens/repositories/tokens.repository";
+import { ChainIndexerService } from "../chain-indexer/chain-indexer.service";
 import { compareTokensByPriority } from "../tokens/token-order.config";
 import { erc20Abi } from "../abis/ERC20";
-import type { DepositTokenDto, BalanceResponseDto } from "./dto/deposit.dto";
+import type { DepositTokenDto, BalanceResponseDto, ConfirmDepositResponseDto } from "./dto/deposit.dto";
 
 @Injectable()
 export class DepositService {
@@ -19,6 +20,7 @@ export class DepositService {
         private readonly tokensRepository: TokensRepository,
         private readonly viemService: ViemService,
         private readonly configService: ConfigService,
+        private readonly chainIndexerService: ChainIndexerService,
     ) {
         this.isDevMode =
             this.configService.get<string>("NODE_ENV") !== "production";
@@ -74,5 +76,11 @@ export class DepositService {
             imageUrl: t.imageUrl,
             chainId: t.chainId,
         }));
+    }
+
+    async confirmDeposit(txHash: string): Promise<ConfirmDepositResponseDto> {
+        const processed = await this.chainIndexerService.processTransactionDeposits(txHash);
+        this.logger.log(`Deposit confirmed: txHash=${txHash}, processed=${processed}`);
+        return { processed };
     }
 }

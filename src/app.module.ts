@@ -14,6 +14,7 @@ import { DepositModule } from "./deposit/deposit.module";
 import { RateModule } from "./rate-history/rate-history.module";
 import { RepayModule } from "./repay/repay.module";
 import { WithdrawModule } from "./withdraw/withdraw.module";
+import { ChainIndexerModule } from "./chain-indexer/chain-indexer.module";
 import { EventsGateway } from "./core/websocket/websocket.gateway";
 
 @Module({
@@ -41,6 +42,7 @@ import { EventsGateway } from "./core/websocket/websocket.gateway";
         WithdrawModule,
         RepayModule,
         RateModule,
+        ChainIndexerModule,
     ],
     controllers: [],
     providers: [EventsGateway],

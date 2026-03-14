@@ -101,7 +101,16 @@ export function baseUnitsToHuman(
         throw new Error("Invalid decimals value");
     }
 
-    const raw = amount.toString().trim();
+    let raw = amount.toString().trim();
+
+    // Strip trailing decimal zeros from PostgreSQL NUMERIC columns (e.g. "1230000.00" → "1230000")
+    const dotIndex = raw.indexOf(".");
+    if (dotIndex !== -1) {
+        const fractional = raw.slice(dotIndex + 1);
+        if (/^0*$/.test(fractional)) {
+            raw = raw.slice(0, dotIndex);
+        }
+    }
 
     if (!/^\d+$/.test(raw)) {
         throw new Error("Base units amount must be a non-negative integer");

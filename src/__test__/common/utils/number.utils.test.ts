@@ -80,6 +80,13 @@ describe("baseUnitsToHuman", () => {
         expect(baseUnitsToHuman("123", 0)).toBe("123");
     });
 
+    it("handles PostgreSQL NUMERIC trailing zeros", () => {
+        expect(baseUnitsToHuman("1230000.00", 6)).toBe("1.23");
+        expect(baseUnitsToHuman("1000000.0", 6)).toBe("1");
+        expect(baseUnitsToHuman("0.00", 6)).toBe("0");
+        expect(baseUnitsToHuman("100.000", 6)).toBe("0.0001");
+    });
+
     it("throws on invalid base units format", () => {
         expect(() => baseUnitsToHuman("1.23", 6)).toThrow(
             "Base units amount must be a non-negative integer",

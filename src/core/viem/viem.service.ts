@@ -13,7 +13,7 @@ import {
     type TransactionReceipt,
     type Transport,
 } from "viem";
-import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
+import { generatePrivateKey, privateKeyToAccount, nonceManager } from "viem/accounts";
 import * as chains from "viem/chains";
 
 export interface ViemWriteContractOptions {
@@ -110,7 +110,9 @@ export class ViemService implements OnModuleInit {
 
     getWalletClient(privateKey: string, chainId: number): WalletClient<Transport, Chain, Account> {
         const formattedKey = privateKey.startsWith("0x") ? privateKey : `0x${privateKey}`;
-        const account = privateKeyToAccount(formattedKey as `0x${string}`);
+        const account = privateKeyToAccount(formattedKey as `0x${string}`, {
+            nonceManager,
+        });
 
         const key = `${chainId}-${account.address}`;
 

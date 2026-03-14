@@ -183,36 +183,28 @@ export class FaucetService {
             )}`,
         );
 
-        const mintResults = await Promise.allSettled(
-            tokenAddresses.map((tokenAddress) =>
-                this.mintToken(
+        const outcomes: MintOutcome[] = [];
+        for (const tokenAddress of tokenAddresses) {
+            try {
+                const result = await this.mintToken(
                     chainId,
                     operatorKey,
                     faucetAddress,
                     tokenAddress,
                     recipientAddress,
-                ),
-            ),
-        );
-
-        const outcomes: MintOutcome[] = mintResults.map((outcome, idx) => {
-            if (outcome.status === "fulfilled") {
-                return outcome.value;
+                );
+                outcomes.push(result);
+            } catch (error) {
+                this.logger.error(
+                    `Failed to mint token=${tokenAddress} for recipient=${recipientAddress}: ${error}`,
+                );
+                outcomes.push({
+                    tokenAddress,
+                    amount: "0",
+                    error: error instanceof Error ? error.message : String(error),
+                });
             }
-
-            this.logger.error(
-                `Failed to mint token=${tokenAddresses[idx]} for recipient=${recipientAddress}: ${outcome.reason}`,
-            );
-
-            return {
-                tokenAddress: tokenAddresses[idx],
-                amount: "0",
-                error:
-                    outcome.reason instanceof Error
-                        ? outcome.reason.message
-                        : String(outcome.reason),
-            };
-        });
+        }
 
         const firstSuccess = outcomes.find((o) => o.receipt);
         const results: TokenMintResultDto[] = outcomes.map((o) => ({
@@ -231,17 +223,23 @@ export class FaucetService {
         };
     }
 
+    private static readonly MAX_BATCH = 9;
+
+    /**
+     * Request multiple tokens in bulk via the Faucet contract's mintBatch (1 tx per chunk of 9).
+     * When amounts is omitted, derives from configOf.maxPerRequest per token.
+     */
     async requestTokensBatch(
         chainId: number,
         recipientAddress: string,
         tokenAddresses: string[],
-        amounts: string[],
+        amounts?: string[],
     ): Promise<FaucetResponseDto> {
         if (this.isDevMode) {
             return this.mockRequestTokens(
                 chainId,
                 recipientAddress,
-                "all-assets",
+                tokenAddresses.length > 0 ? tokenAddresses : "all-assets",
             );
         }
 
@@ -259,60 +257,180 @@ export class FaucetService {
             return this.mockRequestTokens(
                 chainId,
                 recipientAddress,
-                "all-assets",
+                tokenAddresses.length > 0 ? tokenAddresses : "all-assets",
             );
         }
 
-        const mintResults = await Promise.allSettled(
-            tokenAddresses.map((tokenAddress, idx) =>
-                this.mintToken(
-                    chainId,
-                    operatorKey,
-                    tokenAddress,
-                    recipientAddress,
-                    amounts[idx],
-                ),
+        if (tokenAddresses.length === 0) {
+            return {
+                chainId,
+                recipientAddress,
+                transactionHash: `0x${"0".repeat(64)}`,
+                blockNumber: "0",
+                status: "success",
+                results: [],
+            };
+        }
+
+        // Read configOf for each token in parallel
+        const configs = await Promise.all(
+            tokenAddresses.map((tokenAddress) =>
+                this.viemService
+                    .readContract<[boolean, bigint, bigint]>(
+                        chainId,
+                        faucetAddress,
+                        faucetAbi,
+                        "configOf",
+                        [tokenAddress],
+                    )
+                    .then(([enabled, maxPerRequest]) => ({
+                        tokenAddress,
+                        enabled,
+                        maxPerRequest,
+                    }))
+                    .catch((err) => {
+                        this.logger.debug(
+                            `configOf failed for ${tokenAddress}: ${(err as Error).message}`,
+                        );
+                        return {
+                            tokenAddress,
+                            enabled: false,
+                            maxPerRequest: 0n,
+                        };
+                    }),
             ),
         );
 
-        const outcomes: MintOutcome[] = mintResults.map((outcome, idx) => {
-            if (outcome.status === "fulfilled") {
-                return outcome.value;
+        // Build tokens and amounts: use provided amounts when valid, else maxPerRequest
+        const tokensToMint: string[] = [];
+        const amountsToMint: bigint[] = [];
+
+        for (let i = 0; i < configs.length; i++) {
+            const { tokenAddress, enabled, maxPerRequest } = configs[i];
+            if (!enabled) continue;
+
+            let amount: bigint;
+            if (amounts && amounts[i] !== undefined && amounts[i] !== "") {
+                try {
+                    amount = BigInt(amounts[i]);
+                } catch {
+                    amount = maxPerRequest;
+                }
+            } else {
+                amount = maxPerRequest;
             }
 
-            this.logger.error(
-                `Failed to mint token=${tokenAddresses[idx]} for recipient=${recipientAddress}: ${outcome.reason}`,
-            );
+            if (amount <= 0n) continue;
 
+            tokensToMint.push(tokenAddress);
+            amountsToMint.push(amount);
+        }
+
+        if (tokensToMint.length === 0) {
             return {
-                tokenAddress: tokenAddresses[idx],
-                amount: "0",
-                error:
-                    outcome.reason instanceof Error
-                        ? outcome.reason.message
-                        : String(outcome.reason),
+                chainId,
+                recipientAddress,
+                transactionHash: `0x${"0".repeat(64)}`,
+                blockNumber: "0",
+                status: "success",
+                results: tokenAddresses.map((addr) => ({
+                    tokenAddress: addr,
+                    amount: "0",
+                })),
+            };
+        }
+
+        const results: TokenMintResultDto[] = tokenAddresses.map((addr) => {
+            const idx = tokensToMint.indexOf(addr);
+            return {
+                tokenAddress: addr,
+                amount: idx >= 0 ? amountsToMint[idx].toString() : "0",
             };
         });
 
-        const firstSuccess = outcomes.find((o) => o.receipt);
-        const results: TokenMintResultDto[] = outcomes.map((o) => ({
-            tokenAddress: o.tokenAddress,
-            amount: o.amount,
-        }));
+        // Chunk by MAX_BATCH and call mintBatch for each chunk
+        let firstReceipt: TransactionReceipt | undefined;
+
+        for (let start = 0; start < tokensToMint.length; start += FaucetService.MAX_BATCH) {
+            const chunkTokens = tokensToMint.slice(
+                start,
+                start + FaucetService.MAX_BATCH,
+            );
+            const chunkAmounts = amountsToMint.slice(
+                start,
+                start + FaucetService.MAX_BATCH,
+            );
+
+            const receipt = await this.writeWithNonceRetry(
+                chainId,
+                operatorKey,
+                faucetAddress,
+                faucetAbi,
+                "mintBatch",
+                [chunkTokens, chunkAmounts, recipientAddress],
+            );
+
+            if (!firstReceipt) firstReceipt = receipt;
+        }
 
         return {
             chainId,
             recipientAddress,
             transactionHash:
-                firstSuccess?.receipt?.transactionHash ?? `0x${"0".repeat(64)}`,
-            blockNumber: firstSuccess?.receipt?.blockNumber?.toString() ?? "0",
-            status: firstSuccess ? firstSuccess.receipt!.status : "failed",
+                firstReceipt?.transactionHash ?? `0x${"0".repeat(64)}`,
+            blockNumber: firstReceipt?.blockNumber?.toString() ?? "0",
+            status: firstReceipt?.status ?? "success",
             results,
         };
     }
 
     async getTokens(chainId: number): Promise<string[]> {
         return this.resolveTokenAddresses(chainId, "all-assets");
+    }
+
+    private isNonceError(error: unknown): boolean {
+        const msg = ((error as Error).message ?? "").toLowerCase();
+        return (
+            msg.includes("nonce too low") ||
+            msg.includes("lower than the current nonce")
+        );
+    }
+
+    private async writeWithNonceRetry(
+        chainId: number,
+        privateKey: string,
+        address: string,
+        abi: readonly any[],
+        functionName: string,
+        args: any[],
+    ): Promise<TransactionReceipt> {
+        try {
+            return (await this.viemService.writeContract(
+                chainId,
+                privateKey,
+                address,
+                abi,
+                functionName,
+                args,
+                { waitForReceipt: true },
+            )) as TransactionReceipt;
+        } catch (e) {
+            if (!this.isNonceError(e)) throw e;
+
+            this.logger.warn(
+                `Nonce error on ${functionName}; retrying after short delay`,
+            );
+            await new Promise((r) => setTimeout(r, 2000));
+            return (await this.viemService.writeContract(
+                chainId,
+                privateKey,
+                address,
+                abi,
+                functionName,
+                args,
+                { waitForReceipt: true },
+            )) as TransactionReceipt;
+        }
     }
 
     private async mintToken(

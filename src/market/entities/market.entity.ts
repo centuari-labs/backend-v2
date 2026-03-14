@@ -1,7 +1,8 @@
-import { Entity, PrimaryColumn, Column, CreateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
+import { Entity, PrimaryColumn, Column, CreateDateColumn, ManyToOne, JoinColumn, Unique } from 'typeorm';
 import { Token } from '../../tokens/entities/token.entity';
 
 @Entity('markets')
+@Unique(['assetId', 'maturity'])
 export class Market {
     @PrimaryColumn('uuid')
     id: string;
@@ -13,7 +14,7 @@ export class Market {
     @JoinColumn({ name: 'asset_id' })
     asset: Token;
 
-    @Column({ type: 'timestamp', nullable: true })
+    @Column({ type: 'timestamptz', nullable: true })
     maturity: Date;
 
     @CreateDateColumn({ name: 'created_at' })

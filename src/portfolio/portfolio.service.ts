@@ -48,9 +48,12 @@ export class PortfolioService {
         ]);
 
         for (const deposit of portfolio) {
+            const decimals = await this.tokensService.getTokenDecimalsByAssetId(deposit.asset_id);
+            if (decimals == null) continue;
+            const amountHuman = Number(baseUnitsToHuman(deposit.total_amount, decimals));
             const price = allPrices[deposit.asset_id.toLowerCase()];
             if (price !== undefined) {
-                totalBalanceUsd += Number.parseFloat(deposit.total_amount) * price;
+                totalBalanceUsd += amountHuman * price;
             }
         }
 
@@ -127,7 +130,7 @@ export class PortfolioService {
         }
 
         return {
-            totalDeposit: totalBalanceUsd,
+            totalDeposit: Number(totalBalanceUsd.toFixed(2)),
             allTimeReturn: Number(allTimeReturnUsd.toFixed(2)),
             netAPY: Number((netAPR * 100).toFixed(2)),
             allocation: {

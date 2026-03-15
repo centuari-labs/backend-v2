@@ -424,9 +424,7 @@ export class OrdersService {
             SETTLEMENT_FEE_RATE_BPS,
             SETTLEMENT_FEE_MAX_CAP_USD,
         );
-        // Ensure we do not lose precision when converting to base units
-        const feeAsString = feeHuman.toFixed(decimals);
-        return humanToBaseUnits(feeAsString, decimals);
+        return feeHuman.toString();
     }
 
     private async mapToResponse(

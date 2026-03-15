@@ -94,29 +94,35 @@ BEGIN
     DELETE FROM orders WHERE account_id = counterparty_id;
     DELETE FROM portfolio WHERE account_id = test_account_id;
 
-    -- 4. Ensure Markets
-    -- USDC 30-day
-    SELECT id INTO usdc_market_30d_id FROM markets WHERE asset_id = usdc_id AND maturity > NOW() ORDER BY maturity ASC LIMIT 1;
+    -- 4. Ensure Markets (maturities must be 1st-of-month UTC to match market worker)
+    -- USDC: 1st of next month
+    SELECT id INTO usdc_market_30d_id FROM markets
+    WHERE asset_id = usdc_id
+      AND maturity = date_trunc('month', NOW()) + INTERVAL '1 month';
     IF usdc_market_30d_id IS NULL THEN
         usdc_market_30d_id := gen_random_uuid();
         INSERT INTO markets (id, asset_id, maturity, created_at)
-        VALUES (usdc_market_30d_id, usdc_id, NOW() + INTERVAL '30 days', NOW());
+        VALUES (usdc_market_30d_id, usdc_id, date_trunc('month', NOW()) + INTERVAL '1 month', NOW());
     END IF;
 
-    -- USDT 60-day
-    SELECT id INTO usdt_market_60d_id FROM markets WHERE asset_id = usdt_id AND maturity > NOW() ORDER BY maturity ASC LIMIT 1;
+    -- USDT: 1st of month after next
+    SELECT id INTO usdt_market_60d_id FROM markets
+    WHERE asset_id = usdt_id
+      AND maturity = date_trunc('month', NOW()) + INTERVAL '2 months';
     IF usdt_market_60d_id IS NULL THEN
         usdt_market_60d_id := gen_random_uuid();
         INSERT INTO markets (id, asset_id, maturity, created_at)
-        VALUES (usdt_market_60d_id, usdt_id, NOW() + INTERVAL '60 days', NOW());
+        VALUES (usdt_market_60d_id, usdt_id, date_trunc('month', NOW()) + INTERVAL '2 months', NOW());
     END IF;
 
-    -- USDC 90-day
-    SELECT id INTO usdc_market_90d_id FROM markets WHERE asset_id = usdc_id AND maturity > NOW() ORDER BY maturity DESC LIMIT 1;
-    IF usdc_market_90d_id = usdc_market_30d_id OR usdc_market_90d_id IS NULL THEN
+    -- USDC: 1st of 3 months from now
+    SELECT id INTO usdc_market_90d_id FROM markets
+    WHERE asset_id = usdc_id
+      AND maturity = date_trunc('month', NOW()) + INTERVAL '3 months';
+    IF usdc_market_90d_id IS NULL THEN
         usdc_market_90d_id := gen_random_uuid();
         INSERT INTO markets (id, asset_id, maturity, created_at)
-        VALUES (usdc_market_90d_id, usdc_id, NOW() + INTERVAL '90 days', NOW());
+        VALUES (usdc_market_90d_id, usdc_id, date_trunc('month', NOW()) + INTERVAL '3 months', NOW());
     END IF;
 
     -- 5. Portfolio holdings (base units)
@@ -225,15 +231,15 @@ BEGIN
     -- 7. Matches
     -- Match 1: User lends 5000 USDC at 4.5%, 30-day maturity
     INSERT INTO matches (id, lend_order_market_id, borrow_order_market_id, asset_id, lender_account_id, borrower_account_id, match_amount, rate, is_borrower_taker, maker_fee, taker_fee, lender_settlement_fee, borrower_settlement_fee, maturity, created_at)
-    VALUES (match_1_id, om_lend_1, om_borrow_cp_1, usdc_id, test_account_id, counterparty_id, 5000000000, 450, true, 0, 0.001, 0.005, 0.005, NOW() + INTERVAL '30 days', NOW() - INTERVAL '10 days');
+    VALUES (match_1_id, om_lend_1, om_borrow_cp_1, usdc_id, test_account_id, counterparty_id, 5000000000, 450, true, 0, 0.001, 0.005, 0.005, date_trunc('month', NOW()) + INTERVAL '1 month', NOW() - INTERVAL '10 days');
 
     -- Match 2: User lends 3000 USDC at 5.0%, 90-day maturity
     INSERT INTO matches (id, lend_order_market_id, borrow_order_market_id, asset_id, lender_account_id, borrower_account_id, match_amount, rate, is_borrower_taker, maker_fee, taker_fee, lender_settlement_fee, borrower_settlement_fee, maturity, created_at)
-    VALUES (match_2_id, om_lend_2, om_borrow_cp_2, usdc_id, test_account_id, counterparty_id, 3000000000, 500, true, 0, 0.001, 0.005, 0.005, NOW() + INTERVAL '90 days', NOW() - INTERVAL '5 days');
+    VALUES (match_2_id, om_lend_2, om_borrow_cp_2, usdc_id, test_account_id, counterparty_id, 3000000000, 500, true, 0, 0.001, 0.005, 0.005, date_trunc('month', NOW()) + INTERVAL '3 months', NOW() - INTERVAL '5 days');
 
     -- Match 3: User borrows 8000 USDT at 3.8%, 60-day maturity
     INSERT INTO matches (id, lend_order_market_id, borrow_order_market_id, asset_id, lender_account_id, borrower_account_id, match_amount, rate, is_borrower_taker, maker_fee, taker_fee, lender_settlement_fee, borrower_settlement_fee, maturity, created_at)
-    VALUES (match_3_id, om_lend_cp_usdt, om_borrow_user, usdt_id, counterparty_id, test_account_id, 8000000000, 380, true, 0, 0.001, 0.005, 0.005, NOW() + INTERVAL '60 days', NOW() - INTERVAL '7 days');
+    VALUES (match_3_id, om_lend_cp_usdt, om_borrow_user, usdt_id, counterparty_id, test_account_id, 8000000000, 380, true, 0, 0.001, 0.005, 0.005, date_trunc('month', NOW()) + INTERVAL '2 months', NOW() - INTERVAL '7 days');
 
     -- 8. Lend Positions
     -- 5000 USDC: shares > amount to show accrued interest (APR = shares/amount - 1)

@@ -20,6 +20,8 @@ import { PortfolioService } from "../portfolio/portfolio.service";
 import { TokensService } from "../tokens/tokens.service";
 import { OrderSide } from "./constants/order.constants";
 import { humanToBaseUnits } from "../common/utils/number.utils";
+import { PriceService } from "../price/price.service";
+import { HEALTH_FACTOR_NO_DEBT } from "../portfolio/helpers/health-factor.helpers";
 
 const LEND_INSERT_INTERVAL_MS = 15000;
 const BORROW_INSERT_INTERVAL_MS = 15000;
@@ -80,6 +82,7 @@ export class OrdersWorker implements OnModuleInit {
         private readonly portfolioService: PortfolioService,
         private readonly portfolioRepository: PortfolioRepository,
         private readonly tokensService: TokensService,
+        private readonly priceService: PriceService,
     ) {}
 
     private initialized = false;
@@ -697,6 +700,186 @@ export class OrdersWorker implements OnModuleInit {
         }
     }
 
+    /**
+     * On-demand collateral top-up for a single bot.
+     * Mints collateral tokens via faucet, deposits into Treasury, and marks as collateral.
+     */
+    private async topUpCollateralForBot(bot: BotAccount): Promise<void> {
+        const operatorKey = this.configService.get<string>("OPERATOR_PRIVATE_KEY");
+        if (!operatorKey) return;
+        const formattedKey = operatorKey.startsWith("0x") ? operatorKey : `0x${operatorKey}`;
+
+        const collateralTokens = await this.tokenRepository.find({
+            where: {
+                isLoanToken: false,
+                chainId: this.chainId as unknown as number,
+            },
+        });
+        if (collateralTokens.length === 0) return;
+
+        await this.ensureGasForBot(formattedKey, bot.wallet);
+
+        const specs: TokenFundingSpec[] = collateralTokens
+            .filter((t) => t.tokenAddress && t.decimals != null)
+            .map((t) => ({
+                assetId: t.id,
+                tokenAddress: t.tokenAddress!,
+                decimals: t.decimals!,
+                minBalanceHuman: this.getMinCollateralBalanceHuman(),
+            }));
+
+        if (specs.length === 0) return;
+
+        // Filter to Treasury-supported tokens
+        const supportedResults = await Promise.all(
+            specs.map((s) =>
+                this.viemService
+                    .readContract<boolean>(
+                        this.chainId,
+                        this.treasuryAddress,
+                        treasuryAbi,
+                        "supportedToken",
+                        [s.tokenAddress],
+                    )
+                    .then((supported) => ({ ...s, supported }))
+                    .catch(() => ({ ...s, supported: false })),
+            ),
+        );
+        const supportedSpecs = supportedResults.filter((r) => r.supported);
+        if (supportedSpecs.length === 0) return;
+
+        // Ensure approvals
+        for (const spec of supportedSpecs) {
+            const minBalanceBaseUnits =
+                BigInt(spec.minBalanceHuman) * 10n ** BigInt(spec.decimals);
+            const allowance = await this.viemService.readContract<bigint>(
+                this.chainId,
+                spec.tokenAddress,
+                erc20Abi,
+                "allowance",
+                [bot.wallet, this.treasuryAddress],
+            );
+            if (allowance < minBalanceBaseUnits) {
+                await this.writeContractWithNonceRetry(
+                    bot.privateKey,
+                    spec.tokenAddress,
+                    erc20Abi,
+                    "approve",
+                    [
+                        this.treasuryAddress,
+                        BigInt(
+                            "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+                        ),
+                    ],
+                );
+                await new Promise((r) => setTimeout(r, 1500));
+            }
+        }
+
+        // Request tokens from faucet
+        const tokensToRequest = supportedSpecs.map((s) => s.tokenAddress);
+        try {
+            await this.faucetService.requestTokensBatch(
+                this.chainId,
+                bot.wallet,
+                tokensToRequest,
+            );
+        } catch (e) {
+            this.logger.warn(
+                `[topUpCollateral] Faucet request failed for bot ${bot.wallet}: ${(e as Error).message}`,
+            );
+            return;
+        }
+
+        // Deposit wallet balances into Treasury
+        const account = await this.orderRepository.findAccountByWallet(bot.wallet);
+        const specByToken = new Map(
+            supportedSpecs.map((s) => [s.tokenAddress.toLowerCase(), s]),
+        );
+
+        for (const spec of supportedSpecs) {
+            const walletBalance = await this.viemService.readContract<bigint>(
+                this.chainId,
+                spec.tokenAddress,
+                erc20Abi,
+                "balanceOf",
+                [bot.wallet],
+            );
+            if (walletBalance === 0n) continue;
+
+            try {
+                const receipt = await this.writeContractWithNonceRetry(
+                    bot.privateKey,
+                    this.treasuryAddress,
+                    treasuryAbi,
+                    "deposit",
+                    [spec.tokenAddress, walletBalance],
+                );
+
+                if (account) {
+                    const depositedLogs = parseEventLogs({
+                        abi: treasuryAbi,
+                        eventName: "Deposited",
+                        logs: receipt.logs,
+                    }).filter(
+                        (log) =>
+                            log.address?.toLowerCase() ===
+                            this.treasuryAddress.toLowerCase(),
+                    );
+
+                    for (const log of depositedLogs) {
+                        const userWallet = (
+                            log.args as { user: string }
+                        ).user.toLowerCase();
+                        const tokenAddr = (
+                            log.args as { token: string }
+                        ).token.toLowerCase();
+                        const amount = (
+                            log.args as { amount: bigint }
+                        ).amount.toString();
+                        const specForLog = specByToken.get(tokenAddr);
+                        const assetId = specForLog?.assetId ?? spec.assetId;
+                        const portfolioId = portfolioUuidFor(
+                            userWallet,
+                            tokenAddr,
+                        );
+                        await this.portfolioRepository.upsertPortfolio(
+                            portfolioId,
+                            account.id,
+                            assetId,
+                            amount,
+                        );
+                    }
+                }
+            } catch (e) {
+                this.logger.error(
+                    `[topUpCollateral] Deposit failed for bot ${bot.wallet} token ${spec.tokenAddress}: ${(e as Error).message}`,
+                );
+            }
+        }
+
+        // Sync portfolio from on-chain and mark as collateral
+        await Promise.all(
+            supportedSpecs.map((s) =>
+                this.syncPortfolioFromOnChainBalance(bot, s.assetId, s.tokenAddress),
+            ),
+        );
+
+        const collateralAssetIds = collateralTokens.map((t) => t.id);
+        try {
+            await this.portfolioService.setAssetAsCollateral(bot.wallet, {
+                assetIds: collateralAssetIds,
+                isCollateral: true,
+            });
+        } catch (e) {
+            this.logger.error(
+                `[topUpCollateral] Failed to set collateral for bot ${bot.wallet}: ${(e as Error).message}`,
+            );
+        }
+
+        this.logger.log(`[topUpCollateral] Topped up collateral for bot ${bot.wallet}`);
+    }
+
     // ─── Cache ───────────────────────────────────────────────────────────
 
     @Interval(CACHE_REFRESH_INTERVAL_MS)
@@ -807,10 +990,26 @@ export class OrdersWorker implements OnModuleInit {
         }
 
         for (const entry of this.assetMarketCache) {
-            const account = this.randomAccount();
             try {
                 const { assetId, marketIds, symbol } = entry;
                 const amount = this.randomQuantity(BORROW_QUANTITY_MIN, BORROW_QUANTITY_MAX);
+
+                let account = await this.pickAccountWithSufficientHealthForBorrow(assetId, amount);
+                if (!account) {
+                    // Top up collateral for a random bot and retry
+                    const fallbackBot = this.randomAccount();
+                    this.logger.debug(
+                        `[OrdersWorker] No bot with sufficient HF for ${symbol} amount=${amount}; topping up collateral for ${fallbackBot.wallet}`,
+                    );
+                    await this.topUpCollateralForBot(fallbackBot);
+                    account = await this.pickAccountWithSufficientHealthForBorrow(assetId, amount);
+                }
+                if (!account) {
+                    this.logger.debug(
+                        `[OrdersWorker] No bot with sufficient health factor for ${symbol} amount=${amount} after top-up; skipping`,
+                    );
+                    continue;
+                }
 
                 if (Math.random() < MARKET_ORDER_PROBABILITY) {
                     await this.ordersService.createBorrowMarketOrder(
@@ -831,7 +1030,7 @@ export class OrdersWorker implements OnModuleInit {
             } catch (error) {
                 const err = error as Error;
                 this.logger.warn(
-                    `[OrdersWorker] Failed borrow order for ${entry.symbol} (bot ${account.wallet}): ${err.message}`,
+                    `[OrdersWorker] Failed borrow order for ${entry.symbol}: ${err.message}`,
                 );
             }
         }
@@ -918,6 +1117,40 @@ export class OrdersWorker implements OnModuleInit {
             const availableBalance = portfolioBalance - totalOpenOrders;
 
             if (BigInt(quantityBaseUnits) <= availableBalance) {
+                candidates.push(bot);
+            }
+        }
+
+        if (candidates.length === 0) return null;
+        return candidates[Math.floor(Math.random() * candidates.length)];
+    }
+
+    /**
+     * Returns a bot whose health factor remains >= 1 after placing the given borrow order,
+     * or null if none qualify.
+     */
+    private async pickAccountWithSufficientHealthForBorrow(
+        assetId: string,
+        amount: string,
+    ): Promise<BotAccount | null> {
+        const assetPrice = await this.priceService.getPrice(assetId);
+        if (assetPrice == null || assetPrice <= 0) return null;
+        const newOrderUsd = Number(amount) * assetPrice;
+
+        const candidates: BotAccount[] = [];
+        for (const bot of this.botAccounts) {
+            const account = await this.orderRepository.findAccountByWallet(bot.wallet);
+            if (!account) continue;
+
+            const hfResult = await this.portfolioService.getHealthFactorForAccount(account.id, {
+                additionalBorrowUsd: newOrderUsd,
+                includeOpenOrders: true,
+            });
+
+            if (
+                hfResult.healthFactor === HEALTH_FACTOR_NO_DEBT ||
+                (Number.isFinite(hfResult.healthFactor) && hfResult.healthFactor >= 1)
+            ) {
                 candidates.push(bot);
             }
         }

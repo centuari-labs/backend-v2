@@ -1,5 +1,6 @@
 import "dotenv/config";
 import { NestFactory } from "@nestjs/core";
+import { json, urlencoded } from "express";
 import { AppModule } from "./app.module";
 import { AllExceptionsFilter } from "./common/filters/http-exception.filter";
 import { ResponseInterceptor } from "./common/interceptors/response.interceptor";
@@ -25,6 +26,9 @@ async function bootstrap() {
 
     app.useGlobalInterceptors(new ResponseInterceptor());
     app.useGlobalFilters(new AllExceptionsFilter());
+
+    app.use(json({ limit: "10kb" }));
+    app.use(urlencoded({ limit: "10kb", extended: true }));
 
     await app.listen(process.env.PORT ?? 3000);
 }

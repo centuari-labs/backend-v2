@@ -32,16 +32,16 @@ const LEND_RATE_MIN = 500;
 const LEND_RATE_MAX = 1500;
 const BORROW_RATE_MIN = 500;
 const BORROW_RATE_MAX = 1500;
-const LEND_QUANTITY_MIN = 10;
-const LEND_QUANTITY_MAX = 500;
-const BORROW_QUANTITY_MIN = 10;
-const BORROW_QUANTITY_MAX = 200;
+const LEND_QUANTITY_USD_MIN = 10;
+const LEND_QUANTITY_USD_MAX = 500;
+const BORROW_QUANTITY_USD_MIN = 10;
+const BORROW_QUANTITY_USD_MAX = 200;
 const MARKET_ORDER_PROBABILITY = 0.05;
 
 const NUM_BOT_ACCOUNTS = 6;
-const DEFAULT_MIN_TREASURY_BALANCE_HUMAN = 10_000;
-const DEFAULT_MIN_COLLATERAL_BALANCE_HUMAN = 100;
-const MAX_FAUCET_LOOPS = 20;
+const DEFAULT_MIN_TREASURY_BALANCE_USD = 1_000_000;
+const DEFAULT_MIN_COLLATERAL_BALANCE_USD = 100_000;
+const DEFAULT_MAX_FAUCET_LOOPS = 50;
 const MIN_GAS_BALANCE_WEI = BigInt(1e15); // ~0.001 ETH
 
 interface BotAccount {
@@ -131,14 +131,31 @@ export class OrdersWorker implements OnModuleInit {
         return process.env.ORDER_WORKER_ENABLED === "true";
     }
 
-    private getMinTreasuryBalanceHuman(): number {
+    private async getMinTreasuryBalanceHuman(assetId: string): Promise<number> {
         const val = this.configService.get<string>("ORDER_WORKER_MIN_TREASURY_BALANCE");
-        return val != null ? Number(val) : DEFAULT_MIN_TREASURY_BALANCE_HUMAN;
+        const usdTarget = val != null ? Number(val) : DEFAULT_MIN_TREASURY_BALANCE_USD;
+        return this.usdToTokenAmount(usdTarget, assetId);
     }
 
-    private getMinCollateralBalanceHuman(): number {
+    private async getMinCollateralBalanceHuman(assetId: string): Promise<number> {
         const val = this.configService.get<string>("ORDER_WORKER_MIN_COLLATERAL_BALANCE");
-        return val != null ? Number(val) : DEFAULT_MIN_COLLATERAL_BALANCE_HUMAN;
+        const usdTarget = val != null ? Number(val) : DEFAULT_MIN_COLLATERAL_BALANCE_USD;
+        return this.usdToTokenAmount(usdTarget, assetId);
+    }
+
+    private async usdToTokenAmount(usdAmount: number, assetId: string): Promise<number> {
+        const price = await this.priceService.getPrice(assetId);
+        if (price == null || price <= 0) {
+            this.logger.warn(
+                `[OrdersWorker] No price for asset ${assetId}; falling back to raw USD value as token amount`,
+            );
+            return usdAmount;
+        }
+        const tokenAmount = usdAmount / price;
+        this.logger.debug(
+            `[OrdersWorker] USD→Token: $${usdAmount} / $${price} = ${tokenAmount.toFixed(2)} tokens for asset ${assetId}`,
+        );
+        return tokenAmount;
     }
 
     private deriveBotAccounts(): BotAccount[] {
@@ -212,7 +229,7 @@ export class OrdersWorker implements OnModuleInit {
                         assetId: token.id,
                         tokenAddress: token.tokenAddress,
                         decimals: token.decimals,
-                        minBalanceHuman: this.getMinTreasuryBalanceHuman(),
+                        minBalanceHuman: await this.getMinTreasuryBalanceHuman(token.id),
                     });
                 }
                 for (const token of collateralTokens) {
@@ -221,7 +238,7 @@ export class OrdersWorker implements OnModuleInit {
                         assetId: token.id,
                         tokenAddress: token.tokenAddress,
                         decimals: token.decimals,
-                        minBalanceHuman: this.getMinCollateralBalanceHuman(),
+                        minBalanceHuman: await this.getMinCollateralBalanceHuman(token.id),
                     });
                 }
 
@@ -327,7 +344,7 @@ export class OrdersWorker implements OnModuleInit {
 
         let account = await this.orderRepository.findAccountByWallet(bot.wallet);
 
-        for (let loop = 0; loop < MAX_FAUCET_LOOPS; loop++) {
+        for (let loop = 0; loop < DEFAULT_MAX_FAUCET_LOOPS; loop++) {
             // Parallel read Treasury balanceOf for all tokens
             const treasuryBalances = await Promise.all(
                 supportedSpecs.map((s) =>
@@ -505,7 +522,7 @@ export class OrdersWorker implements OnModuleInit {
         assetId: string,
         tokenAddress: string,
         decimals: number,
-        minBalanceHuman: number = DEFAULT_MIN_TREASURY_BALANCE_HUMAN,
+        minBalanceHuman: number = DEFAULT_MIN_TREASURY_BALANCE_USD,
     ): Promise<void> {
         // Skip tokens that Treasury does not support
         const isSupported = await this.viemService.readContract<boolean>(
@@ -559,7 +576,7 @@ export class OrdersWorker implements OnModuleInit {
             await new Promise((r) => setTimeout(r, 3000));
         }
 
-        for (let loop = 0; loop < MAX_FAUCET_LOOPS; loop++) {
+        for (let loop = 0; loop < DEFAULT_MAX_FAUCET_LOOPS; loop++) {
             const treasuryBal = await this.viemService.readContract<bigint>(
                 this.chainId,
                 this.treasuryAddress,
@@ -719,14 +736,16 @@ export class OrdersWorker implements OnModuleInit {
 
         await this.ensureGasForBot(formattedKey, bot.wallet);
 
-        const specs: TokenFundingSpec[] = collateralTokens
-            .filter((t) => t.tokenAddress && t.decimals != null)
-            .map((t) => ({
-                assetId: t.id,
-                tokenAddress: t.tokenAddress!,
-                decimals: t.decimals!,
-                minBalanceHuman: this.getMinCollateralBalanceHuman(),
-            }));
+        const specs: TokenFundingSpec[] = await Promise.all(
+            collateralTokens
+                .filter((t) => t.tokenAddress && t.decimals != null)
+                .map(async (t) => ({
+                    assetId: t.id,
+                    tokenAddress: t.tokenAddress!,
+                    decimals: t.decimals!,
+                    minBalanceHuman: await this.getMinCollateralBalanceHuman(t.id),
+                })),
+        );
 
         if (specs.length === 0) return;
 
@@ -772,7 +791,7 @@ export class OrdersWorker implements OnModuleInit {
                         ),
                     ],
                 );
-                await new Promise((r) => setTimeout(r, 1500));
+                await new Promise((r) => setTimeout(r, 3000));
             }
         }
 
@@ -791,8 +810,23 @@ export class OrdersWorker implements OnModuleInit {
             return;
         }
 
-        // Allow RPC state to propagate after faucet mint
-        await new Promise((r) => setTimeout(r, 2000));
+        // Poll wallet balances until RPC state reflects the mint
+        for (const spec of supportedSpecs) {
+            const maxAttempts = 10;
+            for (let attempt = 0; attempt < maxAttempts; attempt++) {
+                const bal = await this.viemService.readContract<bigint>(
+                    this.chainId,
+                    spec.tokenAddress,
+                    erc20Abi,
+                    "balanceOf",
+                    [bot.wallet],
+                );
+                if (bal > 0n) break;
+                if (attempt < maxAttempts - 1) {
+                    await new Promise((r) => setTimeout(r, 1500));
+                }
+            }
+        }
 
         // Deposit wallet balances into Treasury
         const account = await this.orderRepository.findAccountByWallet(bot.wallet);
@@ -862,7 +896,7 @@ export class OrdersWorker implements OnModuleInit {
                         `[topUpCollateral] ERC20InsufficientBalance for bot ${bot.wallet} token ${spec.tokenAddress}, retrying with fresh balance`,
                     );
                     try {
-                        await new Promise((r) => setTimeout(r, 2000));
+                        await new Promise((r) => setTimeout(r, 5000));
                         const freshBalance =
                             await this.viemService.readContract<bigint>(
                                 this.chainId,
@@ -967,7 +1001,9 @@ export class OrdersWorker implements OnModuleInit {
         for (const entry of this.assetMarketCache) {
             try {
                 const { assetId, marketIds, symbol } = entry;
-                const amount = this.randomQuantity(LEND_QUANTITY_MIN, LEND_QUANTITY_MAX);
+                const lendMin = await this.usdToTokenAmount(LEND_QUANTITY_USD_MIN, assetId);
+                const lendMax = await this.usdToTokenAmount(LEND_QUANTITY_USD_MAX, assetId);
+                const amount = this.randomQuantity(lendMin, lendMax);
 
                 const decimals = await this.tokensService.getTokenDecimalsByAssetId(assetId);
                 if (decimals == null) {
@@ -1027,7 +1063,9 @@ export class OrdersWorker implements OnModuleInit {
         for (const entry of this.assetMarketCache) {
             try {
                 const { assetId, marketIds, symbol } = entry;
-                const amount = this.randomQuantity(BORROW_QUANTITY_MIN, BORROW_QUANTITY_MAX);
+                const borrowMin = await this.usdToTokenAmount(BORROW_QUANTITY_USD_MIN, assetId);
+                const borrowMax = await this.usdToTokenAmount(BORROW_QUANTITY_USD_MAX, assetId);
+                const amount = this.randomQuantity(borrowMin, borrowMax);
 
                 let account = await this.pickAccountWithSufficientHealthForBorrow(assetId, amount);
                 if (!account) {

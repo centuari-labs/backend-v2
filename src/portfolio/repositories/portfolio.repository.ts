@@ -250,7 +250,7 @@ export class PortfolioRepository extends Repository<Portfolio> {
         await this.dataSource.query(
             `INSERT INTO portfolio (id, account_id, asset_id, amount, is_collateral)
              VALUES ($1, $2, $3, $4, false)
-             ON CONFLICT (id) DO UPDATE SET
+             ON CONFLICT (account_id, asset_id) DO UPDATE SET
                amount = portfolio.amount + EXCLUDED.amount::numeric,
                updated_at = NOW()`,
             [id, accountId, assetId, amountDelta],
@@ -271,7 +271,7 @@ export class PortfolioRepository extends Repository<Portfolio> {
         await this.dataSource.query(
             `INSERT INTO portfolio (id, account_id, asset_id, amount, is_collateral)
              VALUES ($1, $2, $3, $4, false)
-             ON CONFLICT (id) DO UPDATE SET
+             ON CONFLICT (account_id, asset_id) DO UPDATE SET
                amount = $4::numeric,
                updated_at = NOW()`,
             [id, accountId, assetId, amount],

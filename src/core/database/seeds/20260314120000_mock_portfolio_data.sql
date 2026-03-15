@@ -131,28 +131,38 @@ BEGIN
     -- BTC: 0.05 = 5_000_000 (8 decimals) ~$3,540
     IF btc_id IS NOT NULL THEN
         INSERT INTO portfolio (id, account_id, asset_id, amount, is_collateral)
-        VALUES (gen_random_uuid(), test_account_id, btc_id, 5000000, true);
+        VALUES (gen_random_uuid(), test_account_id, btc_id, 5000000, true)
+        ON CONFLICT (account_id, asset_id) DO UPDATE SET
+            amount = EXCLUDED.amount, is_collateral = EXCLUDED.is_collateral, updated_at = NOW();
     END IF;
 
     -- ETH: 3.5 = 3_500_000_000_000_000_000 (18 decimals) ~$7,270
     IF eth_id IS NOT NULL THEN
         INSERT INTO portfolio (id, account_id, asset_id, amount, is_collateral)
-        VALUES (gen_random_uuid(), test_account_id, eth_id, 3500000000000000000, true);
+        VALUES (gen_random_uuid(), test_account_id, eth_id, 3500000000000000000, true)
+        ON CONFLICT (account_id, asset_id) DO UPDATE SET
+            amount = EXCLUDED.amount, is_collateral = EXCLUDED.is_collateral, updated_at = NOW();
     END IF;
 
     -- XAUT: 1.5 = 1_500_000 (6 decimals) ~$7,495
     IF xaut_id IS NOT NULL THEN
         INSERT INTO portfolio (id, account_id, asset_id, amount, is_collateral)
-        VALUES (gen_random_uuid(), test_account_id, xaut_id, 1500000, true);
+        VALUES (gen_random_uuid(), test_account_id, xaut_id, 1500000, true)
+        ON CONFLICT (account_id, asset_id) DO UPDATE SET
+            amount = EXCLUDED.amount, is_collateral = EXCLUDED.is_collateral, updated_at = NOW();
     END IF;
 
     -- USDC: 5000 = 5_000_000_000 (6 decimals)
     INSERT INTO portfolio (id, account_id, asset_id, amount, is_collateral)
-    VALUES (gen_random_uuid(), test_account_id, usdc_id, 5000000000, false);
+    VALUES (gen_random_uuid(), test_account_id, usdc_id, 5000000000, false)
+    ON CONFLICT (account_id, asset_id) DO UPDATE SET
+        amount = EXCLUDED.amount, is_collateral = EXCLUDED.is_collateral, updated_at = NOW();
 
     -- USDT: 2500 = 2_500_000_000 (6 decimals)
     INSERT INTO portfolio (id, account_id, asset_id, amount, is_collateral)
-    VALUES (gen_random_uuid(), test_account_id, usdt_id, 2500000000, false);
+    VALUES (gen_random_uuid(), test_account_id, usdt_id, 2500000000, false)
+    ON CONFLICT (account_id, asset_id) DO UPDATE SET
+        amount = EXCLUDED.amount, is_collateral = EXCLUDED.is_collateral, updated_at = NOW();
 
     -- 6. Orders
 

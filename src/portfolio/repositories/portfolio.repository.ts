@@ -267,14 +267,16 @@ export class PortfolioRepository extends Repository<Portfolio> {
         accountId: string,
         assetId: string,
         amount: string,
+        isCollateral: boolean = false,
     ): Promise<void> {
         await this.dataSource.query(
             `INSERT INTO portfolio (id, account_id, asset_id, amount, is_collateral)
-             VALUES ($1, $2, $3, $4, false)
+             VALUES ($1, $2, $3, $4, $5)
              ON CONFLICT (account_id, asset_id) DO UPDATE SET
                amount = $4::numeric,
+               is_collateral = CASE WHEN $5::boolean THEN true ELSE portfolio.is_collateral END,
                updated_at = NOW()`,
-            [id, accountId, assetId, amount],
+            [id, accountId, assetId, amount, isCollateral],
         );
     }
 }

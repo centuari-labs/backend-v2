@@ -53,8 +53,8 @@ export class OrderRepository extends Repository<Order> {
     async getBestRates(): Promise<Map<string, { borrow: number; lend: number }>> {
         const rawResults = await this.createQueryBuilder('order')
             .select('order.assetId', 'assetId')
-            .addSelect('MAX(CASE WHEN order.side = :borrowSide THEN order.rate ELSE 0 END)', 'highestBid')
-            .addSelect('MIN(NULLIF(CASE WHEN order.side = :lendSide THEN order.rate ELSE NULL END, 0))', 'lowestAsk')
+            .addSelect('MIN(NULLIF(CASE WHEN order.side = :borrowSide THEN order.rate ELSE NULL END, 0))', 'lowestBorrow')
+            .addSelect('MAX(CASE WHEN order.side = :lendSide THEN order.rate ELSE 0 END)', 'highestLend')
             .where('order.status = :status', { status: OrderStatus.Open })
             .setParameters({ borrowSide: OrderSide.Borrow, lendSide: OrderSide.Lend })
             .groupBy('order.assetId')
@@ -63,8 +63,8 @@ export class OrderRepository extends Repository<Order> {
         const rateMap = new Map<string, { borrow: number; lend: number }>();
         for (const rate of rawResults) {
             rateMap.set(rate.assetId, {
-                lend: rate.highestBid ? Number.parseFloat(rate.highestBid) : 0,
-                borrow: rate.lowestAsk ? Number.parseFloat(rate.lowestAsk) : 0
+                borrow: rate.lowestBorrow ? Number.parseFloat(rate.lowestBorrow) : 0,
+                lend: rate.highestLend ? Number.parseFloat(rate.highestLend) : 0,
             });
         }
         return rateMap;

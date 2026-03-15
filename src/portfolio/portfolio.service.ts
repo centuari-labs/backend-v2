@@ -237,12 +237,20 @@ export class PortfolioService {
             if (p !== undefined) priceMap.set(t.id, p);
         }
 
+        // Fetch LTV from risk table for collateral tokens (token.averageLTV is only set for loan tokens)
+        const collateralAssetIds = collateralRows.map((r) => r.asset_id);
+        const riskParams = collateralAssetIds.length > 0
+            ? await this.portfolioRepository.getRiskParamsByCollateralTokenIds(collateralAssetIds)
+            : [];
+        const riskLtvMap = new Map(riskParams.map((r) => [r.asset_id, Number(r.avg_ltv)]));
+
         const collateralPositions: CollateralPositionInput[] = [];
         for (const row of collateralRows) {
             const token = tokenMap.get(row.asset_id);
             const decimals = token?.decimals ?? 0;
             const priceUsd = priceMap.get(row.asset_id) ?? 0;
-            const ltvBps = token?.averageLTV != null ? Number(token.averageLTV) : 0;
+            const ltvBps = riskLtvMap.get(row.asset_id)
+                ?? (token?.averageLTV != null ? Number(token.averageLTV) : 0);
             collateralPositions.push({
                 assetId: row.asset_id,
                 amountBaseUnits: row.amount,

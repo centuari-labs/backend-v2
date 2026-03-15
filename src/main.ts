@@ -18,6 +18,8 @@ async function bootstrap() {
 
     const app = await NestFactory.create(AppModule);
 
+    app.enableShutdownHooks();
+
     app.enableCors({
         origin: process.env.CORS_ORIGINS?.split(",") || [],
         credentials: true,

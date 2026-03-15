@@ -10,6 +10,7 @@ import {
 } from "@nestjs/websockets";
 import { Logger } from "@nestjs/common";
 import { Server, Socket } from "socket.io";
+import { DataSource } from "typeorm";
 import { NatsService } from "../nats/nats.service";
 import { type UserPositionsDto } from "./dto/user.dto";
 import {
@@ -110,7 +111,13 @@ export class EventsGateway
     /** Cached latest prices keyed by assetId */
     private pricesCache: PricesDto["prices"] = {};
 
-    constructor(private readonly natsService: NatsService) {}
+    /** Tracks which assetIds have already been loaded from DB */
+    private dbLoadedAssets = new Set<string>();
+
+    constructor(
+        private readonly natsService: NatsService,
+        private readonly dataSource: DataSource,
+    ) {}
 
     afterInit(_server: Server) {
         this.logger.log("WebSocket Gateway initialized");
@@ -185,7 +192,12 @@ export class EventsGateway
 
     private handleOrdersMessage(data: unknown, subject: string) {
         if (subject === "orders.status") {
-            this.handleStatusUpdate(data as OrderStatusMessage);
+            this.handleStatusUpdate(data as OrderStatusMessage).catch(
+                (err) =>
+                    this.logger.error(
+                        `Error in handleStatusUpdate: ${(err as Error).message}`,
+                    ),
+            );
         } else if (subject === "orders.cancel") {
             this.handleCancelMessage(data as OrderCancelMessage);
         } else if (
@@ -225,13 +237,17 @@ export class EventsGateway
         this.emitUserPosition(tracked, subject);
     }
 
-    private handleStatusUpdate(msg: OrderStatusMessage) {
-        const tracked = this.orderState.get(msg.orderId);
+    private async handleStatusUpdate(msg: OrderStatusMessage) {
+        let tracked = this.orderState.get(msg.orderId);
         if (!tracked) {
-            this.logger.debug(
-                `Status update for unknown order ${msg.orderId}, ignoring`,
-            );
-            return;
+            await this.loadSingleOrderFromDb(msg.orderId);
+            tracked = this.orderState.get(msg.orderId);
+            if (!tracked) {
+                this.logger.debug(
+                    `Status update for unknown order ${msg.orderId}, ignoring`,
+                );
+                return;
+            }
         }
 
         tracked.status = msg.status as OrderStatus;
@@ -314,10 +330,147 @@ export class EventsGateway
         };
     }
 
+    // ─── DB Hydration ─────────────────────────────────────────────────
+
+    private async loadOrdersFromDb(assetId: string): Promise<void> {
+        if (this.dbLoadedAssets.has(assetId)) return;
+
+        try {
+            const rows: Array<{
+                id: string;
+                asset_id: string;
+                side: OrderSide;
+                type: OrderType;
+                rate: string;
+                quantity: string;
+                filled_quantity: string;
+                settlement_fee: string;
+                account_id: string;
+                status: OrderStatus;
+                user_wallet: string;
+                markets: Array<{ marketId: string; maturity: number }> | null;
+            }> = await this.dataSource.query(
+                `SELECT o.id, o.asset_id, o.side, o.type, o.rate,
+                        o.quantity, o.filled_quantity, o.settlement_fee,
+                        o.account_id, o.status,
+                        a.user_wallet,
+                        json_agg(json_build_object(
+                            'marketId', om.market_id,
+                            'maturity', COALESCE(EXTRACT(EPOCH FROM m.maturity)::int, 0)
+                        )) FILTER (WHERE om.market_id IS NOT NULL) as markets
+                 FROM orders o
+                 JOIN accounts a ON a.id = o.account_id
+                 LEFT JOIN order_markets om ON om.order_id = o.id
+                 LEFT JOIN markets m ON m.id = om.market_id
+                 WHERE o.asset_id = $1
+                   AND o.type = 'LIMIT'
+                   AND o.status IN ('OPEN', 'PARTIALLY_FILLED')
+                 GROUP BY o.id, a.user_wallet`,
+                [assetId],
+            );
+
+            for (const row of rows) {
+                if (this.orderState.has(row.id)) continue;
+                const remaining =
+                    BigInt(row.quantity) -
+                    BigInt(row.filled_quantity || "0");
+                this.orderState.set(row.id, {
+                    orderId: row.id,
+                    assetId: row.asset_id,
+                    side: row.side,
+                    type: row.type,
+                    rate: Number(row.rate),
+                    remainingAmount:
+                        remaining >= 0n ? remaining.toString() : "0",
+                    originalAmount: row.quantity,
+                    accountId: row.account_id,
+                    status: row.status,
+                    walletAddress: row.user_wallet,
+                    markets: row.markets ?? [],
+                    settlementFeeAmount: row.settlement_fee,
+                });
+            }
+
+            this.dbLoadedAssets.add(assetId);
+            this.logger.log(
+                `Loaded ${rows.length} active limit orders from DB for asset ${assetId}`,
+            );
+        } catch (err) {
+            this.logger.error(
+                `Failed to load orders from DB for asset ${assetId}: ${(err as Error).message}`,
+            );
+        }
+    }
+
+    private async loadSingleOrderFromDb(
+        orderId: string,
+    ): Promise<void> {
+        try {
+            const rows: Array<{
+                id: string;
+                asset_id: string;
+                side: OrderSide;
+                type: OrderType;
+                rate: string;
+                quantity: string;
+                filled_quantity: string;
+                settlement_fee: string;
+                account_id: string;
+                status: OrderStatus;
+                user_wallet: string;
+                markets: Array<{ marketId: string; maturity: number }> | null;
+            }> = await this.dataSource.query(
+                `SELECT o.id, o.asset_id, o.side, o.type, o.rate,
+                        o.quantity, o.filled_quantity, o.settlement_fee,
+                        o.account_id, o.status,
+                        a.user_wallet,
+                        json_agg(json_build_object(
+                            'marketId', om.market_id,
+                            'maturity', COALESCE(EXTRACT(EPOCH FROM m.maturity)::int, 0)
+                        )) FILTER (WHERE om.market_id IS NOT NULL) as markets
+                 FROM orders o
+                 JOIN accounts a ON a.id = o.account_id
+                 LEFT JOIN order_markets om ON om.order_id = o.id
+                 LEFT JOIN markets m ON m.id = om.market_id
+                 WHERE o.id = $1
+                 GROUP BY o.id, a.user_wallet`,
+                [orderId],
+            );
+
+            if (rows.length === 0) return;
+
+            const row = rows[0];
+            const remaining =
+                BigInt(row.quantity) - BigInt(row.filled_quantity || "0");
+            this.orderState.set(row.id, {
+                orderId: row.id,
+                assetId: row.asset_id,
+                side: row.side,
+                type: row.type,
+                rate: Number(row.rate),
+                remainingAmount:
+                    remaining >= 0n ? remaining.toString() : "0",
+                originalAmount: row.quantity,
+                accountId: row.account_id,
+                status: row.status,
+                walletAddress: row.user_wallet,
+                markets: row.markets ?? [],
+                settlementFeeAmount: row.settlement_fee,
+            });
+        } catch (err) {
+            this.logger.error(
+                `Failed to load order ${orderId} from DB: ${(err as Error).message}`,
+            );
+        }
+    }
+
+    // ─── Orderbook ──────────────────────────────────────────────────
+
     private aggregateAndBroadcastOrderbook(assetId: string) {
         const activeOrders = Array.from(this.orderState.values()).filter(
             (o) =>
                 o.assetId === assetId &&
+                o.type === OrderType.Limit &&
                 (o.status === OrderStatus.Open ||
                     o.status === OrderStatus.PartiallyFilled),
         );
@@ -386,7 +539,7 @@ export class EventsGateway
     }
 
     @SubscribeMessage("subscribe-orderbook")
-    handleSubscribeOrderbook(
+    async handleSubscribeOrderbook(
         @ConnectedSocket() client: Socket,
         @MessageBody() body: SubscribeOrderbookDto,
     ) {
@@ -394,7 +547,12 @@ export class EventsGateway
         client.join(room);
         this.logger.log(`Client ${client.id} joined ${room}`);
 
-        const cached = this.orderbookCache.get(room);
+        let cached = this.orderbookCache.get(room);
+        if (!cached) {
+            await this.loadOrdersFromDb(body.assetId);
+            this.aggregateAndBroadcastOrderbook(body.assetId);
+            cached = this.orderbookCache.get(room);
+        }
         if (cached) {
             client.emit("orderbook-update", cached);
         }

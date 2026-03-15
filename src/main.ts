@@ -17,7 +17,11 @@ async function bootstrap() {
 
     const app = await NestFactory.create(AppModule);
 
-    app.enableCors();
+    app.enableCors({
+        origin: process.env.CORS_ORIGINS?.split(",") || [],
+        credentials: true,
+        methods: ["GET", "POST", "PATCH", "DELETE"],
+    });
 
     app.useGlobalInterceptors(new ResponseInterceptor());
     app.useGlobalFilters(new AllExceptionsFilter());

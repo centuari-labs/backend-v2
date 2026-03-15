@@ -453,15 +453,14 @@ export class FaucetService {
             );
         }
 
-        const receipt = (await this.viemService.writeContract(
+        const receipt = await this.writeWithNonceRetry(
             chainId,
             operatorKey,
             faucetAddress,
             faucetAbi,
             "mintTo",
             [tokenAddress, recipientAddress, maxPerRequest],
-            { waitForReceipt: true },
-        )) as TransactionReceipt;
+        );
 
         return {
             tokenAddress,

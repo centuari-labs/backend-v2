@@ -86,6 +86,17 @@ export class OrdersService {
             quantityBaseUnits,
         );
 
+        const hasCounterparty = await this.orderRepository.hasCounterpartyOrders(
+            dto.assetId,
+            OrderSide.Lend,
+            dto.marketIds ?? [],
+        );
+        if (!hasCounterparty) {
+            throw new BadRequestException(
+                "No available liquidity for this market order",
+            );
+        }
+
         const settlementFee = await this.computeSettlementFee(
             dto.assetId,
             dto.amount,
@@ -201,6 +212,17 @@ export class OrdersService {
             dto.amount,
             decimals!,
         );
+
+        const hasCounterparty = await this.orderRepository.hasCounterpartyOrders(
+            dto.assetId,
+            OrderSide.Borrow,
+            dto.marketIds ?? [],
+        );
+        if (!hasCounterparty) {
+            throw new BadRequestException(
+                "No available liquidity for this market order",
+            );
+        }
 
         const assetPrice = await this.priceService.getPrice(dto.assetId);
         if (assetPrice == null || assetPrice <= 0) {

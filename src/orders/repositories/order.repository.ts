@@ -104,6 +104,36 @@ export class OrderRepository extends Repository<Order> {
         return BigInt(totalStr);
     }
 
+    /**
+     * Returns true when at least one open/partially-filled LIMIT order exists
+     * on the opposite side for the given asset and overlapping markets.
+     *
+     * Used to pre-check liquidity before accepting a market order.
+     */
+    async hasCounterpartyOrders(
+        assetId: string,
+        side: OrderSide,
+        marketIds: string[],
+    ): Promise<boolean> {
+        if (!marketIds.length) return false;
+
+        const counterpartySide = side === OrderSide.Lend ? OrderSide.Borrow : OrderSide.Lend;
+
+        const result = await this.createQueryBuilder('order')
+            .innerJoin('order_markets', 'om', 'om.order_id = order.id')
+            .where('order.assetId = :assetId', { assetId })
+            .andWhere('order.side = :side', { side: counterpartySide })
+            .andWhere('order.type = :type', { type: 'LIMIT' })
+            .andWhere('order.status IN (:...statuses)', {
+                statuses: [OrderStatus.Open, OrderStatus.PartiallyFilled],
+            })
+            .andWhere('om.market_id IN (:...marketIds)', { marketIds })
+            .limit(1)
+            .getCount();
+
+        return result > 0;
+    }
+
     async getOpenBorrowOrders(accountId: string): Promise<Order[]> {
         return this.find({
             where: {

@@ -13,7 +13,7 @@ import {
     type TransactionReceipt,
     type Transport,
 } from "viem";
-import { generatePrivateKey, privateKeyToAccount, nonceManager } from "viem/accounts";
+import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import * as chains from "viem/chains";
 
 export interface ViemWriteContractOptions {
@@ -33,6 +33,8 @@ export class ViemService implements OnModuleInit {
     private publicClients = new Map<number, PublicClient>();
     private walletClients = new Map<string, WalletClient<Transport, Chain, Account>>();
     private supportedChains = new Map<number, Chain>();
+    /** Per-address transaction queue to prevent nonce races */
+    private txQueues = new Map<string, Promise<any>>();
 
     constructor(private readonly configService: ConfigService) { }
 
@@ -110,9 +112,7 @@ export class ViemService implements OnModuleInit {
 
     getWalletClient(privateKey: string, chainId: number): WalletClient<Transport, Chain, Account> {
         const formattedKey = privateKey.startsWith("0x") ? privateKey : `0x${privateKey}`;
-        const account = privateKeyToAccount(formattedKey as `0x${string}`, {
-            nonceManager,
-        });
+        const account = privateKeyToAccount(formattedKey as `0x${string}`);
 
         const key = `${chainId}-${account.address}`;
 
@@ -192,13 +192,39 @@ export class ViemService implements OnModuleInit {
         options: ViemWriteContractOptions = {}
     ): Promise<Hash | TransactionReceipt> {
         const walletClient = this.getWalletClient(privateKey, chainId);
+        const queueKey = `${chainId}-${walletClient.account.address}`;
 
+        const pending = this.txQueues.get(queueKey) ?? Promise.resolve();
+        const next = pending
+            .catch(() => { }) // don't let a prior failure block the queue
+            .then(() => this.executeWriteContract(walletClient, chainId, address, abi, functionName, args, options));
+        this.txQueues.set(queueKey, next);
+
+        return next;
+    }
+
+    private async executeWriteContract(
+        walletClient: WalletClient<Transport, Chain, Account>,
+        chainId: number,
+        address: string,
+        abi: readonly any[],
+        functionName: string,
+        args: any[],
+        options: ViemWriteContractOptions,
+    ): Promise<Hash | TransactionReceipt> {
         try {
+            const publicClient = this.getPublicClient(chainId);
+            const nonce = await publicClient.getTransactionCount({
+                address: walletClient.account.address,
+                blockTag: "pending",
+            });
+
             const hash = await walletClient.writeContract({
                 address: address as `0x${string}`,
                 abi,
                 functionName,
                 args,
+                nonce,
                 value: options.value,
                 gas: options.gas,
                 type: 'eip1559',

@@ -446,7 +446,8 @@ export class OrdersService {
             SETTLEMENT_FEE_RATE_BPS,
             SETTLEMENT_FEE_MAX_CAP_USD,
         );
-        return feeHuman.toString();
+        if (feeHuman === 0) return "0";
+        return humanToBaseUnits(feeHuman.toString(), decimals);
     }
 
     private async mapToResponse(
@@ -473,6 +474,10 @@ export class OrdersService {
             maturity: maturityByMarketId.get(marketId) ?? 0,
         }));
 
+        const decimals = await this.tokensService.getTokenDecimalsByAssetId(
+            dto.assetId,
+        );
+
         return {
             statusCode: HttpStatus.CREATED,
             data: {
@@ -485,7 +490,7 @@ export class OrdersService {
                 type: order.type,
                 status: order.status,
                 originalAmount: dto.amount,
-                settlementFeeAmount: order.settlementFee,
+                settlementFeeAmount: baseUnitsToHuman(order.settlementFee, decimals!),
                 // order.rate is stored as basis points in the DB; expose percentage in responses
                 rate: toPercentage(order.rate),
                 autoRollover: order.autoRollover,

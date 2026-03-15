@@ -791,6 +791,9 @@ export class OrdersWorker implements OnModuleInit {
             return;
         }
 
+        // Allow RPC state to propagate after faucet mint
+        await new Promise((r) => setTimeout(r, 2000));
+
         // Deposit wallet balances into Treasury
         const account = await this.orderRepository.findAccountByWallet(bot.wallet);
         const specByToken = new Map(
@@ -852,9 +855,41 @@ export class OrdersWorker implements OnModuleInit {
                     }
                 }
             } catch (e) {
-                this.logger.error(
-                    `[topUpCollateral] Deposit failed for bot ${bot.wallet} token ${spec.tokenAddress}: ${(e as Error).message}`,
-                );
+                const errMsg = (e as Error).message ?? "";
+                // 0xe450d38c = ERC20InsufficientBalance — retry with fresh balance
+                if (errMsg.includes("0xe450d38c")) {
+                    this.logger.warn(
+                        `[topUpCollateral] ERC20InsufficientBalance for bot ${bot.wallet} token ${spec.tokenAddress}, retrying with fresh balance`,
+                    );
+                    try {
+                        await new Promise((r) => setTimeout(r, 2000));
+                        const freshBalance =
+                            await this.viemService.readContract<bigint>(
+                                this.chainId,
+                                spec.tokenAddress,
+                                erc20Abi,
+                                "balanceOf",
+                                [bot.wallet],
+                            );
+                        if (freshBalance > 0n) {
+                            await this.writeContractWithNonceRetry(
+                                bot.privateKey,
+                                this.treasuryAddress,
+                                treasuryAbi,
+                                "deposit",
+                                [spec.tokenAddress, freshBalance],
+                            );
+                        }
+                    } catch (retryErr) {
+                        this.logger.error(
+                            `[topUpCollateral] Deposit retry also failed for bot ${bot.wallet} token ${spec.tokenAddress}: ${(retryErr as Error).message}`,
+                        );
+                    }
+                } else {
+                    this.logger.error(
+                        `[topUpCollateral] Deposit failed for bot ${bot.wallet} token ${spec.tokenAddress}: ${errMsg}`,
+                    );
+                }
             }
         }
 

@@ -21,7 +21,9 @@ export class AllExceptionsFilter implements ExceptionFilter {
         const message =
             exception instanceof HttpException
                 ? exception.getResponse()
-                : `Internal server error: ${(exception as Error).message} ${(exception as Error).stack}`;
+                : process.env.NODE_ENV === "production"
+                    ? "Internal server error"
+                    : `Internal server error: ${(exception as Error).message}`;
 
         response.status(status).json({
             success: false,

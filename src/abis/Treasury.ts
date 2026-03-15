@@ -85,5 +85,23 @@ export const treasuryAbi = [
         ],
         anonymous: false,
     },
+    {
+        type: "error",
+        name: "ERC20InsufficientBalance",
+        inputs: [
+            { name: "sender", type: "address", internalType: "address" },
+            { name: "balance", type: "uint256", internalType: "uint256" },
+            { name: "needed", type: "uint256", internalType: "uint256" },
+        ],
+    },
+    {
+        type: "error",
+        name: "ERC20InsufficientAllowance",
+        inputs: [
+            { name: "spender", type: "address", internalType: "address" },
+            { name: "allowance", type: "uint256", internalType: "uint256" },
+            { name: "needed", type: "uint256", internalType: "uint256" },
+        ],
+    },
 ] as const;
 

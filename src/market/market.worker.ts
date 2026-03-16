@@ -8,7 +8,6 @@ import { Token } from "../tokens/entities/token.entity";
 import { getAllowedMaturitiesUtcSeconds } from "../orders/utils/maturity.utils";
 
 const MARKET_MATURITIES_REFRESH_INTERVAL_MS = 24 * 60 * 60 * 1000; // once per day
-//@todo : fix inconsistent maturity not start with 1
 @Injectable()
 export class MarketWorker implements OnModuleInit {
     private readonly logger = new Logger(MarketWorker.name);
@@ -57,7 +56,9 @@ export class MarketWorker implements OnModuleInit {
         });
 
         if (loanTokens.length === 0) {
-            this.logger.debug("No loan tokens found, skipping market maturities refresh");
+            this.logger.debug(
+                "No loan tokens found, skipping market maturities refresh",
+            );
             return 0;
         }
 
@@ -66,30 +67,55 @@ export class MarketWorker implements OnModuleInit {
             (seconds) => new Date(seconds * 1000),
         );
 
+        // Batch-fetch all existing markets to avoid N+1 queries
+        const existingMarkets = await this.marketRepository.find({
+            select: ["assetId", "maturity"],
+        });
+
+        const existingKeys = new Set(
+            existingMarkets.map(
+                (m) => `${m.assetId}_${m.maturity.getTime()}`,
+            ),
+        );
+
         let createdCount = 0;
 
         for (const token of loanTokens) {
             for (const maturity of allowedMaturitiesDates) {
-                // Check if a market already exists for this asset and maturity
-                const existing = await this.marketRepository.findOne({
-                    where: {
-                        assetId: token.id,
-                        maturity,
-                    },
-                });
+                const key = `${token.id}_${maturity.getTime()}`;
 
-                if (existing) {
+                if (existingKeys.has(key)) {
                     continue;
                 }
 
-                const market = this.marketRepository.create({
-                    id: randomUUID(),
-                    assetId: token.id,
-                    maturity,
-                });
+                try {
+                    const market = this.marketRepository.create({
+                        id: randomUUID(),
+                        assetId: token.id,
+                        maturity,
+                    });
 
-                await this.marketRepository.save(market);
-                createdCount += 1;
+                    await this.marketRepository.save(market);
+                    createdCount += 1;
+                } catch (error) {
+                    // Handle race condition: another process may have
+                    // inserted the same (assetId, maturity) between
+                    // our check and insert
+                    if (
+                        (error as Error).message?.includes(
+                            "duplicate key",
+                        ) ||
+                        (error as Error).message?.includes(
+                            "unique constraint",
+                        )
+                    ) {
+                        this.logger.debug(
+                            `Market already exists for asset ${token.id} maturity ${maturity.toISOString()}, skipping`,
+                        );
+                        continue;
+                    }
+                    throw error;
+                }
             }
         }
 

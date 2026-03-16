@@ -11,7 +11,7 @@ import { MarketModule } from "./market/market.module";
 import { PortfolioModule } from "./portfolio/portfolio.module";
 import { FaucetModule } from "./faucet/faucet.module";
 import { DepositModule } from "./deposit/deposit.module";
-import { RateModule } from "./rate-history/rate-history.module";
+
 import { RepayModule } from "./repay/repay.module";
 import { WithdrawModule } from "./withdraw/withdraw.module";
 import { ChainIndexerModule } from "./chain-indexer/chain-indexer.module";
@@ -41,7 +41,7 @@ import { EventsGateway } from "./core/websocket/websocket.gateway";
         DepositModule,
         WithdrawModule,
         RepayModule,
-        RateModule,
+
         ChainIndexerModule,
     ],
     controllers: [],

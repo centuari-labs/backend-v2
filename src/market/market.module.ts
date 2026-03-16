@@ -9,6 +9,7 @@ import { Token } from '../tokens/entities/token.entity';
 import { PriceModule } from '../price/price.module';
 import { OrdersModule } from '../orders/orders.module';
 import { MarketRepositories } from './repository/market.repository';
+import { RateRepository } from './repository/rate-history.repository';
 import { MarketWorker } from './market.worker';
 
 @Module({
@@ -23,6 +24,7 @@ import { MarketWorker } from './market.worker';
     providers: [
         MarketService,
         MarketRepositories,
+        RateRepository,
         MarketWorker,
     ],
     exports: [MarketService, MarketRepositories],

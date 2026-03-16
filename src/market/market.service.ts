@@ -1,9 +1,11 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { MarketDetailResponseDto, MarketResponseDto } from './dto/market.dto';
+import { RateHistoryDataDto } from './dto/rate-history.dto';
 import { PriceService } from '../price/price.service';
 
 import { OrderRepository } from '../orders/repositories/order.repository';
 import { MarketRepositories } from './repository/market.repository';
+import { RateRepository } from './repository/rate-history.repository';
 import { TokensRepository } from '../tokens/repositories/tokens.repository';
 import { toPercentage } from '../common/utils/number.utils';
 
@@ -12,6 +14,7 @@ export class MarketService {
     constructor(
         private readonly orderRepository: OrderRepository,
         private readonly marketRepository: MarketRepositories,
+        private readonly rateRepository: RateRepository,
         private readonly tokensRepository: TokensRepository,
         private readonly priceService: PriceService,
     ) { }
@@ -138,6 +141,15 @@ export class MarketService {
                 market_id: m.id,
                 maturity: Math.floor(new Date(m.maturity).getTime() / 1000),
             })),
+        };
+    }
+
+    async getRateHistory(assetId: string): Promise<RateHistoryDataDto> {
+        const rateHistory = await this.rateRepository.getRateHistoryByAssetId(assetId);
+
+        return {
+            assetId,
+            rateHistory,
         };
     }
 

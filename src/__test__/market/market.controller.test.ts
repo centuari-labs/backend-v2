@@ -40,6 +40,7 @@ describe('MarketController', () => {
                     useValue: {
                         getMarketSnapshot: jest.fn(),
                         getMarketDetail: jest.fn(),
+                        getRateHistory: jest.fn(),
                     },
                 },
             ],

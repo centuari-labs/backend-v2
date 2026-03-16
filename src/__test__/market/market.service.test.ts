@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { MarketService } from '../../market/market.service';
 import { OrderRepository } from '../../orders/repositories/order.repository';
 import { MarketRepositories } from '../../market/repository/market.repository';
+import { RateRepository } from '../../market/repository/rate-history.repository';
 import { TokensRepository } from '../../tokens/repositories/tokens.repository';
 import { PriceService } from '../../price/price.service';
 
@@ -9,6 +10,7 @@ describe('MarketService', () => {
     let service: MarketService;
     let orderRepositoryMock: any;
     let marketRepositoryMock: any;
+    let rateRepositoryMock: any;
     let tokenRepositoryMock: any;
     let priceServiceMock: any;
 
@@ -33,6 +35,9 @@ describe('MarketService', () => {
             find: jest.fn().mockResolvedValue(mockAssets),
             findLoanTokens: jest.fn().mockResolvedValue(mockAssets),
         };
+        rateRepositoryMock = {
+            getRateHistoryByAssetId: jest.fn().mockResolvedValue([]),
+        };
         priceServiceMock = {
             getPrice: jest.fn().mockResolvedValue(1000),
         };
@@ -42,6 +47,7 @@ describe('MarketService', () => {
                 MarketService,
                 { provide: OrderRepository, useValue: orderRepositoryMock },
                 { provide: MarketRepositories, useValue: marketRepositoryMock },
+                { provide: RateRepository, useValue: rateRepositoryMock },
                 { provide: TokensRepository, useValue: tokenRepositoryMock },
                 { provide: PriceService, useValue: priceServiceMock },
             ],

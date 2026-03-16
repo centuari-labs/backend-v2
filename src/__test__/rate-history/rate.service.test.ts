@@ -1,9 +1,13 @@
 import { Test, TestingModule } from "@nestjs/testing";
-import { RateService } from "../../rate-history/rate-history.service";
-import { RateRepository } from "../../rate-history/repositories/rate-history.respository";
+import { MarketService } from "../../market/market.service";
+import { OrderRepository } from "../../orders/repositories/order.repository";
+import { MarketRepositories } from "../../market/repository/market.repository";
+import { RateRepository } from "../../market/repository/rate-history.repository";
+import { TokensRepository } from "../../tokens/repositories/tokens.repository";
+import { PriceService } from "../../price/price.service";
 
-describe("RateService", () => {
-    let service: RateService;
+describe("MarketService - getRateHistory", () => {
+    let service: MarketService;
     let rateRepository: jest.Mocked<RateRepository>;
 
     beforeEach(async () => {
@@ -13,12 +17,16 @@ describe("RateService", () => {
 
         const module: TestingModule = await Test.createTestingModule({
             providers: [
-                RateService,
+                MarketService,
                 { provide: RateRepository, useValue: mockRateRepository },
+                { provide: OrderRepository, useValue: { getBestRates: jest.fn() } },
+                { provide: MarketRepositories, useValue: {} },
+                { provide: TokensRepository, useValue: {} },
+                { provide: PriceService, useValue: {} },
             ],
         }).compile();
 
-        service = module.get(RateService);
+        service = module.get(MarketService);
         rateRepository = module.get(RateRepository);
     });
 
@@ -66,4 +74,3 @@ describe("RateService", () => {
         });
     });
 });
-

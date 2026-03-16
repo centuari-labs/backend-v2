@@ -1,0 +1,138 @@
+{
+  "info": {
+    "_postman_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "name": "Transaction History",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Get transaction history",
+      "id": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{auth_token}}",
+            "type": "text",
+            "uuid": "c3d4e5f6-a7b8-9012-cdef-123456789012"
+          }
+        ],
+        "url": {
+          "raw": "{{base url}}transaction-history?page=1&limit=10",
+          "host": [
+            "{{base url}}transaction-history"
+          ],
+          "path": [],
+          "query": [
+            {
+              "key": "page",
+              "value": "1",
+              "uuid": "d4e5f6a7-b8c9-0123-defa-234567890123"
+            },
+            {
+              "key": "limit",
+              "value": "10",
+              "uuid": "e5f6a7b8-c9d0-1234-efab-345678901234"
+            },
+            {
+              "key": "type",
+              "value": "ORDER",
+              "uuid": "f6a7b8c9-d0e1-2345-fabc-456789012345",
+              "disabled": true
+            }
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Get transaction history - orders only",
+      "id": "a7b8c9d0-e1f2-3456-abcd-567890123456",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{auth_token}}",
+            "type": "text",
+            "uuid": "b8c9d0e1-f2a3-4567-bcde-678901234567"
+          }
+        ],
+        "url": {
+          "raw": "{{base url}}transaction-history?page=1&limit=10&type=ORDER",
+          "host": [
+            "{{base url}}transaction-history"
+          ],
+          "path": [],
+          "query": [
+            {
+              "key": "page",
+              "value": "1",
+              "uuid": "c9d0e1f2-a3b4-5678-cdef-789012345678"
+            },
+            {
+              "key": "limit",
+              "value": "10",
+              "uuid": "d0e1f2a3-b4c5-6789-defa-890123456789"
+            },
+            {
+              "key": "type",
+              "value": "ORDER",
+              "uuid": "e1f2a3b4-c5d6-7890-efab-901234567890"
+            }
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Get transaction history - matches only",
+      "id": "f2a3b4c5-d6e7-8901-fabc-012345678901",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{auth_token}}",
+            "type": "text",
+            "uuid": "a3b4c5d6-e7f8-9012-abcd-123456789012"
+          }
+        ],
+        "url": {
+          "raw": "{{base url}}transaction-history?page=1&limit=10&type=MATCH",
+          "host": [
+            "{{base url}}transaction-history"
+          ],
+          "path": [],
+          "query": [
+            {
+              "key": "page",
+              "value": "1",
+              "uuid": "b4c5d6e7-f8a9-0123-bcde-234567890123"
+            },
+            {
+              "key": "limit",
+              "value": "10",
+              "uuid": "c5d6e7f8-a9b0-1234-cdef-345678901234"
+            },
+            {
+              "key": "type",
+              "value": "MATCH",
+              "uuid": "d6e7f8a9-b0c1-2345-defa-456789012345"
+            }
+          ]
+        }
+      },
+      "response": []
+    }
+  ],
+  "variable": [
+    {
+      "id": "e7f8a9b0-c1d2-3456-efab-567890123456",
+      "key": "base url",
+      "value": "",
+      "type": "default"
+    }
+  ]
+}

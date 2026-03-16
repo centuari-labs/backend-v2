@@ -291,7 +291,7 @@ export class PortfolioRepository extends Repository<Portfolio> {
         const rows = await this.dataSource.query(
             `SELECT m.id, m.maturity,
                     COALESCE(a.decimals, 0) as decimals,
-                    a.token_address
+                    a.token_address as "tokenAddress"
              FROM markets m
              JOIN assets a ON m.asset_id = a.id
              WHERE m.id = $1`,

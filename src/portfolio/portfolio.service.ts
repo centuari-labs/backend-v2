@@ -4,7 +4,7 @@ import { Repository } from "typeorm";
 import { Token } from "../tokens/entities/token.entity";
 import { PriceService } from "../price/price.service";
 import { TokensService } from "../tokens/tokens.service";
-import { MyPortfolioResponseDto, GetMyAssetsQueryDto, MyAssetsResponseDto, LendBorrowAssetResponseDto, GetMyPositionResponseDto, MyPositionQueryDto, SetAssetAsCollateralDto, MyHealthFactorResponseDto } from "./dto/portfolio.dto";
+import { MyPortfolioResponseDto, GetMyAssetsQueryDto, MyAssetsResponseDto, LendBorrowAssetResponseDto, GetMyPositionResponseDto, MyPositionQueryDto, SetAssetAsCollateralDto, MyHealthFactorResponseDto, UserDetailsResponseDto } from "./dto/portfolio.dto";
 import { PortfolioRepository } from "./repositories/portfolio.repository";
 import { OrderRepository } from "../orders/repositories/order.repository";
 import { calculateUsdAmount, createPaginatedResponse } from "./helpers/position.helpers";
@@ -465,5 +465,118 @@ export class PortfolioService {
         const balances = await this.portfolioRepository.getUserTotalBalances(accountId);
         const match = balances.find(b => b.asset_id === assetId);
         return match ? match.total_amount : "0";
+    }
+
+    async getUserDetails(wallet: string): Promise<UserDetailsResponseDto> {
+        const account = await this.orderRepository.findAccountByWallet(wallet);
+        if (!account) {
+            throw new NotFoundException("Account not found");
+        }
+
+        const [
+            portfolioBalances,
+            openLendAmounts,
+            borrowedAssets,
+            openBorrowOrders,
+            userAssets,
+            tokens,
+        ] = await Promise.all([
+            this.portfolioRepository.getUserTotalBalances(account.id),
+            this.orderRepository.getOpenLendAmountsByAccount(account.id),
+            this.portfolioRepository.getUserBorrowedAssets(account.id),
+            this.orderRepository.getOpenBorrowOrders(account.id),
+            this.portfolioRepository.getUserAssets(account.id, 1, 1000),
+            this.tokenRepository.find(),
+        ]);
+
+        const allPrices = this.priceService.getPrices();
+        const tokenMap = new Map(tokens.map((t) => [t.id, t]));
+
+        // Build locked lend amounts map: assetId -> locked base units
+        const lockedMap = new Map<string, string>();
+        for (const row of openLendAmounts) {
+            lockedMap.set(row.assetId, row.lockedAmount);
+        }
+
+        // Build collateral status map from user assets
+        const collateralMap = new Map<string, boolean>();
+        for (const ua of userAssets.data) {
+            collateralMap.set(ua.asset_id, !!ua.is_collateral);
+        }
+
+        // Get risk params for all portfolio asset IDs
+        const assetIds = portfolioBalances.map((b) => b.asset_id);
+        const riskParams = assetIds.length > 0
+            ? await this.portfolioRepository.getRiskParamsByCollateralTokenIds(assetIds)
+            : [];
+        const riskMap = new Map(riskParams.map((r) => [r.asset_id, r]));
+
+        // Build asset details
+        const assets = portfolioBalances.map((balance) => {
+            const token = tokenMap.get(balance.asset_id);
+            const decimals = token?.decimals ?? 0;
+            const risk = riskMap.get(balance.asset_id);
+            const price = allPrices[balance.asset_id.toLowerCase()] ?? 0;
+
+            const totalBalanceHuman = Number(baseUnitsToHuman(balance.total_amount, decimals));
+
+            const lockedBaseUnits = lockedMap.get(balance.asset_id) ?? "0";
+            const lockedHuman = Number(baseUnitsToHuman(lockedBaseUnits, decimals));
+
+            const availableBalance = Math.max(0, totalBalanceHuman - lockedHuman);
+            const availableBalanceUsd = availableBalance * price;
+
+            const ltv = risk ? Number(risk.avg_ltv) / 10000 : 0;
+            const liquidationThreshold = risk ? Number(risk.avg_lt) / 10000 : 0;
+
+            return {
+                assetId: balance.asset_id,
+                totalBalance: totalBalanceHuman,
+                lockedInOrders: lockedHuman,
+                availableBalance,
+                availableBalanceUsd: Number(availableBalanceUsd.toFixed(2)),
+                isCollateral: collateralMap.get(balance.asset_id) ?? false,
+                ltv,
+                liquidationThreshold,
+            };
+        });
+
+        // Compute settled debt
+        let settledDebtUsd = 0;
+        const debts: { assetId: string; debtAmount: number; debtAmountUsd: number }[] = [];
+        for (const row of borrowedAssets) {
+            const token = tokenMap.get(row.asset_id);
+            const decimals = token?.decimals ?? 0;
+            const price = allPrices[row.asset_id.toLowerCase()] ?? 0;
+            const debtHuman = Number(baseUnitsToHuman(row.amount, decimals));
+            const debtUsd = debtHuman * price;
+            settledDebtUsd += debtUsd;
+            debts.push({
+                assetId: row.asset_id,
+                debtAmount: debtHuman,
+                debtAmountUsd: Number(debtUsd.toFixed(2)),
+            });
+        }
+
+        // Compute pending debt from open borrow orders
+        let pendingDebtUsd = 0;
+        for (const order of openBorrowOrders) {
+            const token = tokenMap.get(order.assetId);
+            const decimals = token?.decimals ?? 0;
+            const price = allPrices[order.assetId.toLowerCase()] ?? 0;
+            const remainingBaseUnits = (BigInt(order.quantity) - BigInt(order.filledQuantity)).toString();
+            const remainingHuman = Number(baseUnitsToHuman(remainingBaseUnits, decimals));
+            pendingDebtUsd += remainingHuman * price;
+        }
+
+        const totalDebtUsd = settledDebtUsd + pendingDebtUsd;
+
+        return {
+            assets,
+            totalDebtUsd: Number(totalDebtUsd.toFixed(2)),
+            settledDebtUsd: Number(settledDebtUsd.toFixed(2)),
+            pendingDebtUsd: Number(pendingDebtUsd.toFixed(2)),
+            debts,
+        };
     }
 }

@@ -1,13 +1,13 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { MarketDetailResponseDto, MarketResponseDto } from './dto/market.dto';
-import { RateHistoryDataDto } from './dto/rate-history.dto';
-import { PriceService } from '../price/price.service';
+import { Injectable, NotFoundException } from "@nestjs/common";
+import { MarketDetailResponseDto, MarketResponseDto } from "./dto/market.dto";
+import { RateHistoryDataDto } from "./dto/rate-history.dto";
+import { PriceService } from "../price/price.service";
 
-import { OrderRepository } from '../orders/repositories/order.repository';
-import { MarketRepositories } from './repository/market.repository';
-import { RateRepository } from './repository/rate-history.repository';
-import { TokensRepository } from '../tokens/repositories/tokens.repository';
-import { toPercentage } from '../common/utils/number.utils';
+import { OrderRepository } from "../orders/repositories/order.repository";
+import { MarketRepositories } from "./repository/market.repository";
+import { RateRepository } from "./repository/rate-history.repository";
+import { TokensRepository } from "../tokens/repositories/tokens.repository";
+import { toPercentage } from "../common/utils/number.utils";
 
 @Injectable()
 export class MarketService {
@@ -17,7 +17,7 @@ export class MarketService {
         private readonly rateRepository: RateRepository,
         private readonly tokensRepository: TokensRepository,
         private readonly priceService: PriceService,
-    ) { }
+    ) {}
 
     async getMarketSnapshot(): Promise<MarketResponseDto> {
         const assets = await this.tokensRepository.findLoanTokens();
@@ -31,33 +31,37 @@ export class MarketService {
                 if (price !== null) {
                     priceMap.set(asset.id.toLowerCase(), price);
                 }
-            })
+            }),
         );
 
         let totalDepositUSD = 0;
         let activeLoansUSD = 0;
 
-        const portfolioDeposits = await this.marketRepository.getTotalDepositUsd();
+        const portfolioDeposits =
+            await this.marketRepository.getTotalDepositUsd();
         const lendPositions = await this.marketRepository.getActiveLoans();
 
         for (const deposit of portfolioDeposits) {
-            const asset = assets.find(a => a.id === deposit.asset_id);
+            const asset = assets.find((a) => a.id === deposit.asset_id);
             if (!asset || !asset.decimals) continue;
 
             const price = priceMap.get(asset.id.toLowerCase());
             if (price !== undefined) {
-                const humanAmount = Number.parseFloat(deposit.total_amount) / Math.pow(10, asset.decimals);
+                const humanAmount =
+                    Number.parseFloat(deposit.total_amount) /
+                    10 ** asset.decimals;
                 totalDepositUSD += humanAmount * price;
             }
         }
 
         for (const loan of lendPositions) {
-            const asset = assets.find(a => a.id === loan.asset_id);
+            const asset = assets.find((a) => a.id === loan.asset_id);
             if (!asset || !asset.decimals) continue;
 
             const price = priceMap.get(asset.id.toLowerCase());
             if (price !== undefined) {
-                const humanAmount = Number.parseFloat(loan.total_amount) / Math.pow(10, asset.decimals);
+                const humanAmount =
+                    Number.parseFloat(loan.total_amount) / 10 ** asset.decimals;
                 activeLoansUSD += humanAmount * price;
             }
         }
@@ -72,7 +76,7 @@ export class MarketService {
             ]),
         );
 
-        const markets = assets.map(asset => {
+        const markets = assets.map((asset) => {
             const rates = rateMap.get(asset.id) || { borrow: 0, lend: 0 };
             const earliest = earliestByAsset.get(asset.id);
             return {
@@ -114,18 +118,25 @@ export class MarketService {
         const rateMap = await this.orderRepository.getBestRates();
         const rates = rateMap.get(assetId) || { borrow: 0, lend: 0 };
 
-        const rawDeposit = await this.marketRepository.getSumDepositByAssetId(assetId);
-        const rawLoans = await this.marketRepository.getSumLoansByAssetId(assetId);
+        const rawDeposit =
+            await this.marketRepository.getSumDepositByAssetId(assetId);
+        const rawLoans =
+            await this.marketRepository.getSumLoansByAssetId(assetId);
 
         let totalDepositUSD = 0;
         let activeLoansUSD = 0;
 
         if (price !== null && asset.decimals) {
-            totalDepositUSD = (Number.parseFloat(rawDeposit) / Math.pow(10, asset.decimals)) * price;
-            activeLoansUSD = (Number.parseFloat(rawLoans) / Math.pow(10, asset.decimals)) * price;
+            totalDepositUSD =
+                (Number.parseFloat(rawDeposit) / 10 ** asset.decimals) * price;
+            activeLoansUSD =
+                (Number.parseFloat(rawLoans) / 10 ** asset.decimals) * price;
         }
 
-        const upcomingMarkets = await this.marketRepository.getUpcomingMarkets(assetId, 3);
+        const upcomingMarkets = await this.marketRepository.getUpcomingMarkets(
+            assetId,
+            3,
+        );
         return {
             asset: {
                 id: asset.id,
@@ -137,7 +148,7 @@ export class MarketService {
             collateral_factor: toPercentage(asset.averageLTV),
             total_deposit: totalDepositUSD.toFixed(2),
             active_loans: activeLoansUSD.toFixed(2),
-            upcoming_maturities: upcomingMarkets.map(m => ({
+            upcoming_maturities: upcomingMarkets.map((m) => ({
                 market_id: m.id,
                 maturity: Math.floor(new Date(m.maturity).getTime() / 1000),
             })),
@@ -145,12 +156,15 @@ export class MarketService {
     }
 
     async getRateHistory(assetId: string): Promise<RateHistoryDataDto> {
-        const rateHistory = await this.rateRepository.getRateHistoryByAssetId(assetId);
+        const rateHistory =
+            await this.rateRepository.getRateHistoryByAssetId(assetId);
 
         return {
             assetId,
-            rateHistory,
+            rateHistory: rateHistory.map((item) => ({
+                date: item.date,
+                rate: toPercentage(item.rate),
+            })),
         };
     }
-
 }

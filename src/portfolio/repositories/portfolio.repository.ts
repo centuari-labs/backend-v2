@@ -20,6 +20,21 @@ export interface RawPosition {
     created_at: Date;
 }
 
+export interface RawTransactionRow {
+    id: string;
+    side: string;
+    order_type: string | null;
+    rate: string;
+    amount: string;
+    filled_quantity: string | null;
+    status: string;
+    symbol: string;
+    image_url: string | null;
+    decimals: string;
+    token_address: string;
+    created_at: string;
+}
+
 export interface LendPositionForApr {
     asset_id: string;
     shares: string;
@@ -262,6 +277,42 @@ export class PortfolioRepository extends Repository<Portfolio> {
      * Replaces amount on conflict (SET) rather than adding (upsertPortfolio).
      * Used by OrdersWorker to ensure DB reflects on-chain state regardless of event parsing.
      */
+    async getTransactionHistory(
+        accountId: string,
+        page: number,
+        limit: number,
+    ): Promise<{ data: RawTransactionRow[]; total: number }> {
+        const offset = (page - 1) * limit;
+
+        const dataQuery = `
+            SELECT o.id, o.side::text, o.type::text as order_type, o.rate,
+                   o.quantity as amount, o.filled_quantity, o.status::text,
+                   a.symbol, a.image_url, COALESCE(a.decimals, 0) as decimals,
+                   a.token_address, o.created_at
+            FROM orders o
+            JOIN assets a ON o.asset_id = a.id
+            WHERE o.account_id = $1
+            ORDER BY o.created_at DESC
+            LIMIT $2 OFFSET $3
+        `;
+
+        const countQuery = `
+            SELECT COUNT(*) as count
+            FROM orders o
+            WHERE o.account_id = $1
+        `;
+
+        const [rows, countResult] = await Promise.all([
+            this.dataSource.query(dataQuery, [accountId, limit, offset]),
+            this.dataSource.query(countQuery, [accountId]),
+        ]);
+
+        return {
+            data: rows,
+            total: Number.parseInt(countResult[0]?.count || "0", 10),
+        };
+    }
+
     async syncPortfolioBalance(
         id: string,
         accountId: string,

@@ -1,5 +1,6 @@
 import { Controller, Get, Query, UseGuards, Body, Put } from "@nestjs/common";
 import { PortfolioService } from "./portfolio.service";
+import { TransactionHistoryQueryDto } from "./dto/transaction-history.dto";
 import {
     GetMyAssetsQueryDto,
     MyAssetsResponseDto,
@@ -55,5 +56,13 @@ export class PortfolioController {
         @Body() body: SetAssetAsCollateralDto,
     ): Promise<void> {
         return this.portfolioService.setAssetAsCollateral(wallet, body);
+    }
+
+    @Get("transaction-history")
+    async getTransactionHistory(
+        @Wallet() wallet: string,
+        @Query() query: TransactionHistoryQueryDto,
+    ) {
+        return this.portfolioService.getTransactionHistory(wallet, query);
     }
 }

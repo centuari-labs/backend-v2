@@ -168,6 +168,40 @@
         }
       },
       "response": []
+    },
+    {
+      "name": "Transaction history",
+      "id": "a1b2c3d4-5678-9012-3456-789012345678",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer DEV_TOKEN_0x71C7656EC7ab88b098defB751B7401B5f6d8976F",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base url}}portfolio/transaction-history?page=1&limit=10",
+          "host": [
+            "{{base url}}portfolio"
+          ],
+          "path": [
+            "transaction-history"
+          ],
+          "query": [
+            {
+              "key": "page",
+              "value": "1"
+            },
+            {
+              "key": "limit",
+              "value": "10"
+            }
+          ]
+        }
+      },
+      "response": []
     }
   ],
   "variable": [

@@ -31,8 +31,13 @@
             },
             "url": {
               "raw": "{{baseUrl}}/auth/validate",
-              "host": ["{{baseUrl}}"],
-              "path": ["auth", "validate"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "validate"
+              ]
             }
           },
           "response": [
@@ -42,7 +47,12 @@
               "status": "OK",
               "code": 200,
               "_postman_previewlanguage": "json",
-              "header": [{"key": "Content-Type", "value": "application/json"}],
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
               "cookie": [],
               "body": "{\n  \"statusCode\": 200,\n  \"data\": {\n    \"id\": 1,\n    \"wallet_address\": \"0x1234567890abcdef1234567890abcdef12345678\",\n    \"paired_wallet_address\": \"0xabcdefabcdefabcdefabcdefabcdefabcdefabcd\",\n    \"paired_wallet_primary_key\": \"0x...\"\n  }\n}"
             }
@@ -62,8 +72,13 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/auth/login",
-              "host": ["{{baseUrl}}"],
-              "path": ["auth", "login"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
             }
           },
           "response": [
@@ -73,7 +88,12 @@
               "status": "OK",
               "code": 200,
               "_postman_previewlanguage": "json",
-              "header": [{"key": "Content-Type", "value": "application/json"}],
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
               "cookie": [],
               "body": "{\n  \"statusCode\": 200,\n  \"data\": {\n    \"accessToken\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\"\n  }\n}"
             }
@@ -107,8 +127,13 @@
             },
             "url": {
               "raw": "{{baseUrl}}/auth/name",
-              "host": ["{{baseUrl}}"],
-              "path": ["auth", "name"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "name"
+              ]
             }
           },
           "response": [
@@ -118,7 +143,12 @@
               "status": "OK",
               "code": 200,
               "_postman_previewlanguage": "json",
-              "header": [{"key": "Content-Type", "value": "application/json"}],
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
               "cookie": [],
               "body": "{\n  \"statusCode\": 200,\n  \"data\": {\n    \"name\": \"John\"\n  }\n}"
             }
@@ -138,8 +168,13 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/deposit/tokens",
-              "host": ["{{baseUrl}}"],
-              "path": ["deposit", "tokens"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "deposit",
+                "tokens"
+              ]
             }
           },
           "response": [
@@ -149,7 +184,12 @@
               "status": "OK",
               "code": 200,
               "_postman_previewlanguage": "json",
-              "header": [{"key": "Content-Type", "value": "application/json"}],
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
               "cookie": [],
               "body": "{\n  \"statusCode\": 200,\n  \"data\": [\n    {\n      \"id\": \"b66a2641-3339-4a48-805c-6da248f33dee\",\n      \"symbol\": \"USDC\",\n      \"name\": \"USD Coin\",\n      \"tokenAddress\": \"0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48\",\n      \"decimals\": 6,\n      \"imageUrl\": \"/tokens/usdc-icon.svg\",\n      \"chainId\": 11155111\n    },\n    {\n      \"id\": \"ac7ae153-ad3f-44aa-96e7-44c8d22e84ab\",\n      \"symbol\": \"WETH\",\n      \"name\": \"Wrapped Ether\",\n      \"tokenAddress\": \"0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2\",\n      \"decimals\": 18,\n      \"imageUrl\": \"/tokens/eth-icon.svg\",\n      \"chainId\": 11155111\n    }\n  ]\n}"
             }
@@ -169,8 +209,14 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/deposit/balance/ac7ae153-ad3f-44aa-96e7-44c8d22e84ab",
-              "host": ["{{baseUrl}}"],
-              "path": ["deposit", "balance", "ac7ae153-ad3f-44aa-96e7-44c8d22e84ab"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "deposit",
+                "balance",
+                "ac7ae153-ad3f-44aa-96e7-44c8d22e84ab"
+              ]
             }
           },
           "response": [
@@ -180,7 +226,12 @@
               "status": "OK",
               "code": 200,
               "_postman_previewlanguage": "json",
-              "header": [{"key": "Content-Type", "value": "application/json"}],
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
               "cookie": [],
               "body": "{\n  \"statusCode\": 200,\n  \"data\": {\n    \"balance\": \"1000000000\",\n    \"formattedBalance\": \"1000.00\",\n    \"decimals\": 6,\n    \"symbol\": \"USDC\"\n  }\n}"
             }
@@ -220,8 +271,12 @@
             },
             "url": {
               "raw": "{{baseUrl}}/withdraw",
-              "host": ["{{baseUrl}}"],
-              "path": ["withdraw"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "withdraw"
+              ]
             }
           },
           "response": [
@@ -231,7 +286,12 @@
               "status": "OK",
               "code": 200,
               "_postman_previewlanguage": "json",
-              "header": [{"key": "Content-Type", "value": "application/json"}],
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
               "cookie": [],
               "body": "{\n  \"statusCode\": 200,\n  \"data\": {\n    \"txHash\": \"0xabc123def456789...\",\n    \"status\": \"SUCCESS\"\n  }\n}"
             }
@@ -257,8 +317,13 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/orders/open-amounts",
-              "host": ["{{baseUrl}}"],
-              "path": ["orders", "open-amounts"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "orders",
+                "open-amounts"
+              ]
             }
           },
           "response": [
@@ -268,7 +333,12 @@
               "status": "OK",
               "code": 200,
               "_postman_previewlanguage": "json",
-              "header": [{"key": "Content-Type", "value": "application/json"}],
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
               "cookie": [],
               "body": "{\n  \"statusCode\": 200,\n  \"data\": [\n    {\n      \"assetId\": \"b66a2641-3339-4a48-805c-6da248f33dee\",\n      \"lockedAmount\": \"500.00\"\n    }\n  ]\n}"
             }
@@ -601,8 +671,13 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/portfolio/my-health-factor",
-              "host": ["{{baseUrl}}"],
-              "path": ["portfolio", "my-health-factor"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "portfolio",
+                "my-health-factor"
+              ]
             }
           },
           "response": [
@@ -612,7 +687,12 @@
               "status": "OK",
               "code": 200,
               "_postman_previewlanguage": "json",
-              "header": [{"key": "Content-Type", "value": "application/json"}],
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
               "cookie": [],
               "body": "{\n  \"statusCode\": 200,\n  \"data\": {\n    \"collateralUsd\": 10000,\n    \"debtUsd\": 5000,\n    \"weightedLtv\": 0.75,\n    \"healthFactor\": 1.5\n  }\n}"
             }
@@ -950,11 +1030,17 @@
                 "key": "Content-Type",
                 "value": "application/json",
                 "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}",
+                "type": "text",
+                "uuid": "1ef2d9be-d3a0-4ad4-a884-7663e19d51fd"
               }
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"chainId\": 11155111,\n  \"recipientAddress\": \"0x1234567890abcdef1234567890abcdef12345678\",\n  \"token\": [\"0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48\"]\n}",
+              "raw": "{\n  \"chainId\": 11155111,\n  \"recipientAddress\": \"0x44a95B161A038de26cB16A45CC2580685176D966\",\n  \"token\": [\"0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48\"]\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -963,8 +1049,13 @@
             },
             "url": {
               "raw": "{{baseUrl}}/faucet/request-tokens",
-              "host": ["{{baseUrl}}"],
-              "path": ["faucet", "request-tokens"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "faucet",
+                "request-tokens"
+              ]
             }
           },
           "response": [
@@ -974,9 +1065,97 @@
               "status": "OK",
               "code": 200,
               "_postman_previewlanguage": "json",
-              "header": [{"key": "Content-Type", "value": "application/json"}],
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
               "cookie": [],
               "body": "{\n  \"statusCode\": 200,\n  \"data\": {\n    \"chainId\": 11155111,\n    \"recipientAddress\": \"0x1234567890abcdef1234567890abcdef12345678\",\n    \"transactionHash\": \"0xabc123...\",\n    \"blockNumber\": \"12345678\",\n    \"status\": \"SUCCESS\",\n    \"results\": [\n      {\n        \"tokenAddress\": \"0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48\",\n        \"amount\": \"1000000000\"\n      }\n    ]\n  }\n}"
+            },
+            {
+              "id": "e77fe309-8a41-4be1-a4d4-c9a44966df95",
+              "name": "401 Unauthorized",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{authToken}}",
+                    "type": "text",
+                    "uuid": "1ef2d9be-d3a0-4ad4-a884-7663e19d51fd"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"chainId\": 11155111,\n  \"recipientAddress\": \"0x26752eF324fea2B1FbeB6cF62Ca733DF21107de1\",\n  \"token\": [\"0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48\"]\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/faucet/request-tokens",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "faucet",
+                    "request-tokens"
+                  ]
+                }
+              },
+              "status": "Unauthorized",
+              "code": 401,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "X-Powered-By",
+                  "value": "Express"
+                },
+                {
+                  "key": "Vary",
+                  "value": "Origin"
+                },
+                {
+                  "key": "Access-Control-Allow-Credentials",
+                  "value": "true"
+                },
+                {
+                  "key": "Content-Type",
+                  "value": "application/json; charset=utf-8"
+                },
+                {
+                  "key": "Content-Length",
+                  "value": "219"
+                },
+                {
+                  "key": "ETag",
+                  "value": "W/\"db-Wb2FlwhgwtmOudfDhg1dr9/AGNQ\""
+                },
+                {
+                  "key": "Date",
+                  "value": "Sun, 15 Mar 2026 21:33:52 GMT"
+                },
+                {
+                  "key": "Connection",
+                  "value": "keep-alive"
+                },
+                {
+                  "key": "Keep-Alive",
+                  "value": "timeout=5"
+                }
+              ],
+              "cookie": [],
+              "responseTime": "2026-03-15T21:33:54.133Z",
+              "body": "{\n    \"success\": false,\n    \"message\": {\n        \"message\": \"Recipient address must match authenticated wallet\",\n        \"error\": \"Unauthorized\",\n        \"statusCode\": 401\n    },\n    \"statusCode\": 401,\n    \"timestamp\": \"2026-03-15T21:33:52.270Z\",\n    \"path\": \"/faucet/request-tokens\"\n}"
             }
           ]
         },
@@ -988,8 +1167,14 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/faucet/all-tokens/11155111",
-              "host": ["{{baseUrl}}"],
-              "path": ["faucet", "all-tokens", "11155111"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "faucet",
+                "all-tokens",
+                "11155111"
+              ]
             }
           },
           "response": [
@@ -999,7 +1184,12 @@
               "status": "OK",
               "code": 200,
               "_postman_previewlanguage": "json",
-              "header": [{"key": "Content-Type", "value": "application/json"}],
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
               "cookie": [],
               "body": "{\n  \"statusCode\": 200,\n  \"data\": [\"0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48\", \"0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2\"]\n}"
             }

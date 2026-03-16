@@ -89,7 +89,11 @@ describe("FaucetService", () => {
     describe("requestTokens", () => {
         it("should mint all configured tokens for recipient", async () => {
             setupConfig();
-            viemService.readContract.mockResolvedValue([true, MAX_PER_REQUEST, BigInt(3600)]);
+            viemService.readContract
+                .mockResolvedValueOnce([true, MAX_PER_REQUEST, BigInt(3600)]) // configOf
+                .mockResolvedValueOnce(0n) // lastMintAt
+                .mockResolvedValueOnce([true, MAX_PER_REQUEST, BigInt(3600)]) // configOf
+                .mockResolvedValueOnce(0n); // lastMintAt
             viemService.writeContract
                 .mockResolvedValueOnce(makeTxReceipt("0xaaa") as any)
                 .mockResolvedValueOnce(makeTxReceipt("0xbbb") as any);
@@ -112,13 +116,34 @@ describe("FaucetService", () => {
                 amount: MAX_PER_REQUEST.toString(),
             });
 
-            expect(viemService.readContract).toHaveBeenCalledTimes(2);
+            expect(viemService.readContract).toHaveBeenCalledTimes(4);
             expect(viemService.writeContract).toHaveBeenCalledTimes(2);
+        });
+
+        it("should return error entry when cooldown has not elapsed", async () => {
+            setupConfig();
+            const now = Math.floor(Date.now() / 1000);
+            viemService.readContract
+                .mockResolvedValueOnce([true, MAX_PER_REQUEST, BigInt(86400)]) // configOf (24h cooldown)
+                .mockResolvedValueOnce(BigInt(now - 3600)); // lastMintAt (1h ago)
+
+            const result = await service.requestTokens(CHAIN_ID, RECIPIENT_ADDRESS, [TOKEN_ADDRESS_A]);
+
+            expect(result.status).toBe("failed");
+            expect(result.results[0]).toMatchObject({
+                tokenAddress: TOKEN_ADDRESS_A,
+                amount: "0",
+            });
+            expect(viemService.writeContract).not.toHaveBeenCalled();
         });
 
         it("should return error entry for a failed token without aborting others", async () => {
             setupConfig();
-            viemService.readContract.mockResolvedValue([true, MAX_PER_REQUEST, BigInt(3600)]);
+            viemService.readContract
+                .mockResolvedValueOnce([true, MAX_PER_REQUEST, BigInt(3600)]) // configOf A
+                .mockResolvedValueOnce(0n) // lastMintAt A
+                .mockResolvedValueOnce([true, MAX_PER_REQUEST, BigInt(3600)]) // configOf B
+                .mockResolvedValueOnce(0n); // lastMintAt B
             viemService.writeContract
                 .mockResolvedValueOnce(makeTxReceipt("0xaaa") as any)
                 .mockRejectedValueOnce(new Error("Transaction reverted"));
@@ -138,8 +163,10 @@ describe("FaucetService", () => {
             setupConfig();
             // first token disabled, second enabled
             viemService.readContract
-                .mockResolvedValueOnce([false, MAX_PER_REQUEST, BigInt(3600)])
-                .mockResolvedValueOnce([true, MAX_PER_REQUEST, BigInt(3600)]);
+                .mockResolvedValueOnce([false, MAX_PER_REQUEST, BigInt(3600)]) // configOf A
+                .mockResolvedValueOnce(0n) // lastMintAt A
+                .mockResolvedValueOnce([true, MAX_PER_REQUEST, BigInt(3600)]) // configOf B
+                .mockResolvedValueOnce(0n); // lastMintAt B
             viemService.writeContract.mockResolvedValueOnce(makeTxReceipt("0xbbb") as any);
 
             const result = await service.requestTokens(CHAIN_ID, RECIPIENT_ADDRESS, "all-assets");

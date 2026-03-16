@@ -272,42 +272,64 @@ export class FaucetService {
             };
         }
 
-        // Read configOf for each token in parallel
+        // Read configOf and lastMintAt for each token in parallel
         const configs = await Promise.all(
-            tokenAddresses.map((tokenAddress) =>
-                this.viemService
-                    .readContract<[boolean, bigint, bigint]>(
-                        chainId,
-                        faucetAddress,
-                        faucetAbi,
-                        "configOf",
-                        [tokenAddress],
-                    )
-                    .then(([enabled, maxPerRequest]) => ({
+            tokenAddresses.map(async (tokenAddress) => {
+                try {
+                    const [config, lastMintAt] = await Promise.all([
+                        this.viemService.readContract<[boolean, bigint, bigint]>(
+                            chainId,
+                            faucetAddress,
+                            faucetAbi,
+                            "configOf",
+                            [tokenAddress],
+                        ),
+                        this.viemService.readContract<bigint>(
+                            chainId,
+                            faucetAddress,
+                            faucetAbi,
+                            "lastMintAt",
+                            [tokenAddress, recipientAddress],
+                        ),
+                    ]);
+                    const [enabled, maxPerRequest, cooldown] = config;
+                    return {
                         tokenAddress,
                         enabled,
                         maxPerRequest,
-                    }))
-                    .catch((err) => {
-                        this.logger.debug(
-                            `configOf failed for ${tokenAddress}: ${(err as Error).message}`,
-                        );
-                        return {
-                            tokenAddress,
-                            enabled: false,
-                            maxPerRequest: 0n,
-                        };
-                    }),
-            ),
+                        cooldown,
+                        lastMintAt,
+                    };
+                } catch (err) {
+                    this.logger.debug(
+                        `Contract read failed for ${tokenAddress}: ${(err as Error).message}`,
+                    );
+                    return {
+                        tokenAddress,
+                        enabled: false,
+                        maxPerRequest: 0n,
+                        cooldown: 0n,
+                        lastMintAt: 0n,
+                    };
+                }
+            }),
         );
 
         // Build tokens and amounts: use provided amounts when valid, else maxPerRequest
         const tokensToMint: string[] = [];
         const amountsToMint: bigint[] = [];
 
+        const now = BigInt(Math.floor(Date.now() / 1000));
         for (let i = 0; i < configs.length; i++) {
-            const { tokenAddress, enabled, maxPerRequest } = configs[i];
+            const { tokenAddress, enabled, maxPerRequest, cooldown, lastMintAt } = configs[i];
             if (!enabled) continue;
+
+            if (now < lastMintAt + cooldown) {
+                this.logger.warn(
+                    `Cooldown not elapsed for token ${tokenAddress} and recipient ${recipientAddress}`,
+                );
+                continue;
+            }
 
             let amount: bigint;
             if (amounts && amounts[i] !== undefined && amounts[i] !== "") {
@@ -443,13 +465,35 @@ export class FaucetService {
         tokenAddress: string,
         recipientAddress: string,
     ): Promise<MintOutcome> {
-        const [enabled, maxPerRequest] = await this.viemService.readContract<
-            [boolean, bigint, bigint]
-        >(chainId, faucetAddress, faucetAbi, "configOf", [tokenAddress]);
+        const [config, lastMintAt] = await Promise.all([
+            this.viemService.readContract<[boolean, bigint, bigint]>(
+                chainId,
+                faucetAddress,
+                faucetAbi,
+                "configOf",
+                [tokenAddress],
+            ),
+            this.viemService.readContract<bigint>(
+                chainId,
+                faucetAddress,
+                faucetAbi,
+                "lastMintAt",
+                [tokenAddress, recipientAddress],
+            ),
+        ]);
+
+        const [enabled, maxPerRequest, cooldown] = config;
 
         if (!enabled) {
             throw new BadRequestException(
                 `Token ${tokenAddress} not enabled on faucet`,
+            );
+        }
+
+        const now = BigInt(Math.floor(Date.now() / 1000));
+        if (now < lastMintAt + cooldown) {
+            throw new BadRequestException(
+                `Cooldown not elapsed for token ${tokenAddress}`,
             );
         }
 

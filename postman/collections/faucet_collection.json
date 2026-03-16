@@ -19,14 +19,14 @@
           },
           {
             "key": "Authorization",
-            "value": "Bearer DEV_TOKEN_0x71C7656EC7ab88b098defB751B7401B5f6d8976F",
+            "value": "Bearer eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6IjJsR0pIc2VidkJPeHkxNWRUY2hkaTV2OU5xM2NvRVBsYlFDelFDbDlSeDAifQ.eyJzaWQiOiJjbW1zOW40Zm0wMm13MGRsNzdxOXhrNmpvIiwiaXNzIjoicHJpdnkuaW8iLCJpYXQiOjE3NzM2MTAwNjksImF1ZCI6ImNtZm1tb213dzAxNmZqbDBiZWU5aTJkczQiLCJzdWIiOiJkaWQ6cHJpdnk6Y21rM3ltN2gwMDI0Y2w4MGNuNXJzNjg0OSIsImV4cCI6MTc3MzYxMzY2OX0.EZYD_TKJb54Ha9VkYOHrMyo-h4HrMJpDPWB81wPpgyM6UdG5S0Gq1VQ1OZshaLwhLB8XkEbirWctYatZgsCsKg",
             "type": "text",
             "uuid": "16012311-7a8f-46ef-94d9-f666d1763e26"
           }
         ],
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"chainId\": 11155111,\n  \"recipientAddress\": \"0xYourWalletAddress\",\n  \"token\": [\n    \"0xYourUsdcContractAddress\",\n    \"0xYourWethContractAddress\",\n    \"0xYourWethContractAddress\"\n  ]\n}\n",
+          "raw": "{\n  \"chainId\": 11155111,\n  \"recipientAddress\": \"0x44a95B161A038de26cB16A45CC2580685176D966\",\n  \"token\": [\n    \"0x26970F990252306AFa328B2c91225605c0862498\",\n    \"0xe1e9f8aDFBee861d1173850d692dD3863B7f2b61\"\n  ]\n}\n",
           "options": {
             "raw": {
               "language": "json"

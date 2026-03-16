@@ -168,6 +168,39 @@
         }
       },
       "response": []
+    },
+    {
+      "name": "Withdraw lend position",
+      "id": "b2c3d4e5-6789-0123-4567-890123456789",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer DEV_TOKEN_0x71C7656EC7ab88b098defB751B7401B5f6d8976F",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"marketId\": \"eb25bc4f-d6c4-4cc7-8b3e-c22ad4292510\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{base url}}portfolio/withdraw-lend-position",
+          "host": [
+            "{{base url}}portfolio"
+          ],
+          "path": [
+            "withdraw-lend-position"
+          ]
+        }
+      },
+      "response": []
     }
   ],
   "variable": [

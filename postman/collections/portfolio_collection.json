@@ -136,6 +136,38 @@
       "response": []
     },
     {
+      "name": "Chart data",
+      "id": "1a2b3c4d-5e6f-7890-abcd-ef1234567891",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{auth_token}}",
+            "type": "text",
+            "uuid": "2b3c4d5e-6f7a-8901-bcde-f12345678912"
+          }
+        ],
+        "url": {
+          "raw": "{{base url}}portfolio/chart-data?days=90",
+          "host": [
+            "{{base url}}portfolio"
+          ],
+          "path": [
+            "chart-data"
+          ],
+          "query": [
+            {
+              "key": "days",
+              "value": "90",
+              "uuid": "3c4d5e6f-7a8b-9012-cdef-123456789123"
+            }
+          ]
+        }
+      },
+      "response": []
+    },
+    {
       "name": "Set assets as collateral",
       "id": "fb0dc2c0-5732-4448-ad1c-d5ce7b266f87",
       "request": {

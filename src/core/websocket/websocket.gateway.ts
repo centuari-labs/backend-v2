@@ -477,9 +477,11 @@ export class EventsGateway
 
         const lendLevels = this.aggregateLevels(
             activeOrders.filter((o) => o.side === OrderSide.Lend),
+            true,
         );
         const borrowLevels = this.aggregateLevels(
             activeOrders.filter((o) => o.side === OrderSide.Borrow),
+            false,
         );
 
         const update: OrderbookUpdateDto = {
@@ -494,7 +496,10 @@ export class EventsGateway
         this.server.to(room).emit("orderbook-update", update);
     }
 
-    private aggregateLevels(orders: TrackedOrder[]): OrderbookLevel[] {
+    private aggregateLevels(
+        orders: TrackedOrder[],
+        descending = false,
+    ): OrderbookLevel[] {
         const byRate = new Map<number, { amount: bigint; count: number }>();
 
         for (const order of orders) {
@@ -509,7 +514,9 @@ export class EventsGateway
         }
 
         return Array.from(byRate.entries())
-            .sort((a, b) => a[0] - b[0])
+            .sort((a, b) =>
+                descending ? b[0] - a[0] : a[0] - b[0],
+            )
             .map(([rateBps, { amount, count }]) => ({
                 rate: toPercentage(rateBps),
                 amount: amount.toString(),

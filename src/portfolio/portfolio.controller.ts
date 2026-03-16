@@ -10,6 +10,7 @@ import {
     SetAssetAsCollateralDto,
     MyHealthFactorResponseDto,
 } from "./dto/portfolio.dto";
+import { ChartDataQueryDto } from "./dto/chart-data.dto";
 import { AuthGuard } from "../common/guards/auth.guard";
 import { Wallet } from "../common/decorators/wallet.decorator";
 
@@ -47,6 +48,14 @@ export class PortfolioController {
         @Query() query: MyPositionQueryDto,
     ): Promise<GetMyPositionResponseDto> {
         return this.portfolioService.getMyPosition(wallet, query);
+    }
+
+    @Get("chart-data")
+    async getChartData(
+        @Wallet() wallet: string,
+        @Query() query: ChartDataQueryDto,
+    ) {
+        return this.portfolioService.getChartData(wallet, query.days ?? 90);
     }
 
     @Put("is-collateral")

@@ -442,6 +442,7 @@ export class PortfolioService {
                 imageUrl: position.image_url ?? null,
                 side: position.side as 'LEND' | 'BORROW',
                 maturity: position.maturity ? new Date(position.maturity).getTime() / 1000 : null,
+                apr: Number(position.rate) || 0,
             };
         });
 
@@ -465,5 +466,25 @@ export class PortfolioService {
         const balances = await this.portfolioRepository.getUserTotalBalances(accountId);
         const match = balances.find(b => b.asset_id === assetId);
         return match ? match.total_amount : "0";
+    }
+
+    async getChartData(wallet: string, days: number) {
+        const account = await this.orderRepository.findAccountByWallet(wallet);
+        if (!account) {
+            return { data: [] };
+        }
+
+        const rows = await this.portfolioRepository.getUserDailyLendBorrow(
+            account.id,
+            days,
+        );
+
+        const data = rows.map((row) => ({
+            date: new Date(row.date).toISOString().split("T")[0],
+            lendAmount: String(row.lend_amount),
+            borrowAmount: String(row.borrow_amount),
+        }));
+
+        return { data };
     }
 }

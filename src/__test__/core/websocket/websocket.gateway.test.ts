@@ -321,7 +321,7 @@ describe("EventsGateway", () => {
                 ]);
             });
 
-            it("should show multiple rate levels sorted ascending", () => {
+            it("should show multiple lend rate levels sorted descending", () => {
                 const ordersCallback = natsCallbacks.get("orders.>");
 
                 ordersCallback!(
@@ -352,8 +352,8 @@ describe("EventsGateway", () => {
                 const lastOrderbook =
                     orderbookCalls[orderbookCalls.length - 1];
                 expect(lastOrderbook[1].lend).toEqual([
-                    { rate: 5, amount: "2000000", orders: 1 },
                     { rate: 8, amount: "1000000", orders: 1 },
+                    { rate: 5, amount: "2000000", orders: 1 },
                 ]);
             });
 

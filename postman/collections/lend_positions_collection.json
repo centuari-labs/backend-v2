@@ -1,0 +1,51 @@
+{
+  "info": {
+    "_postman_id": "4d5e6f7a-8b9c-0d1e-2f3a-4b5c6d7e8f9a",
+    "name": "Lend Positions",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Withdraw lend position",
+      "id": "5e6f7a8b-9c0d-1e2f-3a4b-5c6d7e8f9a0b",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{auth_token}}",
+            "type": "text",
+            "uuid": "6f7a8b9c-0d1e-2f3a-4b5c-6d7e8f9a0b1c"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"marketId\": \"eb25bc4f-d6c4-4cc7-8b3e-c22ad4292510\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{base url}}lend-positions/withdraw",
+          "host": [
+            "{{base url}}lend-positions"
+          ],
+          "path": [
+            "withdraw"
+          ]
+        }
+      },
+      "response": []
+    }
+  ],
+  "variable": [
+    {
+      "id": "7a8b9c0d-1e2f-3a4b-5c6d-7e8f9a0b1c2d",
+      "key": "base url",
+      "value": "",
+      "type": "default"
+    }
+  ]
+}

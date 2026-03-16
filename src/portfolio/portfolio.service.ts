@@ -8,7 +8,7 @@ import {
 import { InjectRepository } from "@nestjs/typeorm";
 import { DataSource, Repository } from "typeorm";
 import { ConfigService } from "@nestjs/config";
-import { parseEventLogs, type TransactionReceipt } from "viem";
+import type { TransactionReceipt } from "viem";
 import { Token } from "../tokens/entities/token.entity";
 import { PriceService } from "../price/price.service";
 import { TokensService } from "../tokens/tokens.service";
@@ -23,6 +23,7 @@ import { PortfolioRepository } from "./repositories/portfolio.repository";
 import { OrderRepository } from "../orders/repositories/order.repository";
 import { calculateUsdAmount, createPaginatedResponse } from "./helpers/position.helpers";
 import { baseUnitsToHuman } from "../common/utils/number.utils";
+import { getFirstEventFromReceipt } from "../common/utils/event.utils";
 import {
     computeHealthFactor,
     formatHealthFactorResponse,
@@ -621,28 +622,24 @@ export class PortfolioService {
         }
     }
 
-    private parseWithdrawEvent(receipt: TransactionReceipt): {
-        cbtBurned: bigint;
-        amountWithdrawn: bigint;
-    } {
-        const logs = parseEventLogs({
-            abi: centuariAbi,
-            eventName: "LendPositionWithdrawn",
-            logs: receipt.logs,
-        });
-
-        if (!logs.length) {
+    private parseWithdrawEvent(
+        receipt: TransactionReceipt,
+    ): { cbtBurned: bigint; amountWithdrawn: bigint } {
+        try {
+            const event = getFirstEventFromReceipt<{
+                cbtBurned: bigint;
+                amountWithdrawn: bigint;
+            }>(
+                receipt,
+                centuariAbi,
+                "LendPositionWithdrawn",
+            );
+            return event.args;
+        } catch {
             throw new InternalServerErrorException(
                 "No LendPositionWithdrawn event found in transaction receipt",
             );
         }
-
-        return {
-            cbtBurned: (logs[0].args as any)
-                .cbtBurned as bigint,
-            amountWithdrawn: (logs[0].args as any)
-                .amountWithdrawn as bigint,
-        };
     }
 
     private async updateDatabaseState(

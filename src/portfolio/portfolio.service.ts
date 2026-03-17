@@ -442,6 +442,7 @@ export class PortfolioService {
                 imageUrl: position.image_url ?? null,
                 side: position.side as 'LEND' | 'BORROW',
                 maturity: position.maturity ? new Date(position.maturity).getTime() / 1000 : null,
+                apr: Number(position.rate) || 0,
             };
         });
 

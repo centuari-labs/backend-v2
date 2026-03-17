@@ -1,11 +1,19 @@
-import { IsNumber, IsString, IsNotEmpty } from "class-validator";
+import {
+    IsNumber,
+    IsString,
+    IsNotEmpty,
+    IsPositive,
+    Matches,
+} from "class-validator";
 
 export class RequestTokenDto {
     @IsNumber()
+    @IsPositive()
     chainId: number;
 
     @IsString()
     @IsNotEmpty()
+    @Matches(/^0x[a-fA-F0-9]{40}$/, { message: "Invalid wallet address format" })
     recipientAddress: string;
 
     @IsNotEmpty()

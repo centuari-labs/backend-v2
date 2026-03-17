@@ -325,6 +325,147 @@
                     "body": "{\n    \"statusCode\": 200,\n    \"data\": [\n        {\n            \"id\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n            \"side\": \"LEND\",\n            \"orderType\": \"LIMIT\",\n            \"rate\": 5.5,\n            \"amount\": \"1000.00\",\n            \"filledQuantity\": \"500.00\",\n            \"status\": \"PARTIALLY_FILLED\",\n            \"asset\": {\n                \"id\": \"f47ac10b-58cc-4372-a567-0e02b2c3d479\",\n                \"name\": \"USD Coin\",\n                \"symbol\": \"USDC\",\n                \"decimals\": 6,\n                \"imageUrl\": \"https://assets.coingecko.com/coins/images/6319/large/usdc.png\",\n                \"tokenAddress\": \"0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48\"\n            },\n            \"fee\": \"2.50\",\n            \"createdAt\": \"2026-03-15T10:30:00.000Z\"\n        },\n        {\n            \"id\": \"b2c3d4e5-f6a7-8901-bcde-f12345678901\",\n            \"side\": \"BORROW\",\n            \"orderType\": \"MARKET\",\n            \"rate\": 7.2,\n            \"amount\": \"500.00\",\n            \"filledQuantity\": \"500.00\",\n            \"status\": \"FILLED\",\n            \"asset\": {\n                \"id\": \"c5d6e7f8-9012-3456-789a-bcdef0123456\",\n                \"name\": \"Tether\",\n                \"symbol\": \"USDT\",\n                \"decimals\": 6,\n                \"imageUrl\": \"https://assets.coingecko.com/coins/images/325/large/Tether.png\",\n                \"tokenAddress\": \"0xdAC17F958D2ee523a2206206994597C13D831ec7\"\n            },\n            \"fee\": \"3.75\",\n            \"createdAt\": \"2026-03-14T08:15:00.000Z\"\n        },\n        {\n            \"id\": \"c3d4e5f6-a7b8-9012-cdef-012345678902\",\n            \"side\": \"LEND\",\n            \"orderType\": \"LIMIT\",\n            \"rate\": 4.0,\n            \"amount\": \"2000.00\",\n            \"filledQuantity\": null,\n            \"status\": \"OPEN\",\n            \"asset\": {\n                \"id\": \"f47ac10b-58cc-4372-a567-0e02b2c3d479\",\n                \"name\": \"USD Coin\",\n                \"symbol\": \"USDC\",\n                \"decimals\": 6,\n                \"imageUrl\": \"https://assets.coingecko.com/coins/images/6319/large/usdc.png\",\n                \"tokenAddress\": \"0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48\"\n            },\n            \"fee\": null,\n            \"createdAt\": \"2026-03-13T14:00:00.000Z\"\n        }\n    ],\n    \"meta\": {\n        \"page\": 1,\n        \"limit\": 10,\n        \"total\": 3\n    }\n}"
                 }
             ]
+        },
+        {
+            "name": "Withdraw lend position",
+            "id": "b2c3d4e5-6789-0123-4567-890123456789",
+            "request": {
+                "method": "POST",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer DEV_TOKEN_0x71C7656EC7ab88b098defB751B7401B5f6d8976F",
+                        "type": "text"
+                    }
+                ],
+                "body": {
+                    "mode": "raw",
+                    "raw": "{\n  \"marketId\": \"eb25bc4f-d6c4-4cc7-8b3e-c22ad4292510\"\n}",
+                    "options": {
+                        "raw": {
+                            "language": "json"
+                        }
+                    }
+                },
+                "url": {
+                    "raw": "{{base url}}portfolio/withdraw-lend-position",
+                    "host": ["{{base url}}portfolio"],
+                    "path": ["withdraw-lend-position"]
+                }
+            },
+            "response": [
+                {
+                    "name": "Success",
+                    "originalRequest": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer DEV_TOKEN_0x71C7656EC7ab88b098defB751B7401B5f6d8976F",
+                                "type": "text"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"marketId\": \"eb25bc4f-d6c4-4cc7-8b3e-c22ad4292510\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "url": {
+                            "raw": "{{base url}}portfolio/withdraw-lend-position",
+                            "host": ["{{base url}}portfolio"],
+                            "path": ["withdraw-lend-position"]
+                        }
+                    },
+                    "status": "OK",
+                    "code": 200,
+                    "_postman_previewlanguage": "json",
+                    "header": [
+                        {
+                            "key": "Content-Type",
+                            "value": "application/json"
+                        }
+                    ],
+                    "body": "{\n    \"statusCode\": 200,\n    \"data\": {\n        \"txHash\": \"0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef\",\n        \"status\": \"success\"\n    }\n}"
+                },
+                {
+                    "name": "Market not found",
+                    "originalRequest": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer DEV_TOKEN_0x71C7656EC7ab88b098defB751B7401B5f6d8976F",
+                                "type": "text"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"marketId\": \"eb25bc4f-d6c4-4cc7-8b3e-c22ad4292510\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "url": {
+                            "raw": "{{base url}}portfolio/withdraw-lend-position",
+                            "host": ["{{base url}}portfolio"],
+                            "path": ["withdraw-lend-position"]
+                        }
+                    },
+                    "status": "Not Found",
+                    "code": 404,
+                    "_postman_previewlanguage": "json",
+                    "header": [
+                        {
+                            "key": "Content-Type",
+                            "value": "application/json"
+                        }
+                    ],
+                    "body": "{\n    \"success\": false,\n    \"message\": \"Market not found\",\n    \"statusCode\": 404,\n    \"timestamp\": \"2026-03-17T10:00:00.000Z\",\n    \"path\": \"/portfolio/withdraw-lend-position\"\n}"
+                },
+                {
+                    "name": "Position not matured",
+                    "originalRequest": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer DEV_TOKEN_0x71C7656EC7ab88b098defB751B7401B5f6d8976F",
+                                "type": "text"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"marketId\": \"eb25bc4f-d6c4-4cc7-8b3e-c22ad4292510\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "url": {
+                            "raw": "{{base url}}portfolio/withdraw-lend-position",
+                            "host": ["{{base url}}portfolio"],
+                            "path": ["withdraw-lend-position"]
+                        }
+                    },
+                    "status": "Bad Request",
+                    "code": 400,
+                    "_postman_previewlanguage": "json",
+                    "header": [
+                        {
+                            "key": "Content-Type",
+                            "value": "application/json"
+                        }
+                    ],
+                    "body": "{\n    \"success\": false,\n    \"message\": \"Position has not matured yet\",\n    \"statusCode\": 400,\n    \"timestamp\": \"2026-03-17T10:00:00.000Z\",\n    \"path\": \"/portfolio/withdraw-lend-position\"\n}"
+                }
+            ]
         }
     ],
     "variable": [

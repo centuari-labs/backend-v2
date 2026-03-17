@@ -1,6 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import { Portfolio } from "../entities/portfolio.entity";
-import { DataSource, In, Repository } from "typeorm";
+import { DataSource, EntityManager, In, Repository } from "typeorm";
 import { OrderSide, OrderStatus } from "../../orders/constants/order.constants";
 import { Token } from "../../tokens/entities/token.entity";
 import type { RawOpenOrderRow } from "../dto/open-orders.dto";
@@ -500,5 +500,41 @@ export class PortfolioRepository extends Repository<Portfolio> {
                updated_at = NOW()`,
             [id, accountId, assetId, amount, isCollateral],
         );
+    }
+
+    async getLendPositions(
+        accountId: string,
+        marketId: string,
+        manager?: EntityManager,
+    ): Promise<any[]> {
+        const queryRunner = manager
+            ? manager.createQueryBuilder()
+            : this.dataSource.createQueryBuilder();
+
+        let qb = queryRunner
+            .select("lp")
+            .from("lend_positions", "lp")
+            .where("lp.account_id = :accountId", { accountId })
+            .andWhere("lp.market_id = :marketId", { marketId })
+            .andWhere("lp.shares > 0");
+
+        if (manager) {
+            qb = qb.setLock("pessimistic_write");
+        }
+
+        return qb.getRawMany();
+    }
+
+    async updateLendPositionShares(
+        manager: EntityManager,
+        positionId: string,
+        shares: string,
+    ): Promise<void> {
+        await manager
+            .createQueryBuilder()
+            .update("lend_positions")
+            .set({ shares })
+            .where("id = :id", { id: positionId })
+            .execute();
     }
 }

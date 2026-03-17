@@ -1,4 +1,12 @@
-import { Controller, Get, Query, UseGuards, Body, Put } from "@nestjs/common";
+import {
+    Controller,
+    Get,
+    Post,
+    Query,
+    UseGuards,
+    Body,
+    Put,
+} from "@nestjs/common";
 import { PortfolioService } from "./portfolio.service";
 import { TransactionHistoryQueryDto } from "./dto/transaction-history.dto";
 import { OpenOrdersQueryDto } from "./dto/open-orders.dto";
@@ -14,7 +22,8 @@ import {
 } from "./dto/portfolio.dto";
 import { ChartDataQueryDto } from "./dto/chart-data.dto";
 import { AuthGuard } from "../common/guards/auth.guard";
-import { Wallet } from "../common/decorators/wallet.decorator";
+import { Wallet, CurrentUser } from "../common/decorators/wallet.decorator";
+import { WithdrawLendPositionDto } from "./dto/withdraw-lend-position.dto";
 
 @Controller("portfolio")
 @UseGuards(AuthGuard)
@@ -77,6 +86,19 @@ export class PortfolioController {
         return this.portfolioService.setAssetAsCollateral(wallet, body);
     }
 
+    @Post("withdraw-lend-position")
+    async withdrawLendPosition(
+        @Body() dto: WithdrawLendPositionDto,
+        @Wallet() walletAddress: string,
+        @CurrentUser() user: { userId: string },
+    ) {
+        return this.portfolioService.withdrawLendPosition(
+            dto,
+            walletAddress,
+            user.userId,
+        );
+    }
+  
     @Get("open-orders")
     async getOpenOrders(
         @Wallet() wallet: string,

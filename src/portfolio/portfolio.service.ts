@@ -1,13 +1,23 @@
 import {
     BadRequestException,
     Injectable,
+    InternalServerErrorException,
+    Logger,
     NotFoundException,
 } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { Repository } from "typeorm";
+import { DataSource, Repository } from "typeorm";
+import { ConfigService } from "@nestjs/config";
+import type { TransactionReceipt } from "viem";
 import { Token } from "../tokens/entities/token.entity";
 import { PriceService } from "../price/price.service";
 import { TokensService } from "../tokens/tokens.service";
+import { ViemService } from "../core/viem/viem.service";
+import { centuariAbi } from "../../abis/centuari";
+import {
+    WithdrawLendPositionDto,
+    WithdrawLendPositionResponseDto,
+} from "./dto/withdraw-lend-position.dto";
 import type { TransactionHistoryItem } from "./dto/transaction-history.dto";
 import { TransactionHistoryQueryDto } from "./dto/transaction-history.dto";
 import type { OpenOrderItem } from "./dto/open-orders.dto";
@@ -25,11 +35,14 @@ import {
 } from "./dto/portfolio.dto";
 import { PortfolioRepository } from "./repositories/portfolio.repository";
 import { OrderRepository } from "../orders/repositories/order.repository";
+import { MarketRepositories } from "../market/repository/market.repository";
+import { portfolioUuidFor } from "../common/utils/uuid.utils";
 import {
     calculateUsdAmount,
     createPaginatedResponse,
 } from "./helpers/position.helpers";
 import { baseUnitsToHuman } from "../common/utils/number.utils";
+import { getFirstEventFromReceipt } from "../common/utils/event.utils";
 import {
     computeHealthFactor,
     formatHealthFactorResponse,
@@ -42,6 +55,11 @@ import { OrderSide, OrderStatus } from "../orders/constants/order.constants";
 
 @Injectable()
 export class PortfolioService {
+    private readonly logger = new Logger(PortfolioService.name);
+    private readonly chainId: number;
+    private readonly operatorPrivateKey: string;
+    private readonly centuariAddress: string;
+
     constructor(
         @InjectRepository(Token)
         private readonly tokenRepository: Repository<Token>,
@@ -49,7 +67,19 @@ export class PortfolioService {
         private readonly tokensService: TokensService,
         private readonly portfolioRepository: PortfolioRepository,
         private readonly orderRepository: OrderRepository,
-    ) {}
+        private readonly marketRepository: MarketRepositories,
+        private readonly viemService: ViemService,
+        private readonly configService: ConfigService,
+        private readonly dataSource: DataSource,
+    ) {
+        this.chainId = Number(
+            this.configService.get<string>("DEPOSIT_CHAIN_ID") ?? "421614",
+        );
+        this.operatorPrivateKey =
+            this.configService.get<string>("OPERATOR_PRIVATE_KEY") ?? "";
+        this.centuariAddress =
+            this.configService.get<string>("CENTUARI_ADDRESS") ?? "";
+    }
 
     async getMyPortfolio(wallet: string): Promise<MyPortfolioResponseDto> {
         const account = await this.orderRepository.findAccountByWallet(wallet);
@@ -716,6 +746,184 @@ export class PortfolioService {
             await this.portfolioRepository.getUserTotalBalances(accountId);
         const match = balances.find((b) => b.asset_id === assetId);
         return match ? match.total_amount : "0";
+    }
+
+    async withdrawLendPosition(
+        dto: WithdrawLendPositionDto,
+        walletAddress: string,
+        privyUserId: string,
+    ): Promise<WithdrawLendPositionResponseDto> {
+        const { marketId } = dto;
+
+        const accountId = await this.orderRepository
+            .getOrCreateAccount(walletAddress, privyUserId)
+            .then((a) => a.id);
+
+        const market = await this.marketRepository.getMarketWithAsset(marketId);
+        if (!market) {
+            throw new NotFoundException("Market not found");
+        }
+
+        const positions = await this.portfolioRepository.getLendPositions(
+            accountId,
+            marketId,
+        );
+        if (!positions || positions.length === 0) {
+            throw new BadRequestException(
+                "No active lend positions found for this market",
+            );
+        }
+
+        const maturityDate = market.maturity ? new Date(market.maturity) : null;
+        if (!maturityDate) {
+            throw new BadRequestException("Market has no maturity date");
+        }
+
+        const maturityUnix = Math.floor(maturityDate.getTime() / 1000);
+        const nowUnix = Math.floor(Date.now() / 1000);
+        if (nowUnix < maturityUnix) {
+            throw new BadRequestException("Position has not matured yet");
+        }
+
+        let totalShares = 0n;
+        for (const pos of positions) {
+            const sharesStr = pos.lp_shares.toString().split(".")[0];
+            totalShares += BigInt(sharesStr);
+        }
+
+        if (totalShares <= 0n) {
+            throw new BadRequestException("No shares available for withdrawal");
+        }
+
+        this.logger.log(
+            `Executing withdrawLendPosition: token=${market.tokenAddress}, maturity=${maturityUnix}, cbtAmount=${totalShares}`,
+        );
+
+        const receipt = await this.executeBlockchainWithdraw(
+            market.tokenAddress,
+            BigInt(maturityUnix),
+            totalShares,
+        );
+
+        const { amountWithdrawn } = this.parseWithdrawEvent(receipt);
+
+        await this.updateDatabaseState(
+            positions,
+            receipt,
+            accountId,
+            market.assetId,
+            walletAddress,
+            market.tokenAddress,
+            amountWithdrawn,
+        );
+
+        return {
+            txHash: receipt.transactionHash,
+            status: "success",
+        };
+    }
+
+    private async executeBlockchainWithdraw(
+        loanToken: string,
+        maturity: bigint,
+        cbtAmount: bigint,
+    ): Promise<TransactionReceipt> {
+        try {
+            const receipt = (await this.viemService.writeContract(
+                this.chainId,
+                this.operatorPrivateKey,
+                this.centuariAddress,
+                centuariAbi,
+                "withdrawLendPosition",
+                [loanToken, maturity, cbtAmount],
+                { waitForReceipt: true },
+            )) as TransactionReceipt;
+            return receipt;
+        } catch (error: any) {
+            this.logger.error(`Contract call failed: ${error.message}`);
+            if (error.message.includes("NotMatured")) {
+                throw new BadRequestException(
+                    "Contract reverted: position has not matured yet.",
+                );
+            }
+            if (error.message.includes("InsufficientBalance")) {
+                throw new BadRequestException(
+                    "Contract reverted: insufficient CBT balance.",
+                );
+            }
+            throw new InternalServerErrorException(
+                `Blockchain transaction failed: ${error.message}`,
+            );
+        }
+    }
+
+    private parseWithdrawEvent(receipt: TransactionReceipt): {
+        cbtBurned: bigint;
+        amountWithdrawn: bigint;
+    } {
+        try {
+            const event = getFirstEventFromReceipt<{
+                cbtBurned: bigint;
+                amountWithdrawn: bigint;
+            }>(receipt, centuariAbi, "LendPositionWithdrawn");
+            return event.args;
+        } catch {
+            throw new InternalServerErrorException(
+                "No LendPositionWithdrawn event found in transaction receipt",
+            );
+        }
+    }
+
+    private async updateDatabaseState(
+        positions: any[],
+        receipt: TransactionReceipt,
+        accountId: string,
+        assetId: string,
+        walletAddress: string,
+        tokenAddress: string,
+        amountWithdrawn: bigint,
+    ): Promise<void> {
+        const txHash = receipt.transactionHash;
+        try {
+            await this.dataSource.transaction(async (manager) => {
+                const lockedPositions =
+                    await this.portfolioRepository.getLendPositions(
+                        positions[0].lp_account_id,
+                        positions[0].lp_market_id,
+                        manager,
+                    );
+
+                for (const pos of lockedPositions) {
+                    await this.portfolioRepository.updateLendPositionShares(
+                        manager,
+                        pos.lp_id,
+                        "0",
+                    );
+                }
+            });
+
+            const portfolioId = portfolioUuidFor(
+                walletAddress.toLowerCase(),
+                tokenAddress.toLowerCase(),
+            );
+            await this.portfolioRepository.upsertPortfolio(
+                portfolioId,
+                accountId,
+                assetId,
+                amountWithdrawn.toString(),
+            );
+
+            this.logger.log(
+                `Withdraw lend position DB state updated for tx: ${txHash}, portfolio credited: ${amountWithdrawn}`,
+            );
+        } catch (error: any) {
+            this.logger.error(
+                `CRITICAL: Blockchain tx succeeded (${txHash}) but DB update failed: ${error.message}`,
+            );
+            throw new InternalServerErrorException(
+                "Withdraw finalized on-chain but failed local state update.",
+            );
+        }
     }
 
     async getUserDetails(wallet: string): Promise<UserDetailsResponseDto> {

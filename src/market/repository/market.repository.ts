@@ -99,6 +99,25 @@ export class MarketRepositories extends Repository<Market> {
         return result?.total_amount || "0";
     }
 
+    async getMarketWithAsset(marketId: string): Promise<{
+        id: string;
+        assetId: string;
+        maturity: string;
+        decimals: number;
+        tokenAddress: string;
+    } | null> {
+        const rows = await this.dataSource.query(
+            `SELECT m.id, m.asset_id as "assetId", m.maturity,
+                    COALESCE(a.decimals, 0) as decimals,
+                    a.token_address as "tokenAddress"
+             FROM markets m
+             JOIN assets a ON m.asset_id = a.id
+             WHERE m.id = $1`,
+            [marketId],
+        );
+        return rows[0] || null;
+    }
+
     async getUpcomingMarkets(
         assetId: string,
         limit: number,

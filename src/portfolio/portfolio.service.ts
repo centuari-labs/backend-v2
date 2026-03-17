@@ -10,6 +10,8 @@ import { PriceService } from "../price/price.service";
 import { TokensService } from "../tokens/tokens.service";
 import type { TransactionHistoryItem } from "./dto/transaction-history.dto";
 import { TransactionHistoryQueryDto } from "./dto/transaction-history.dto";
+import type { OpenOrderItem } from "./dto/open-orders.dto";
+import { OpenOrdersQueryDto } from "./dto/open-orders.dto";
 import {
     MyPortfolioResponseDto,
     GetMyAssetsQueryDto,
@@ -638,6 +640,65 @@ export class PortfolioService {
                 row.total_fee && row.total_fee !== "0"
                     ? baseUnitsToHuman(row.total_fee, Number(row.decimals) || 0)
                     : null,
+            createdAt: new Date(row.created_at).toISOString(),
+        }));
+
+        return createPaginatedResponse(
+            items,
+            total,
+            query.page ?? 1,
+            query.limit ?? 10,
+        );
+    }
+
+    async getOpenOrders(wallet: string, query: OpenOrdersQueryDto) {
+        const account = await this.orderRepository.findAccountByWallet(wallet);
+        if (!account) {
+            return createPaginatedResponse(
+                [],
+                0,
+                query.page ?? 1,
+                query.limit ?? 10,
+            );
+        }
+
+        const { data: rows, total } =
+            await this.portfolioRepository.getOpenOrders(
+                account.id,
+                query.page ?? 1,
+                query.limit ?? 10,
+                {
+                    side: query.side,
+                    status: query.status,
+                    startDate: query.startDate,
+                    endDate: query.endDate,
+                },
+            );
+
+        const items: OpenOrderItem[] = rows.map((row) => ({
+            id: row.id,
+            side: row.side,
+            orderType: row.order_type,
+            rate: Number(row.rate) || 0,
+            amount: baseUnitsToHuman(row.amount, Number(row.decimals) || 0),
+            filledQuantity: row.filled_quantity
+                ? baseUnitsToHuman(
+                      row.filled_quantity,
+                      Number(row.decimals) || 0,
+                  )
+                : null,
+            status: row.status,
+            maturity: row.maturity
+                ? new Date(row.maturity).toISOString()
+                : null,
+            asset: {
+                id: row.asset_id,
+                name: row.name,
+                symbol: row.symbol,
+                decimals: Number(row.decimals) || 0,
+                imageUrl: row.image_url,
+                tokenAddress: row.token_address,
+            },
             createdAt: new Date(row.created_at).toISOString(),
         }));
 

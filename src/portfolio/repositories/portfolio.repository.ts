@@ -3,6 +3,7 @@ import { Portfolio } from "../entities/portfolio.entity";
 import { DataSource, In, Repository } from "typeorm";
 import { OrderSide, OrderStatus } from "../../orders/constants/order.constants";
 import { Token } from "../../tokens/entities/token.entity";
+import type { RawOpenOrderRow } from "../dto/open-orders.dto";
 
 export interface RawPosition {
     position_id: string;
@@ -379,6 +380,83 @@ export class PortfolioRepository extends Repository<Portfolio> {
         const [rows, countResult] = await Promise.all([
             this.dataSource.query(dataQuery, [accountId, limit, offset]),
             this.dataSource.query(countQuery, [accountId]),
+        ]);
+
+        return {
+            data: rows,
+            total: Number.parseInt(countResult[0]?.count || "0", 10),
+        };
+    }
+
+    async getOpenOrders(
+        accountId: string,
+        page: number,
+        limit: number,
+        filters: {
+            side?: string;
+            status?: string;
+            startDate?: string;
+            endDate?: string;
+        },
+    ): Promise<{ data: RawOpenOrderRow[]; total: number }> {
+        const offset = (page - 1) * limit;
+        const params: any[] = [accountId];
+        let paramIndex = 2;
+
+        let whereClause = "WHERE o.account_id = $1";
+
+        if (filters.status) {
+            whereClause += ` AND o.status = $${paramIndex}`;
+            params.push(filters.status);
+            paramIndex++;
+        } else {
+            whereClause += ` AND o.status IN ('OPEN', 'PARTIALLY_FILLED')`;
+        }
+
+        if (filters.side) {
+            whereClause += ` AND o.side = $${paramIndex}`;
+            params.push(filters.side);
+            paramIndex++;
+        }
+
+        if (filters.startDate) {
+            whereClause += ` AND o.created_at >= $${paramIndex}`;
+            params.push(filters.startDate);
+            paramIndex++;
+        }
+
+        if (filters.endDate) {
+            whereClause += ` AND o.created_at <= $${paramIndex}`;
+            params.push(filters.endDate);
+            paramIndex++;
+        }
+
+        const dataQuery = `
+            SELECT o.id, o.side::text, o.type::text as order_type, o.rate,
+                   o.quantity as amount, o.filled_quantity, o.status::text,
+                   a.id as asset_id, a.name, a.symbol, a.image_url,
+                   COALESCE(a.decimals, 0) as decimals, a.token_address,
+                   m.maturity,
+                   o.created_at
+            FROM orders o
+            JOIN assets a ON o.asset_id = a.id
+            LEFT JOIN order_markets om ON om.order_id = o.id
+            LEFT JOIN markets m ON om.market_id = m.id
+            ${whereClause}
+            ORDER BY o.created_at DESC
+            LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
+        `;
+        params.push(limit, offset);
+
+        const countQuery = `
+            SELECT COUNT(*) as count
+            FROM orders o
+            ${whereClause}
+        `;
+
+        const [rows, countResult] = await Promise.all([
+            this.dataSource.query(dataQuery, params),
+            this.dataSource.query(countQuery, params.slice(0, paramIndex - 1)),
         ]);
 
         return {

@@ -8,6 +8,7 @@ import {
     Put,
 } from "@nestjs/common";
 import { PortfolioService } from "./portfolio.service";
+import { TransactionHistoryQueryDto } from "./dto/transaction-history.dto";
 import {
     GetMyAssetsQueryDto,
     MyAssetsResponseDto,
@@ -17,7 +18,9 @@ import {
     MyPositionQueryDto,
     SetAssetAsCollateralDto,
     MyHealthFactorResponseDto,
+    UserDetailsResponseDto,
 } from "./dto/portfolio.dto";
+import { ChartDataQueryDto } from "./dto/chart-data.dto";
 import { AuthGuard } from "../common/guards/auth.guard";
 import { Wallet, CurrentUser } from "../common/decorators/wallet.decorator";
 import { WithdrawLendPositionDto } from "./dto/withdraw-lend-position.dto";
@@ -25,10 +28,12 @@ import { WithdrawLendPositionDto } from "./dto/withdraw-lend-position.dto";
 @Controller("portfolio")
 @UseGuards(AuthGuard)
 export class PortfolioController {
-    constructor(private readonly portfolioService: PortfolioService) { }
+    constructor(private readonly portfolioService: PortfolioService) {}
 
     @Get("my-portfolio")
-    async getMyPortfolio(@Wallet() wallet: string): Promise<MyPortfolioResponseDto> {
+    async getMyPortfolio(
+        @Wallet() wallet: string,
+    ): Promise<MyPortfolioResponseDto> {
         return this.portfolioService.getMyPortfolio(wallet);
     }
 
@@ -41,12 +46,20 @@ export class PortfolioController {
     }
 
     @Get("lend-borrow-assets")
-    async getLendAndBorrowAssets(@Wallet() wallet: string): Promise<LendBorrowAssetResponseDto> {
-        return this.portfolioService.getLendBorrowAssets(wallet);
+    async getLendAndBorrowAssets(
+        @Wallet() wallet: string,
+        @Query() query: ChartDataQueryDto,
+    ) {
+        return this.portfolioService.getLendBorrowAssets(
+            wallet,
+            query.days ?? 90,
+        );
     }
 
     @Get("my-health-factor")
-    async getMyHealthFactor(@Wallet() wallet: string): Promise<MyHealthFactorResponseDto> {
+    async getMyHealthFactor(
+        @Wallet() wallet: string,
+    ): Promise<MyHealthFactorResponseDto> {
         return this.portfolioService.getMyHealthFactor(wallet);
     }
 
@@ -56,6 +69,13 @@ export class PortfolioController {
         @Query() query: MyPositionQueryDto,
     ): Promise<GetMyPositionResponseDto> {
         return this.portfolioService.getMyPosition(wallet, query);
+    }
+
+    @Get("user-details")
+    async getUserDetails(
+        @Wallet() wallet: string,
+    ): Promise<UserDetailsResponseDto> {
+        return this.portfolioService.getUserDetails(wallet);
     }
 
     @Put("is-collateral")
@@ -77,5 +97,13 @@ export class PortfolioController {
             walletAddress,
             user.userId,
         );
+    }
+
+    @Get("transaction-history")
+    async getTransactionHistory(
+        @Wallet() wallet: string,
+        @Query() query: TransactionHistoryQueryDto,
+    ) {
+        return this.portfolioService.getTransactionHistory(wallet, query);
     }
 }

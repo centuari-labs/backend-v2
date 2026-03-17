@@ -1,4 +1,7 @@
-import { MyAssetsResponseDto, MyAssetItemDto } from "src/portfolio/dto/portfolio.dto";
+import {
+    MyAssetsResponseDto,
+    MyAssetItemDto,
+} from "src/portfolio/dto/portfolio.dto";
 import { ResponseInterceptor } from "src/common/interceptors/response.interceptor";
 import { CallHandler, ExecutionContext } from "@nestjs/common";
 import { of, lastValueFrom } from "rxjs";
@@ -18,7 +21,7 @@ describe("MyAssetsResponseDto contract", () => {
                     isCollateral: false,
                     imageUrl: "https://example.com/usdc.png",
                     ltv: 0.75,
-                    liquidationThreshold: 0.80,
+                    liquidationThreshold: 0.8,
                 },
                 {
                     assetId: "asset-eth-id",
@@ -28,7 +31,7 @@ describe("MyAssetsResponseDto contract", () => {
                     amountInUsd: 7500,
                     isCollateral: true,
                     imageUrl: null,
-                    ltv: 0.80,
+                    ltv: 0.8,
                     liquidationThreshold: 0.82,
                 },
             ],
@@ -68,7 +71,7 @@ describe("MyAssetsResponseDto contract", () => {
                 isCollateral: false,
                 imageUrl: null,
                 ltv: 0.75,
-                liquidationThreshold: 0.80,
+                liquidationThreshold: 0.8,
             };
             expect(item).toHaveProperty("symbol");
             expect(item).toHaveProperty("name");

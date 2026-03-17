@@ -1,5 +1,9 @@
 import { orderSchema } from "../../src/orders/matching-engine/order.schema";
-import { OrderSide, OrderStatus, OrderType } from "../../src/orders/constants/order.constants";
+import {
+    OrderSide,
+    OrderStatus,
+    OrderType,
+} from "../../src/orders/constants/order.constants";
 
 describe("Matching engine order schema", () => {
     it("accepts a valid lend limit order payload", () => {
@@ -54,4 +58,3 @@ describe("Matching engine order schema", () => {
         expect(parsed.rate).toBeUndefined();
     });
 });
-

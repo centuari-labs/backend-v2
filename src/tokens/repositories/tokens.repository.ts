@@ -8,7 +8,7 @@ export class TokensRepository {
     constructor(
         @InjectRepository(Token)
         private readonly tokensRepository: Repository<Token>,
-    ) { }
+    ) {}
 
     async validateToken(tokenAddress: string): Promise<Token | null> {
         return this.tokensRepository.findOne({ where: { tokenAddress } });

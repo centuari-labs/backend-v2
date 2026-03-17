@@ -4,4 +4,3 @@ export interface PricesDto {
      */
     prices: Record<string, number>;
 }
-

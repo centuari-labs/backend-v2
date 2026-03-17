@@ -13,7 +13,11 @@ import { Wallet } from "../common/decorators/wallet.decorator";
 import { AuthGuard } from "../common/guards/auth.guard";
 import { DepositService } from "./deposit.service";
 import { ConfirmDepositDto } from "./dto/deposit.dto";
-import type { DepositTokenDto, BalanceResponseDto, ConfirmDepositResponseDto } from "./dto/deposit.dto";
+import type {
+    DepositTokenDto,
+    BalanceResponseDto,
+    ConfirmDepositResponseDto,
+} from "./dto/deposit.dto";
 
 @Controller("deposit")
 export class DepositController {

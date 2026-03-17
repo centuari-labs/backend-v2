@@ -79,7 +79,9 @@ describe("PrivyAuthStrategy", () => {
 
         it("should throw UnauthorizedException when Privy verify throws error", async () => {
             const mockToken = "expired-token";
-            mockPrivyService.verify.mockRejectedValue(new Error("Token expired"));
+            mockPrivyService.verify.mockRejectedValue(
+                new Error("Token expired"),
+            );
 
             await expect(strategy.validate(mockToken)).rejects.toThrow();
         });
@@ -91,4 +93,3 @@ describe("PrivyAuthStrategy", () => {
         });
     });
 });
-

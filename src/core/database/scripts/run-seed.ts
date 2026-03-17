@@ -22,9 +22,7 @@ export async function runSeeds(targetFile?: string) {
     if (targetFile) {
         // Match by exact name or partial match (e.g. "supported_tokens" matches the full filename)
         const all = readdirSync(dir).filter((f) => f.endsWith(".sql"));
-        files = all.filter(
-            (f) => f === targetFile || f.includes(targetFile),
-        );
+        files = all.filter((f) => f === targetFile || f.includes(targetFile));
 
         if (files.length === 0) {
             console.error(`❌ No seed file matching "${targetFile}" found.`);
@@ -50,10 +48,9 @@ export async function runSeeds(targetFile?: string) {
     for (const file of files) {
         const {
             rows: [existing],
-        } = await client.query(
-            "SELECT id FROM seeds_log WHERE filename = $1",
-            [file],
-        );
+        } = await client.query("SELECT id FROM seeds_log WHERE filename = $1", [
+            file,
+        ]);
 
         if (existing) {
             console.log(`⏭️ Skipping seed ${file} (already applied).`);
@@ -65,10 +62,9 @@ export async function runSeeds(targetFile?: string) {
         try {
             await client.query("BEGIN");
             await client.query(sql);
-            await client.query(
-                "INSERT INTO seeds_log (filename) VALUES ($1)",
-                [file],
-            );
+            await client.query("INSERT INTO seeds_log (filename) VALUES ($1)", [
+                file,
+            ]);
             await client.query("COMMIT");
             console.log(`✅ Seed ${file} executed successfully.`);
         } catch (err) {

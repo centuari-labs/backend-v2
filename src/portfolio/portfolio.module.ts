@@ -22,11 +22,7 @@ import { TokensModule } from "../tokens/tokens.module";
         TokensModule,
     ],
     controllers: [PortfolioController],
-    providers: [
-        PortfolioService,
-        PortfolioRepository,
-
-    ],
+    providers: [PortfolioService, PortfolioRepository],
     exports: [PortfolioService, PortfolioRepository],
 })
-export class PortfolioModule { }
+export class PortfolioModule {}

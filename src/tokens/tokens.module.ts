@@ -9,4 +9,4 @@ import { TokensRepository } from "./repositories/tokens.repository";
     providers: [TokensService, TokensRepository],
     exports: [TokensService, TokensRepository],
 })
-export class TokensModule { }
+export class TokensModule {}

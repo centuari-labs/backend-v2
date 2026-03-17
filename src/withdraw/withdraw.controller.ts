@@ -2,7 +2,10 @@ import { Body, Controller, Post, UseGuards } from "@nestjs/common";
 import { Wallet } from "../common/decorators/wallet.decorator";
 import { AuthGuard } from "../common/guards/auth.guard";
 import { WithdrawService } from "./withdraw.service";
-import type { WithdrawRequestDto, WithdrawResponseDto } from "./dto/withdraw.dto";
+import type {
+    WithdrawRequestDto,
+    WithdrawResponseDto,
+} from "./dto/withdraw.dto";
 
 @Controller("withdraw")
 export class WithdrawController {

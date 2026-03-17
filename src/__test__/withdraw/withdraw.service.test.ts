@@ -67,10 +67,14 @@ describe("WithdrawService", () => {
 
     describe("successful withdrawal", () => {
         it("returns txHash on success", async () => {
-            mockOrderRepository.findAccountByWallet.mockResolvedValue(mockAccount);
+            mockOrderRepository.findAccountByWallet.mockResolvedValue(
+                mockAccount,
+            );
             mockTokensService.getTokenByAssetId.mockResolvedValue(mockToken);
             mockQueryRunner.query
-                .mockResolvedValueOnce([{ id: "portfolio-row-id", amount: "1000" }]) // SELECT FOR UPDATE
+                .mockResolvedValueOnce([
+                    { id: "portfolio-row-id", amount: "1000" },
+                ]) // SELECT FOR UPDATE
                 .mockResolvedValueOnce(undefined); // UPDATE
             mockViemService.writeContract.mockResolvedValue({
                 transactionHash: "0xTxHash123",
@@ -90,10 +94,14 @@ describe("WithdrawService", () => {
         });
 
         it("calls viemService.writeContract with correct args", async () => {
-            mockOrderRepository.findAccountByWallet.mockResolvedValue(mockAccount);
+            mockOrderRepository.findAccountByWallet.mockResolvedValue(
+                mockAccount,
+            );
             mockTokensService.getTokenByAssetId.mockResolvedValue(mockToken);
             mockQueryRunner.query
-                .mockResolvedValueOnce([{ id: "portfolio-row-id", amount: "1000" }])
+                .mockResolvedValueOnce([
+                    { id: "portfolio-row-id", amount: "1000" },
+                ])
                 .mockResolvedValueOnce(undefined);
             mockViemService.writeContract.mockResolvedValue({
                 transactionHash: "0xTxHash123",
@@ -113,10 +121,14 @@ describe("WithdrawService", () => {
         });
 
         it("deletes portfolio row when balance is fully withdrawn", async () => {
-            mockOrderRepository.findAccountByWallet.mockResolvedValue(mockAccount);
+            mockOrderRepository.findAccountByWallet.mockResolvedValue(
+                mockAccount,
+            );
             mockTokensService.getTokenByAssetId.mockResolvedValue(mockToken);
             mockQueryRunner.query
-                .mockResolvedValueOnce([{ id: "portfolio-row-id", amount: "100" }])
+                .mockResolvedValueOnce([
+                    { id: "portfolio-row-id", amount: "100" },
+                ])
                 .mockResolvedValueOnce(undefined);
             mockViemService.writeContract.mockResolvedValue({
                 transactionHash: "0xTxHash",
@@ -132,10 +144,14 @@ describe("WithdrawService", () => {
         });
 
         it("updates portfolio row for partial withdrawal", async () => {
-            mockOrderRepository.findAccountByWallet.mockResolvedValue(mockAccount);
+            mockOrderRepository.findAccountByWallet.mockResolvedValue(
+                mockAccount,
+            );
             mockTokensService.getTokenByAssetId.mockResolvedValue(mockToken);
             mockQueryRunner.query
-                .mockResolvedValueOnce([{ id: "portfolio-row-id", amount: "1000" }])
+                .mockResolvedValueOnce([
+                    { id: "portfolio-row-id", amount: "1000" },
+                ])
                 .mockResolvedValueOnce(undefined);
             mockViemService.writeContract.mockResolvedValue({
                 transactionHash: "0xTxHash",
@@ -178,7 +194,9 @@ describe("WithdrawService", () => {
         });
 
         it("rejects when token not found", async () => {
-            mockOrderRepository.findAccountByWallet.mockResolvedValue(mockAccount);
+            mockOrderRepository.findAccountByWallet.mockResolvedValue(
+                mockAccount,
+            );
             mockTokensService.getTokenByAssetId.mockResolvedValue(null);
 
             await expect(
@@ -187,7 +205,9 @@ describe("WithdrawService", () => {
         });
 
         it("rejects when no non-collateral balance found", async () => {
-            mockOrderRepository.findAccountByWallet.mockResolvedValue(mockAccount);
+            mockOrderRepository.findAccountByWallet.mockResolvedValue(
+                mockAccount,
+            );
             mockTokensService.getTokenByAssetId.mockResolvedValue(mockToken);
             mockQueryRunner.query.mockResolvedValueOnce([]);
 
@@ -198,7 +218,9 @@ describe("WithdrawService", () => {
         });
 
         it("rejects when insufficient balance", async () => {
-            mockOrderRepository.findAccountByWallet.mockResolvedValue(mockAccount);
+            mockOrderRepository.findAccountByWallet.mockResolvedValue(
+                mockAccount,
+            );
             mockTokensService.getTokenByAssetId.mockResolvedValue(mockToken);
             mockQueryRunner.query.mockResolvedValueOnce([
                 { id: "portfolio-row-id", amount: "50" },
@@ -213,7 +235,9 @@ describe("WithdrawService", () => {
 
     describe("error handling", () => {
         it("rolls back transaction on contract revert", async () => {
-            mockOrderRepository.findAccountByWallet.mockResolvedValue(mockAccount);
+            mockOrderRepository.findAccountByWallet.mockResolvedValue(
+                mockAccount,
+            );
             mockTokensService.getTokenByAssetId.mockResolvedValue(mockToken);
             mockQueryRunner.query.mockResolvedValueOnce([
                 { id: "portfolio-row-id", amount: "1000" },

@@ -15,10 +15,18 @@ describe("PriceService", () => {
     let loggerDebugSpy: jest.SpyInstance;
 
     beforeAll(() => {
-        loggerErrorSpy = jest.spyOn(Logger.prototype, "error").mockImplementation(() => { });
-        loggerWarnSpy = jest.spyOn(Logger.prototype, "warn").mockImplementation(() => { });
-        loggerLogSpy = jest.spyOn(Logger.prototype, "log").mockImplementation(() => { });
-        loggerDebugSpy = jest.spyOn(Logger.prototype, "debug").mockImplementation(() => { });
+        loggerErrorSpy = jest
+            .spyOn(Logger.prototype, "error")
+            .mockImplementation(() => {});
+        loggerWarnSpy = jest
+            .spyOn(Logger.prototype, "warn")
+            .mockImplementation(() => {});
+        loggerLogSpy = jest
+            .spyOn(Logger.prototype, "log")
+            .mockImplementation(() => {});
+        loggerDebugSpy = jest
+            .spyOn(Logger.prototype, "debug")
+            .mockImplementation(() => {});
     });
 
     afterAll(() => {
@@ -129,8 +137,14 @@ describe("PriceService", () => {
 
     describe("getPrices", () => {
         it("should return Record of assetId to price when cache is populated", async () => {
-            tokensRepository.getActiveTokens.mockResolvedValue([mockToken, mockTokenEth]);
-            priceProvider.fetchPrices.mockResolvedValue({ USDC: 1.0, ETH: 2500 });
+            tokensRepository.getActiveTokens.mockResolvedValue([
+                mockToken,
+                mockTokenEth,
+            ]);
+            priceProvider.fetchPrices.mockResolvedValue({
+                USDC: 1.0,
+                ETH: 2500,
+            });
 
             await service.fetchAndUpdatePrices();
 
@@ -166,8 +180,14 @@ describe("PriceService", () => {
 
     describe("fetchAndUpdatePrices", () => {
         it("should update cache and map symbol to assetId correctly", async () => {
-            tokensRepository.getActiveTokens.mockResolvedValue([mockToken, mockTokenEth]);
-            priceProvider.fetchPrices.mockResolvedValue({ USDC: 1.0, ETH: 2500 });
+            tokensRepository.getActiveTokens.mockResolvedValue([
+                mockToken,
+                mockTokenEth,
+            ]);
+            priceProvider.fetchPrices.mockResolvedValue({
+                USDC: 1.0,
+                ETH: 2500,
+            });
 
             await service.fetchAndUpdatePrices();
 
@@ -182,7 +202,9 @@ describe("PriceService", () => {
 
             await service.fetchAndUpdatePrices();
 
-            expect(warnSpy).toHaveBeenCalledWith("No tokens found, skipping price fetch");
+            expect(warnSpy).toHaveBeenCalledWith(
+                "No tokens found, skipping price fetch",
+            );
             expect(priceProvider.fetchPrices).not.toHaveBeenCalled();
             expect(service.isCacheReady()).toBe(false);
         });

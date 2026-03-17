@@ -192,11 +192,10 @@ export class EventsGateway
 
     private handleOrdersMessage(data: unknown, subject: string) {
         if (subject === "orders.status") {
-            this.handleStatusUpdate(data as OrderStatusMessage).catch(
-                (err) =>
-                    this.logger.error(
-                        `Error in handleStatusUpdate: ${(err as Error).message}`,
-                    ),
+            this.handleStatusUpdate(data as OrderStatusMessage).catch((err) =>
+                this.logger.error(
+                    `Error in handleStatusUpdate: ${(err as Error).message}`,
+                ),
             );
         } else if (subject === "orders.cancel") {
             this.handleCancelMessage(data as OrderCancelMessage);
@@ -204,17 +203,11 @@ export class EventsGateway
             subject.startsWith("orders.lend.") ||
             subject.startsWith("orders.borrow.")
         ) {
-            this.handleOrderCreation(
-                data as OrderCreationMessage,
-                subject,
-            );
+            this.handleOrderCreation(data as OrderCreationMessage, subject);
         }
     }
 
-    private handleOrderCreation(
-        msg: OrderCreationMessage,
-        subject: string,
-    ) {
+    private handleOrderCreation(msg: OrderCreationMessage, subject: string) {
         const assetId = msg.assetId ?? msg.loanToken;
 
         const tracked: TrackedOrder = {
@@ -261,9 +254,7 @@ export class EventsGateway
         const { orderId } = msg;
         const tracked = this.orderState.get(orderId);
         if (!tracked) {
-            this.logger.debug(
-                `Cancel for unknown order ${orderId}, ignoring`,
-            );
+            this.logger.debug(`Cancel for unknown order ${orderId}, ignoring`);
             return;
         }
 
@@ -285,9 +276,9 @@ export class EventsGateway
         const room = "prices";
         const socketsInRoom = this.server.sockets.adapter.rooms.get(room);
         this.logger.log(
-            `prices-update → room=${room}, clients=${socketsInRoom?.size ?? 0}, assets=${Object.keys(
-                prices,
-            ).length}`,
+            `prices-update → room=${room}, clients=${socketsInRoom?.size ?? 0}, assets=${
+                Object.keys(prices).length
+            }`,
         );
 
         this.server.to(room).emit("prices-update", prices);
@@ -372,8 +363,7 @@ export class EventsGateway
             for (const row of rows) {
                 if (this.orderState.has(row.id)) continue;
                 const remaining =
-                    BigInt(row.quantity) -
-                    BigInt(row.filled_quantity || "0");
+                    BigInt(row.quantity) - BigInt(row.filled_quantity || "0");
                 this.orderState.set(row.id, {
                     orderId: row.id,
                     assetId: row.asset_id,
@@ -402,9 +392,7 @@ export class EventsGateway
         }
     }
 
-    private async loadSingleOrderFromDb(
-        orderId: string,
-    ): Promise<void> {
+    private async loadSingleOrderFromDb(orderId: string): Promise<void> {
         try {
             const rows: Array<{
                 id: string;
@@ -448,8 +436,7 @@ export class EventsGateway
                 side: row.side,
                 type: row.type,
                 rate: Number(row.rate),
-                remainingAmount:
-                    remaining >= 0n ? remaining.toString() : "0",
+                remainingAmount: remaining >= 0n ? remaining.toString() : "0",
                 originalAmount: row.quantity,
                 accountId: row.account_id,
                 status: row.status,
@@ -514,9 +501,7 @@ export class EventsGateway
         }
 
         return Array.from(byRate.entries())
-            .sort((a, b) =>
-                descending ? b[0] - a[0] : a[0] - b[0],
-            )
+            .sort((a, b) => (descending ? b[0] - a[0] : a[0] - b[0]))
             .map(([rateBps, { amount, count }]) => ({
                 rate: toPercentage(rateBps),
                 amount: amount.toString(),

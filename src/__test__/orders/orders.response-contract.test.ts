@@ -1,6 +1,13 @@
 import { HttpStatus } from "@nestjs/common";
-import { OrderSide, OrderType, OrderStatus } from "src/orders/constants/order.constants";
-import { OrderResponse, OrderResponseData } from "src/orders/dto/order-response.dto";
+import {
+    OrderSide,
+    OrderType,
+    OrderStatus,
+} from "src/orders/constants/order.constants";
+import {
+    OrderResponse,
+    OrderResponseData,
+} from "src/orders/dto/order-response.dto";
 import { toPercentage } from "src/common/utils/number.utils";
 
 describe("OrderResponse contract", () => {
@@ -122,13 +129,21 @@ describe("OrderResponse contract", () => {
     });
 
     it("side enum values are LEND or BORROW", () => {
-        expect(buildOrderResponse({ side: OrderSide.Lend }).data.side).toBe("LEND");
-        expect(buildOrderResponse({ side: OrderSide.Borrow }).data.side).toBe("BORROW");
+        expect(buildOrderResponse({ side: OrderSide.Lend }).data.side).toBe(
+            "LEND",
+        );
+        expect(buildOrderResponse({ side: OrderSide.Borrow }).data.side).toBe(
+            "BORROW",
+        );
     });
 
     it("type enum values are MARKET or LIMIT", () => {
-        expect(buildOrderResponse({ type: OrderType.Market }).data.type).toBe("MARKET");
-        expect(buildOrderResponse({ type: OrderType.Limit }).data.type).toBe("LIMIT");
+        expect(buildOrderResponse({ type: OrderType.Market }).data.type).toBe(
+            "MARKET",
+        );
+        expect(buildOrderResponse({ type: OrderType.Limit }).data.type).toBe(
+            "LIMIT",
+        );
     });
 
     it("status enum values cover all states", () => {

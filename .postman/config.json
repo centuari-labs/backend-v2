@@ -1,13 +1,13 @@
 {
-  "workspace": {
-    "id": "a24c0bda-1641-43d3-977e-1213c24307da"
-  },
-  "entities": {
-    "environments": [],
-    "flows": [],
-    "globals": [],
-    "mocks": [],
-    "specs": [],
-    "collections": []
-  }
+    "workspace": {
+        "id": "a24c0bda-1641-43d3-977e-1213c24307da"
+    },
+    "entities": {
+        "environments": [],
+        "flows": [],
+        "globals": [],
+        "mocks": [],
+        "specs": [],
+        "collections": []
+    }
 }

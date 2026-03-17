@@ -54,7 +54,12 @@ describe("health-factor.helpers", () => {
                 },
             ];
             const debt: DebtPositionInput[] = [
-                { assetId: "c", amountBaseUnits: "500000000", decimals: 6, priceUsd: 1 },
+                {
+                    assetId: "c",
+                    amountBaseUnits: "500000000",
+                    decimals: 6,
+                    priceUsd: 1,
+                },
             ];
             const result = computeHealthFactor(collateral, debt);
             expect(result.collateralUsd).toBe(3000);
@@ -81,7 +86,12 @@ describe("health-factor.helpers", () => {
 
         it("zero collateral and positive debt: HF below 1", () => {
             const debt: DebtPositionInput[] = [
-                { assetId: "a", amountBaseUnits: "1000000", decimals: 6, priceUsd: 1 },
+                {
+                    assetId: "a",
+                    amountBaseUnits: "1000000",
+                    decimals: 6,
+                    priceUsd: 1,
+                },
             ];
             const result = computeHealthFactor([], debt);
             expect(result.collateralUsd).toBe(0);
@@ -102,7 +112,12 @@ describe("health-factor.helpers", () => {
                 },
             ];
             const debt: DebtPositionInput[] = [
-                { assetId: "b", amountBaseUnits: "1", decimals: 6, priceUsd: 1 },
+                {
+                    assetId: "b",
+                    amountBaseUnits: "1",
+                    decimals: 6,
+                    priceUsd: 1,
+                },
             ];
             const result = computeHealthFactor(collateral, debt);
             // 1e-18 * 3000 = 3e-15; 1e-6 * 1 = 1e-6
@@ -123,7 +138,12 @@ describe("health-factor.helpers", () => {
                 },
             ];
             const debt: DebtPositionInput[] = [
-                { assetId: "b", amountBaseUnits: "1000000000", decimals: 6, priceUsd: 1 },
+                {
+                    assetId: "b",
+                    amountBaseUnits: "1000000000",
+                    decimals: 6,
+                    priceUsd: 1,
+                },
             ];
             const result = computeHealthFactor(collateral, debt);
             expect(result.healthFactor).toBe(1);
@@ -140,7 +160,12 @@ describe("health-factor.helpers", () => {
                 },
             ];
             const debt: DebtPositionInput[] = [
-                { assetId: "b", amountBaseUnits: "900000000", decimals: 6, priceUsd: 1 },
+                {
+                    assetId: "b",
+                    amountBaseUnits: "900000000",
+                    decimals: 6,
+                    priceUsd: 1,
+                },
             ];
             const result = computeHealthFactor(collateral, debt);
             // (1000 - 900) * 0.8 / 900 = 80/900 < 1
@@ -174,7 +199,11 @@ describe("health-factor.helpers", () => {
                     priceUsd: 1,
                 },
             ];
-            const result = computeHealthFactor(collateral, existingDebt, additionalDebt);
+            const result = computeHealthFactor(
+                collateral,
+                existingDebt,
+                additionalDebt,
+            );
             expect(result.collateralUsd).toBe(3000);
             expect(result.debtUsd).toBe(600); // 500 + 100 total
             expect(result.weightedLtvDecimal).toBe(0.75);

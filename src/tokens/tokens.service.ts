@@ -1,4 +1,9 @@
-import { BadRequestException, Injectable, Logger, OnModuleInit } from "@nestjs/common";
+import {
+    BadRequestException,
+    Injectable,
+    Logger,
+    OnModuleInit,
+} from "@nestjs/common";
 import { Token } from "./entities/token.entity";
 import { TokensRepository } from "./repositories/tokens.repository";
 
@@ -16,9 +21,7 @@ export class TokensService implements OnModuleInit {
      */
     private initPromise: Promise<void> | null = null;
 
-    constructor(
-        private readonly tokenRepository: TokensRepository,
-    ) { }
+    constructor(private readonly tokenRepository: TokensRepository) {}
 
     async onModuleInit(): Promise<void> {
         // Eagerly warm the cache on startup. This can be changed to rely purely on

@@ -1,3 +1,3 @@
 export interface UserPositionsDto {
-  accountId: string;
+    accountId: string;
 }

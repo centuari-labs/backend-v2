@@ -49,5 +49,3 @@ export class CreateBorrowLimitOrderDto {
     @IsBoolean()
     autoRollover?: boolean;
 }
-
-

@@ -1,11 +1,11 @@
 import { Injectable, Logger, OnModuleInit } from "@nestjs/common";
 import { Interval } from "@nestjs/schedule";
 import { InjectRepository } from "@nestjs/typeorm";
-import { randomUUID } from "crypto";
 import { Repository } from "typeorm";
 import { Market } from "./entities/market.entity";
 import { Token } from "../tokens/entities/token.entity";
 import { getAllowedMaturitiesUtcSeconds } from "../orders/utils/maturity.utils";
+import { computeMarketId } from "./utils/market-id.utils";
 
 const MARKET_MATURITIES_REFRESH_INTERVAL_MS = 24 * 60 * 60 * 1000; // once per day
 @Injectable()
@@ -20,10 +20,13 @@ export class MarketWorker implements OnModuleInit {
     ) {}
 
     async onModuleInit(): Promise<void> {
-        this.logger.debug("Running initial market maturities refresh on startup");
+        this.logger.debug(
+            "Running initial market maturities refresh on startup",
+        );
 
         try {
-            const createdCount = await this.ensureFutureMaturitiesForLoanTokens();
+            const createdCount =
+                await this.ensureFutureMaturitiesForLoanTokens();
             this.logger.debug(
                 `Initial market maturities refresh completed, created ${createdCount} new market(s)`,
             );
@@ -39,7 +42,8 @@ export class MarketWorker implements OnModuleInit {
         this.logger.debug("Running scheduled market maturities refresh");
 
         try {
-            const createdCount = await this.ensureFutureMaturitiesForLoanTokens();
+            const createdCount =
+                await this.ensureFutureMaturitiesForLoanTokens();
             this.logger.debug(
                 `Scheduled market maturities refresh completed, created ${createdCount} new market(s)`,
             );
@@ -73,9 +77,7 @@ export class MarketWorker implements OnModuleInit {
         });
 
         const existingKeys = new Set(
-            existingMarkets.map(
-                (m) => `${m.assetId}_${m.maturity.getTime()}`,
-            ),
+            existingMarkets.map((m) => `${m.assetId}_${m.maturity.getTime()}`),
         );
 
         let createdCount = 0;
@@ -89,8 +91,14 @@ export class MarketWorker implements OnModuleInit {
                 }
 
                 try {
+                    const maturityUnixSeconds = Math.floor(
+                        maturity.getTime() / 1000,
+                    );
                     const market = this.marketRepository.create({
-                        id: randomUUID(),
+                        id: computeMarketId(
+                            token.tokenAddress,
+                            maturityUnixSeconds,
+                        ),
                         assetId: token.id,
                         maturity,
                     });
@@ -102,12 +110,8 @@ export class MarketWorker implements OnModuleInit {
                     // inserted the same (assetId, maturity) between
                     // our check and insert
                     if (
-                        (error as Error).message?.includes(
-                            "duplicate key",
-                        ) ||
-                        (error as Error).message?.includes(
-                            "unique constraint",
-                        )
+                        (error as Error).message?.includes("duplicate key") ||
+                        (error as Error).message?.includes("unique constraint")
                     ) {
                         this.logger.debug(
                             `Market already exists for asset ${token.id} maturity ${maturity.toISOString()}, skipping`,
@@ -122,4 +126,3 @@ export class MarketWorker implements OnModuleInit {
         return createdCount;
     }
 }
-

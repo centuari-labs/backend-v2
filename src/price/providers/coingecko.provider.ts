@@ -13,7 +13,11 @@ export class CoinGeckoProvider implements IPriceProvider {
 
         // Fetch from CoinGecko for tokens that have coingecko_id set in DB
         const tokensWithCoingeckoId = tokens.filter((t) => t.coingeckoId);
-        const coinIds = [...new Set(tokensWithCoingeckoId.map((t) => t.coingeckoId).filter(Boolean))];
+        const coinIds = [
+            ...new Set(
+                tokensWithCoingeckoId.map((t) => t.coingeckoId).filter(Boolean),
+            ),
+        ];
         if (coinIds.length === 0) {
             return result;
         }
@@ -22,10 +26,15 @@ export class CoinGeckoProvider implements IPriceProvider {
             const url = `${COINGECKO_BASE_URL}/simple/price?ids=${coinIds.join(",")}&vs_currencies=usd`;
             const response = await fetch(url);
             if (!response.ok) {
-                throw new Error(`CoinGecko API error: ${response.status} ${response.statusText}`);
+                throw new Error(
+                    `CoinGecko API error: ${response.status} ${response.statusText}`,
+                );
             }
 
-            const data = (await response.json()) as Record<string, { usd?: number }>;
+            const data = (await response.json()) as Record<
+                string,
+                { usd?: number }
+            >;
 
             // Map back: coin ID -> token (for symbol lookup)
             const coinIdToToken = new Map<string, Token>();
@@ -45,7 +54,9 @@ export class CoinGeckoProvider implements IPriceProvider {
                 }
             }
         } catch (error) {
-            this.logger.error(`Failed to fetch prices from CoinGecko: ${(error as Error).message}`);
+            this.logger.error(
+                `Failed to fetch prices from CoinGecko: ${(error as Error).message}`,
+            );
             // Return mock prices only on failure - don't throw, allow stale cache to be used
         }
 

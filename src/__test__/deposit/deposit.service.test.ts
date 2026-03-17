@@ -87,14 +87,9 @@ describe("DepositService", () => {
     describe("getBalance", () => {
         it("should return formatted balance from chain", async () => {
             // 1000 USDT with 6 decimals
-            viemService.readContract.mockResolvedValue(
-                BigInt("1000000000"),
-            );
+            viemService.readContract.mockResolvedValue(BigInt("1000000000"));
 
-            const result = await service.getBalance(
-                ASSET_ID,
-                WALLET_ADDRESS,
-            );
+            const result = await service.getBalance(ASSET_ID, WALLET_ADDRESS);
 
             expect(result.balance).toBe("1000000000");
             expect(result.formattedBalance).toBe("1000");

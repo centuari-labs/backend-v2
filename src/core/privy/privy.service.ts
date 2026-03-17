@@ -28,14 +28,14 @@ export class PrivyService {
             "keys",
             "verificationKeyPrivy.key.pub",
         );
-        
+
         if (existsSync(keyPath)) {
             this.verificationKey = readFileSync(keyPath, "utf-8");
             this.logger.log("Verification key loaded successfully");
         } else {
             this.verificationKey = null;
             this.logger.warn(
-                "Verification key not found at keys/verificationKey.pub.key - getUserInfo will not work"
+                "Verification key not found at keys/verificationKey.pub.key - getUserInfo will not work",
             );
         }
     }
@@ -67,7 +67,9 @@ export class PrivyService {
         try {
             return await this.privy.getUser(userId);
         } catch (error) {
-            this.logger.error(`Failed to fetch user ${userId}: ${(error as Error).message}`);
+            this.logger.error(
+                `Failed to fetch user ${userId}: ${(error as Error).message}`,
+            );
             throw error;
         }
     }

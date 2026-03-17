@@ -16,7 +16,9 @@ export class PriceWorker {
         try {
             await this.priceService.fetchAndUpdatePrices();
         } catch (error) {
-            this.logger.error(`Scheduled price fetch failed: ${(error as Error).message}`);
+            this.logger.error(
+                `Scheduled price fetch failed: ${(error as Error).message}`,
+            );
         }
     }
 }

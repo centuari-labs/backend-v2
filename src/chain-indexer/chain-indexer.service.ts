@@ -39,21 +39,35 @@ export class ChainIndexerService implements OnModuleInit {
         private readonly tokenRepository: Repository<Token>,
         private readonly configService: ConfigService,
     ) {
-        const chains = this.configService.get<string>("SUPPORTED_CHAINS", "421614");
+        const chains = this.configService.get<string>(
+            "SUPPORTED_CHAINS",
+            "421614",
+        );
         this.chainId = Number(chains.split(",")[0].trim());
-        this.treasuryAddress = this.configService.get<string>("TREASURY_ADDRESS", "");
-        this.startBlock = BigInt(this.configService.get<string>("INDEXER_START_BLOCK", "0"));
-        this.enabled = this.configService.get<string>("CHAIN_INDEXER_ENABLED", "true") === "true";
+        this.treasuryAddress = this.configService.get<string>(
+            "TREASURY_ADDRESS",
+            "",
+        );
+        this.startBlock = BigInt(
+            this.configService.get<string>("INDEXER_START_BLOCK", "0"),
+        );
+        this.enabled =
+            this.configService.get<string>("CHAIN_INDEXER_ENABLED", "true") ===
+            "true";
     }
 
     async onModuleInit() {
         if (!this.enabled) {
-            this.logger.log("Chain indexer disabled via CHAIN_INDEXER_ENABLED=false");
+            this.logger.log(
+                "Chain indexer disabled via CHAIN_INDEXER_ENABLED=false",
+            );
             return;
         }
 
         if (!this.treasuryAddress) {
-            this.logger.warn("TREASURY_ADDRESS not set — chain indexer disabled");
+            this.logger.warn(
+                "TREASURY_ADDRESS not set — chain indexer disabled",
+            );
             return;
         }
 
@@ -85,7 +99,8 @@ export class ChainIndexerService implements OnModuleInit {
             logs: receipt.logs,
         }).filter(
             (log) =>
-                log.address?.toLowerCase() === this.treasuryAddress.toLowerCase(),
+                log.address?.toLowerCase() ===
+                this.treasuryAddress.toLowerCase(),
         );
 
         let processed = 0;
@@ -117,7 +132,10 @@ export class ChainIndexerService implements OnModuleInit {
         try {
             await this.pollDeposits();
         } catch (error) {
-            this.logger.error(`Poll cycle failed: ${(error as Error).message}`, (error as Error).stack);
+            this.logger.error(
+                `Poll cycle failed: ${(error as Error).message}`,
+                (error as Error).stack,
+            );
         } finally {
             this.polling = false;
         }
@@ -131,9 +149,10 @@ export class ChainIndexerService implements OnModuleInit {
         if (currentBlock <= lastProcessedBlock) return;
 
         const fromBlock = lastProcessedBlock + 1n;
-        const toBlock = currentBlock - fromBlock > MAX_BLOCK_RANGE
-            ? fromBlock + MAX_BLOCK_RANGE
-            : currentBlock;
+        const toBlock =
+            currentBlock - fromBlock > MAX_BLOCK_RANGE
+                ? fromBlock + MAX_BLOCK_RANGE
+                : currentBlock;
 
         this.logger.debug(`Polling blocks ${fromBlock} → ${toBlock}`);
 
@@ -145,7 +164,9 @@ export class ChainIndexerService implements OnModuleInit {
         });
 
         if (logs.length > 0) {
-            this.logger.log(`Found ${logs.length} Deposited event(s) in blocks ${fromBlock}–${toBlock}`);
+            this.logger.log(
+                `Found ${logs.length} Deposited event(s) in blocks ${fromBlock}–${toBlock}`,
+            );
         }
 
         for (const log of logs) {
@@ -178,7 +199,10 @@ export class ChainIndexerService implements OnModuleInit {
      * Attempts to insert into processed_tx_logs. Returns true if the row was
      * inserted (new event), false if it already existed (duplicate).
      */
-    private async markAsProcessed(txHash: string, logIndex: number): Promise<boolean> {
+    private async markAsProcessed(
+        txHash: string,
+        logIndex: number,
+    ): Promise<boolean> {
         const result = await this.databaseService.query<{ tx_hash: string }>(
             `INSERT INTO processed_tx_logs (tx_hash, log_index, event_name)
              VALUES ($1, $2, 'Deposited')
@@ -201,7 +225,9 @@ export class ChainIndexerService implements OnModuleInit {
 
         const account = await this.accountRepository
             .createQueryBuilder("account")
-            .where("LOWER(account.user_wallet) = :wallet", { wallet: userWallet })
+            .where("LOWER(account.user_wallet) = :wallet", {
+                wallet: userWallet,
+            })
             .getOne();
 
         if (!account) {
@@ -251,15 +277,18 @@ export class ChainIndexerService implements OnModuleInit {
                 "INSERT INTO indexer_state (id, last_processed_block) VALUES ($1, $2)",
                 [STATE_KEY, this.startBlock.toString()],
             );
-            this.logger.log(`Initialized indexer state at block ${this.startBlock}`);
+            this.logger.log(
+                `Initialized indexer state at block ${this.startBlock}`,
+            );
         }
     }
 
     private async getLastProcessedBlock(): Promise<bigint> {
-        const row = await this.databaseService.queryOne<{ last_processed_block: string }>(
-            "SELECT last_processed_block FROM indexer_state WHERE id = $1",
-            [STATE_KEY],
-        );
+        const row = await this.databaseService.queryOne<{
+            last_processed_block: string;
+        }>("SELECT last_processed_block FROM indexer_state WHERE id = $1", [
+            STATE_KEY,
+        ]);
         return BigInt(row?.last_processed_block ?? "0");
     }
 

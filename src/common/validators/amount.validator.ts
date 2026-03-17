@@ -8,8 +8,11 @@ import {
  * Custom validator to check that a string amount is at least a minimum value
  * @param minValue - The minimum numeric value allowed
  */
-export function IsMinAmount(minValue: number, validationOptions?: ValidationOptions) {
-    return function (object: object, propertyName: string) {
+export function IsMinAmount(
+    minValue: number,
+    validationOptions?: ValidationOptions,
+) {
+    return (object: object, propertyName: string) => {
         registerDecorator({
             name: "isMinAmount",
             target: object.constructor,
@@ -41,7 +44,7 @@ export function IsMinAmount(minValue: number, validationOptions?: ValidationOpti
  * Validator to check that a numeric string is positive
  */
 export function IsPositiveNumericString(validationOptions?: ValidationOptions) {
-    return function (object: object, propertyName: string) {
+    return (object: object, propertyName: string) => {
         registerDecorator({
             name: "isPositiveNumericString",
             target: object.constructor,

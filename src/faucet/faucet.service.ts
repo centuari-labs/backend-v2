@@ -201,7 +201,8 @@ export class FaucetService {
                 outcomes.push({
                     tokenAddress,
                     amount: "0",
-                    error: error instanceof Error ? error.message : String(error),
+                    error:
+                        error instanceof Error ? error.message : String(error),
                 });
             }
         }
@@ -351,7 +352,11 @@ export class FaucetService {
         // Chunk by MAX_BATCH and call mintBatch for each chunk
         let firstReceipt: TransactionReceipt | undefined;
 
-        for (let start = 0; start < tokensToMint.length; start += FaucetService.MAX_BATCH) {
+        for (
+            let start = 0;
+            start < tokensToMint.length;
+            start += FaucetService.MAX_BATCH
+        ) {
             const chunkTokens = tokensToMint.slice(
                 start,
                 start + FaucetService.MAX_BATCH,

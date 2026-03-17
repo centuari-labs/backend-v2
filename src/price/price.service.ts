@@ -1,5 +1,8 @@
 import { Inject, Injectable, Logger, OnModuleInit } from "@nestjs/common";
-import { PRICE_PROVIDER, type IPriceProvider } from "./interfaces/price-provider.interface";
+import {
+    PRICE_PROVIDER,
+    type IPriceProvider,
+} from "./interfaces/price-provider.interface";
 import { TokensRepository } from "../tokens/repositories/tokens.repository";
 import { EventsGateway } from "../core/websocket/websocket.gateway";
 
@@ -26,7 +29,7 @@ export class PriceService implements OnModuleInit {
         private readonly tokensRepository: TokensRepository,
         @Inject(PRICE_PROVIDER) private readonly priceProvider: IPriceProvider,
         private readonly eventsGateway: EventsGateway,
-    ) { }
+    ) {}
 
     async onModuleInit(): Promise<void> {
         await this.fetchAndUpdatePrices();
@@ -101,7 +104,9 @@ export class PriceService implements OnModuleInit {
                     const normalizedAssetId = token.id.toLowerCase();
                     newCache.set(normalizedAssetId, { price, updatedAt: now });
                 } else {
-                    this.logger.debug(`No price for token ${token.symbol} (assetId: ${token.id}, address: ${token.tokenAddress})`);
+                    this.logger.debug(
+                        `No price for token ${token.symbol} (assetId: ${token.id}, address: ${token.tokenAddress})`,
+                    );
                 }
             }
 

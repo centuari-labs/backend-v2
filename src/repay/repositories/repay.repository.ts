@@ -4,14 +4,14 @@ import { Token } from "../../tokens/entities/token.entity";
 
 @Injectable()
 export class RepayRepository {
-    constructor(private readonly dataSource: DataSource) { }
-
+    constructor(private readonly dataSource: DataSource) {}
 
     async getUserTotalDebt(
         accountId: string,
         marketId: string,
     ): Promise<string> {
-        const result = await this.dataSource.createQueryBuilder()
+        const result = await this.dataSource
+            .createQueryBuilder()
             .select("SUM(debt)", "total_debt")
             .from("borrow_positions", "bp")
             .where("bp.account_id = :accountId", { accountId })
@@ -21,7 +21,8 @@ export class RepayRepository {
     }
 
     async getMarketWithAsset(marketId: string): Promise<any> {
-        return this.dataSource.createQueryBuilder()
+        return this.dataSource
+            .createQueryBuilder()
             .select("m.id", "id")
             .addSelect("m.maturity", "maturity")
             .addSelect("a.decimals", "decimals")
@@ -37,7 +38,8 @@ export class RepayRepository {
         marketId: string,
         manager?: EntityManager,
     ): Promise<any[]> {
-        const qb = (manager || this.dataSource).createQueryBuilder()
+        const qb = (manager || this.dataSource)
+            .createQueryBuilder()
             .select("bp.id", "id")
             .addSelect("bp.debt", "debt")
             .from("borrow_positions", "bp")
@@ -58,7 +60,8 @@ export class RepayRepository {
         positionId: string,
         debt: string,
     ): Promise<void> {
-        await manager.createQueryBuilder()
+        await manager
+            .createQueryBuilder()
             .update("borrow_positions")
             .set({ debt, updatedAt: () => "NOW()" })
             .where("id = :positionId", { positionId })

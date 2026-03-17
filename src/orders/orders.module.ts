@@ -32,4 +32,4 @@ import { OrdersWorker } from "./orders.worker";
     providers: [OrdersService, OrderRepository, OrdersWorker],
     exports: [OrdersService, OrderRepository],
 })
-export class OrdersModule { }
+export class OrdersModule {}

@@ -59,7 +59,7 @@ export class AuthService {
 
     async updateName(privyUserId: string, name: string) {
         const account = await this.databaseService.queryOne(
-            `UPDATE accounts SET name = $1 WHERE privy_user_id = $2 RETURNING *`,
+            "UPDATE accounts SET name = $1 WHERE privy_user_id = $2 RETURNING *",
             [name, privyUserId],
         );
 

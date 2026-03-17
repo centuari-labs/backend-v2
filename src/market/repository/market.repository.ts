@@ -56,11 +56,13 @@ export class MarketRepositories extends Repository<Market> {
         if (assetIds.length === 0) {
             return [];
         }
-        const rows = await this.dataSource.query<{
-            id: string;
-            asset_id: string;
-            maturity: Date | string;
-        }[]>(
+        const rows = await this.dataSource.query<
+            {
+                id: string;
+                asset_id: string;
+                maturity: Date | string;
+            }[]
+        >(
             `SELECT DISTINCT ON (asset_id) id, asset_id, maturity
              FROM markets
              WHERE asset_id = ANY($1::uuid[]) AND maturity >= NOW()

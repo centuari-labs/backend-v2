@@ -6,7 +6,7 @@ import type { RepayRequestDto, RepayResponseDto } from "./dto/repay.dto";
 
 @Controller("repay")
 export class RepayController {
-    constructor(private readonly repayService: RepayService) { }
+    constructor(private readonly repayService: RepayService) {}
 
     @Post()
     @UseGuards(AuthGuard)

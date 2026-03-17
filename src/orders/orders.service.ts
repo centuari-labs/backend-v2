@@ -51,7 +51,7 @@ export class OrdersService {
         private readonly priceService: PriceService,
         private readonly marketRepository: MarketRepositories,
         private readonly portfolioService: PortfolioService,
-    ) { }
+    ) {}
 
     async getOrCreateAccount(
         walletAddress: string,
@@ -86,11 +86,12 @@ export class OrdersService {
             quantityBaseUnits,
         );
 
-        const hasCounterparty = await this.orderRepository.hasCounterpartyOrders(
-            dto.assetId,
-            OrderSide.Lend,
-            dto.marketIds ?? [],
-        );
+        const hasCounterparty =
+            await this.orderRepository.hasCounterpartyOrders(
+                dto.assetId,
+                OrderSide.Lend,
+                dto.marketIds ?? [],
+            );
         if (!hasCounterparty) {
             throw new BadRequestException(
                 "No available liquidity for this market order",
@@ -213,11 +214,12 @@ export class OrdersService {
             decimals!,
         );
 
-        const hasCounterparty = await this.orderRepository.hasCounterpartyOrders(
-            dto.assetId,
-            OrderSide.Borrow,
-            dto.marketIds ?? [],
-        );
+        const hasCounterparty =
+            await this.orderRepository.hasCounterpartyOrders(
+                dto.assetId,
+                OrderSide.Borrow,
+                dto.marketIds ?? [],
+            );
         if (!hasCounterparty) {
             throw new BadRequestException(
                 "No available liquidity for this market order",
@@ -230,10 +232,13 @@ export class OrdersService {
         }
         const newOrderUsd = Number(dto.amount) * assetPrice;
 
-        const hfResult = await this.portfolioService.getHealthFactorForAccount(accountId, {
-            additionalBorrowUsd: newOrderUsd,
-            includeOpenOrders: true,
-        });
+        const hfResult = await this.portfolioService.getHealthFactorForAccount(
+            accountId,
+            {
+                additionalBorrowUsd: newOrderUsd,
+                includeOpenOrders: true,
+            },
+        );
         if (
             hfResult.healthFactor !== HEALTH_FACTOR_NO_DEBT &&
             Number.isFinite(hfResult.healthFactor) &&
@@ -302,10 +307,13 @@ export class OrdersService {
         }
         const newOrderUsd = Number(dto.amount) * assetPrice;
 
-        const hfResult = await this.portfolioService.getHealthFactorForAccount(accountId, {
-            additionalBorrowUsd: newOrderUsd,
-            includeOpenOrders: true,
-        });
+        const hfResult = await this.portfolioService.getHealthFactorForAccount(
+            accountId,
+            {
+                additionalBorrowUsd: newOrderUsd,
+                includeOpenOrders: true,
+            },
+        );
         if (
             hfResult.healthFactor !== HEALTH_FACTOR_NO_DEBT &&
             Number.isFinite(hfResult.healthFactor) &&
@@ -354,8 +362,9 @@ export class OrdersService {
             await this.orderRepository.findAccountByWallet(walletAddress);
         if (!account) return [];
 
-        const rows =
-            await this.orderRepository.getOpenLendAmountsByAccount(account.id);
+        const rows = await this.orderRepository.getOpenLendAmountsByAccount(
+            account.id,
+        );
 
         // Convert base units → human-readable using each token's decimals
         const result: { assetId: string; lockedAmount: string }[] = [];
@@ -372,7 +381,10 @@ export class OrdersService {
             const divisor = 10n ** BigInt(decimals);
             const whole = lockedBigInt / divisor;
             const frac = lockedBigInt % divisor;
-            const fracStr = frac.toString().padStart(decimals, "0").replace(/0+$/, "");
+            const fracStr = frac
+                .toString()
+                .padStart(decimals, "0")
+                .replace(/0+$/, "");
             const humanAmount = fracStr
                 ? `${whole}.${fracStr}`
                 : whole.toString();
@@ -490,7 +502,10 @@ export class OrdersService {
                 type: order.type,
                 status: order.status,
                 originalAmount: dto.amount,
-                settlementFeeAmount: baseUnitsToHuman(order.settlementFee, decimals!),
+                settlementFeeAmount: baseUnitsToHuman(
+                    order.settlementFee,
+                    decimals!,
+                ),
                 // order.rate is stored as basis points in the DB; expose percentage in responses
                 rate: toPercentage(order.rate),
                 autoRollover: order.autoRollover,
@@ -562,15 +577,15 @@ export class OrdersService {
     ): Promise<void> {
         try {
             await this.natsService.publish(subject, order);
-            this.logger.debug(`Published order ${order.orderId as string} to ${subject}`);
+            this.logger.debug(
+                `Published order ${order.orderId as string} to ${subject}`,
+            );
         } catch (error) {
             this.logger.error(
                 `Failed to publish order ${order.orderId as string} to NATS: ${error.message}`,
             );
         }
     }
-
-
 
     private async publishCancelOrderToNats(
         orderId: string,

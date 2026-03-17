@@ -57,8 +57,7 @@ export function humanToBaseUnits(
     const normalized = raw.startsWith("+") ? raw.slice(1) : raw;
     const [integerPartRaw, fractionalPartRaw = ""] = normalized.split(".");
 
-    const integerPart =
-        integerPartRaw.replace(/^0+(?=\d)/, "") || "0";
+    const integerPart = integerPartRaw.replace(/^0+(?=\d)/, "") || "0";
 
     if (decimals === 0) {
         // If decimals is 0, we must not have any non-zero fractional part
@@ -72,15 +71,11 @@ export function humanToBaseUnits(
         throw new Error("Too many decimal places for token");
     }
 
-    const fractionalPartPadded = fractionalPartRaw.padEnd(
-        decimals,
-        "0",
-    );
+    const fractionalPartPadded = fractionalPartRaw.padEnd(decimals, "0");
 
     const combined = `${integerPart}${fractionalPartPadded}`;
     // Normalize leading zeros, but keep at least a single "0"
-    const normalizedCombined =
-        combined.replace(/^0+(?=\d)/, "") || "0";
+    const normalizedCombined = combined.replace(/^0+(?=\d)/, "") || "0";
 
     return normalizedCombined;
 }
@@ -128,8 +123,7 @@ export function baseUnitsToHuman(
     const integerPartRaw = padded.slice(0, padded.length - decimals);
     const fractionalPartRaw = padded.slice(-decimals);
 
-    const integerPart =
-        integerPartRaw.replace(/^0+(?=\d)/, "") || "0";
+    const integerPart = integerPartRaw.replace(/^0+(?=\d)/, "") || "0";
     const fractionalPartTrimmed = fractionalPartRaw.replace(/0+$/, "");
 
     if (fractionalPartTrimmed.length === 0) {
@@ -182,5 +176,3 @@ export function calculateSettlementFee(
     // Limit to a sensible precision to avoid floating point noise
     return Number(feeInToken.toFixed(8));
 }
-
-

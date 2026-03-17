@@ -6,7 +6,11 @@ import {
     PrimaryGeneratedColumn,
     UpdateDateColumn,
 } from "typeorm";
-import { OrderSide, OrderType, OrderStatus } from "../constants/order.constants";
+import {
+    OrderSide,
+    OrderType,
+    OrderStatus,
+} from "../constants/order.constants";
 
 @Entity("orders")
 export class Order {

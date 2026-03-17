@@ -6,7 +6,7 @@ import {
 import { validateMaturitiesUtcSeconds } from "../../orders/utils/maturity.utils";
 
 export function IsValidMaturities(validationOptions?: ValidationOptions) {
-    return function (object: object, propertyName: string) {
+    return (object: object, propertyName: string) => {
         registerDecorator({
             name: "isValidMaturities",
             target: object.constructor,
@@ -17,7 +17,7 @@ export function IsValidMaturities(validationOptions?: ValidationOptions) {
                     if (!Array.isArray(value)) {
                         return false;
                     }
-                    if (value.some(v => typeof v !== "number")) {
+                    if (value.some((v) => typeof v !== "number")) {
                         return false;
                     }
                     const { isValid } = validateMaturitiesUtcSeconds(
@@ -32,4 +32,3 @@ export function IsValidMaturities(validationOptions?: ValidationOptions) {
         });
     };
 }
-

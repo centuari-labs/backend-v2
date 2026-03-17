@@ -31,9 +31,7 @@ export interface ParsedEventLog<TArgs = Record<string, unknown>> {
  * }>(receipt, centuariAbi, "LendPositionWithdrawn");
  * ```
  */
-export function getEventLogsFromReceipt<
-    TArgs = Record<string, unknown>,
->(
+export function getEventLogsFromReceipt<TArgs = Record<string, unknown>>(
     receipt: TransactionReceipt,
     abi: Abi,
     eventName: string,
@@ -48,9 +46,7 @@ export function getEventLogsFromReceipt<
     if (contractAddress) {
         const normalizedAddress = contractAddress.toLowerCase();
         logs = logs.filter(
-            (log) =>
-                log.address?.toLowerCase() ===
-                normalizedAddress,
+            (log) => log.address?.toLowerCase() === normalizedAddress,
         );
     }
 
@@ -80,9 +76,7 @@ export function getEventLogsFromReceipt<
  * console.log(event.args.cbtBurned);
  * ```
  */
-export function getFirstEventFromReceipt<
-    TArgs = Record<string, unknown>,
->(
+export function getFirstEventFromReceipt<TArgs = Record<string, unknown>>(
     receipt: TransactionReceipt,
     abi: Abi,
     eventName: string,

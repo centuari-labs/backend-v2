@@ -11,6 +11,7 @@ import { PortfolioRepository } from "./repositories/portfolio.repository";
 import { OrdersModule } from "../orders/orders.module";
 import { PriceModule } from "../price/price.module";
 import { TokensModule } from "../tokens/tokens.module";
+import { MarketModule } from "../market/market.module";
 
 @Module({
     imports: [
@@ -20,6 +21,7 @@ import { TokensModule } from "../tokens/tokens.module";
         forwardRef(() => OrdersModule),
         PriceModule,
         TokensModule,
+        MarketModule,
     ],
     controllers: [PortfolioController],
     providers: [PortfolioService, PortfolioRepository],

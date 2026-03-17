@@ -86,8 +86,7 @@ function createWithdrawLog(
         abi: TEST_ABI,
         eventName: "LendPositionWithdrawn",
         args: {
-            marketId:
-                marketId as `0x${string}`,
+            marketId: marketId as `0x${string}`,
             lender: lender as `0x${string}`,
         },
     });
@@ -147,9 +146,7 @@ function createDepositLog(
 
 describe("getEventLogsFromReceipt", () => {
     it("should parse a single matching event", () => {
-        const receipt = createMockReceipt([
-            createWithdrawLog(1000n, 900n),
-        ]);
+        const receipt = createMockReceipt([createWithdrawLog(1000n, 900n)]);
 
         const events = getEventLogsFromReceipt<{
             cbtBurned: bigint;
@@ -157,9 +154,7 @@ describe("getEventLogsFromReceipt", () => {
         }>(receipt, TEST_ABI, "LendPositionWithdrawn");
 
         expect(events).toHaveLength(1);
-        expect(events[0].eventName).toBe(
-            "LendPositionWithdrawn",
-        );
+        expect(events[0].eventName).toBe("LendPositionWithdrawn");
         expect(events[0].args.cbtBurned).toBe(1000n);
         expect(events[0].args.amountWithdrawn).toBe(900n);
         expect(events[0].transactionHash).toBe(TX_HASH);
@@ -301,15 +296,11 @@ describe("getEventLogsFromReceipt", () => {
 
         expect(events).toHaveLength(1);
         expect(events[0].args.cbtBurned).toBe(largeCbt);
-        expect(events[0].args.amountWithdrawn).toBe(
-            largeAmount,
-        );
+        expect(events[0].args.amountWithdrawn).toBe(largeAmount);
     });
 
     it("should handle zero values", () => {
-        const receipt = createMockReceipt([
-            createWithdrawLog(0n, 0n),
-        ]);
+        const receipt = createMockReceipt([createWithdrawLog(0n, 0n)]);
 
         const events = getEventLogsFromReceipt<{
             cbtBurned: bigint;
@@ -373,12 +364,7 @@ describe("getFirstEventFromReceipt", () => {
 
     it("should throw when contract address filter excludes all", () => {
         const receipt = createMockReceipt([
-            createWithdrawLog(
-                1000n,
-                900n,
-                CONTRACT_A,
-                0,
-            ),
+            createWithdrawLog(1000n, 900n, CONTRACT_A, 0),
         ]);
 
         expect(() =>
@@ -400,36 +386,20 @@ describe("getFirstEventFromReceipt", () => {
         receipt.transactionHash = customTxHash;
 
         expect(() =>
-            getFirstEventFromReceipt(
-                receipt,
-                TEST_ABI,
-                "SomeEvent",
-            ),
-        ).toThrow(
-            `No "SomeEvent" event found in transaction ${customTxHash}`,
-        );
+            getFirstEventFromReceipt(receipt, TEST_ABI, "SomeEvent"),
+        ).toThrow(`No "SomeEvent" event found in transaction ${customTxHash}`);
     });
 
     it("should respect contract address filter", () => {
         const receipt = createMockReceipt([
             createWithdrawLog(1000n, 900n, CONTRACT_A, 0),
-            createWithdrawLog(
-                2000n,
-                1800n,
-                CONTRACT_B,
-                1,
-            ),
+            createWithdrawLog(2000n, 1800n, CONTRACT_B, 1),
         ]);
 
         const event = getFirstEventFromReceipt<{
             cbtBurned: bigint;
             amountWithdrawn: bigint;
-        }>(
-            receipt,
-            TEST_ABI,
-            "LendPositionWithdrawn",
-            CONTRACT_B,
-        );
+        }>(receipt, TEST_ABI, "LendPositionWithdrawn", CONTRACT_B);
 
         expect(event.args.cbtBurned).toBe(2000n);
     });

@@ -405,26 +405,6 @@ export class PortfolioRepository extends Repository<Portfolio> {
         );
     }
 
-    async getMarketWithAsset(
-        marketId: string,
-    ): Promise<{
-        id: string;
-        maturity: string;
-        decimals: number;
-        tokenAddress: string;
-    } | null> {
-        const rows = await this.dataSource.query(
-            `SELECT m.id, m.maturity,
-                    COALESCE(a.decimals, 0) as decimals,
-                    a.token_address as "tokenAddress"
-             FROM markets m
-             JOIN assets a ON m.asset_id = a.id
-             WHERE m.id = $1`,
-            [marketId],
-        );
-        return rows[0] || null;
-    }
-
     async getLendPositions(
         accountId: string,
         marketId: string,

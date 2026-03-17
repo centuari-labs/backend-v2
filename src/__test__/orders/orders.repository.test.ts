@@ -213,15 +213,13 @@ describe("OrderRepository", () => {
                 where: jest.fn().mockReturnThis(),
                 setParameters: jest.fn().mockReturnThis(),
                 groupBy: jest.fn().mockReturnThis(),
-                getRawMany: jest
-                    .fn()
-                    .mockResolvedValue([
-                        {
-                            assetId: MOCK_IDS.assetId,
-                            highestBid: "750",
-                            lowestAsk: "500",
-                        },
-                    ]),
+                getRawMany: jest.fn().mockResolvedValue([
+                    {
+                        assetId: MOCK_IDS.assetId,
+                        highestBid: "750",
+                        lowestAsk: "500",
+                    },
+                ]),
             };
 
             // Override createQueryBuilder on the repository instance
@@ -265,15 +263,13 @@ describe("OrderRepository", () => {
                 where: jest.fn().mockReturnThis(),
                 setParameters: jest.fn().mockReturnThis(),
                 groupBy: jest.fn().mockReturnThis(),
-                getRawMany: jest
-                    .fn()
-                    .mockResolvedValue([
-                        {
-                            assetId: MOCK_IDS.assetId,
-                            highestBid: null,
-                            lowestAsk: null,
-                        },
-                    ]),
+                getRawMany: jest.fn().mockResolvedValue([
+                    {
+                        assetId: MOCK_IDS.assetId,
+                        highestBid: null,
+                        lowestAsk: null,
+                    },
+                ]),
             };
 
             jest.spyOn(repository, "createQueryBuilder").mockReturnValue(

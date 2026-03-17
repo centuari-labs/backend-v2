@@ -75,11 +75,9 @@ describe("OrdersService", () => {
         const mockTokensService: jest.Mocked<TokensService> = {
             validateTokenByAssetId: jest.fn(),
             getTokenDecimalsByAssetId: jest.fn(),
-            getTokenByAssetId: jest
-                .fn()
-                .mockResolvedValue({
-                    tokenAddress: "0xabcdef1234567890abcdef1234567890abcdef12",
-                } as any),
+            getTokenByAssetId: jest.fn().mockResolvedValue({
+                tokenAddress: "0xabcdef1234567890abcdef1234567890abcdef12",
+            } as any),
         } as any;
 
         const mockNatsService = {

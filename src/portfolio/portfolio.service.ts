@@ -522,7 +522,7 @@ export class PortfolioService {
         wallet: string,
         query: MyPositionQueryDto,
     ): Promise<GetMyPositionResponseDto> {
-        const { page = 1, limit = 10, type } = query;
+        const { page = 1, limit = 10, type, assetId } = query;
 
         const account = await this.orderRepository.findAccountByWallet(wallet);
         if (!account) {
@@ -535,6 +535,7 @@ export class PortfolioService {
                 type,
                 page,
                 limit,
+                assetId,
             );
 
         if (positions.length === 0) {

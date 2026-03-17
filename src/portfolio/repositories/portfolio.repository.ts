@@ -151,6 +151,7 @@ export class PortfolioRepository extends Repository<Portfolio> {
         positionType?: "LEND" | "BORROW",
         page = 1,
         limit = 10,
+        assetId?: string,
     ): Promise<{ data: RawPosition[]; total: number }> {
         const includeLend = !positionType || positionType === "LEND";
         const includeBorrow = !positionType || positionType === "BORROW";
@@ -184,15 +185,24 @@ export class PortfolioRepository extends Repository<Portfolio> {
                 .where("lp.account_id = :accountId", { accountId })
                 .andWhere("lp.amount > 0");
 
+            if (assetId) {
+                lendQuery.andWhere("lp.asset_id = :assetId", { assetId });
+            }
+
+            const countQuery = this.dataSource
+                .createQueryBuilder()
+                .select("COUNT(*)", "count")
+                .from("lend_positions", "lp")
+                .where("lp.account_id = :accountId", { accountId })
+                .andWhere("lp.amount > 0");
+
+            if (assetId) {
+                countQuery.andWhere("lp.asset_id = :assetId", { assetId });
+            }
+
             const [rows, countResult] = await Promise.all([
                 lendQuery.getRawMany(),
-                this.dataSource
-                    .createQueryBuilder()
-                    .select("COUNT(*)", "count")
-                    .from("lend_positions", "lp")
-                    .where("lp.account_id = :accountId", { accountId })
-                    .andWhere("lp.amount > 0")
-                    .getRawOne(),
+                countQuery.getRawOne(),
             ]);
 
             lendResults.push(...rows);
@@ -223,15 +233,24 @@ export class PortfolioRepository extends Repository<Portfolio> {
                 .where("bp.account_id = :accountId", { accountId })
                 .andWhere("bp.debt > 0");
 
+            if (assetId) {
+                borrowQuery.andWhere("bp.asset_id = :assetId", { assetId });
+            }
+
+            const countQuery = this.dataSource
+                .createQueryBuilder()
+                .select("COUNT(*)", "count")
+                .from("borrow_positions", "bp")
+                .where("bp.account_id = :accountId", { accountId })
+                .andWhere("bp.debt > 0");
+
+            if (assetId) {
+                countQuery.andWhere("bp.asset_id = :assetId", { assetId });
+            }
+
             const [rows, countResult] = await Promise.all([
                 borrowQuery.getRawMany(),
-                this.dataSource
-                    .createQueryBuilder()
-                    .select("COUNT(*)", "count")
-                    .from("borrow_positions", "bp")
-                    .where("bp.account_id = :accountId", { accountId })
-                    .andWhere("bp.debt > 0")
-                    .getRawOne(),
+                countQuery.getRawOne(),
             ]);
 
             borrowResults.push(...rows);

@@ -1,3 +1,5 @@
+import { IsOptional, IsUUID } from "class-validator";
+
 export class TotalBalanceDto {
     totalDeposit: number;
 }
@@ -95,6 +97,10 @@ export class MyPositionQueryDto {
     limit?: number = 10;
 
     type?: "LEND" | "BORROW";
+
+    @IsOptional()
+    @IsUUID()
+    assetId?: string;
 }
 
 export class MyPositionItemDto {

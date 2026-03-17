@@ -1,9 +1,13 @@
-import { IsOptional, IsEnum, IsDateString } from "class-validator";
+import { IsOptional, IsEnum, IsDateString, IsUUID } from "class-validator";
 import { Transform } from "class-transformer";
 import { OrderSide, OrderStatus } from "../../orders/constants/order.constants";
 import type { AssetDto } from "../../common/dto/asset.dto";
 
 export class OpenOrdersQueryDto {
+    @IsOptional()
+    @IsUUID()
+    assetId?: string;
+    
     @IsOptional()
     @Transform(({ value }) => Number(value) || 1)
     page?: number = 1;

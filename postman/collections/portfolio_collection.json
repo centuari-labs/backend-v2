@@ -250,6 +250,108 @@
             ]
         },
         {
+            "name": "Open orders",
+            "id": "e4f5a6b7-8901-2345-6789-abcdef012345",
+            "request": {
+                "method": "GET",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer DEV_TOKEN_0x71C7656EC7ab88b098defB751B7401B5f6d8976F",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base url}}portfolio/open-orders?page=1&limit=10",
+                    "host": [
+                        "{{base url}}portfolio"
+                    ],
+                    "path": [
+                        "open-orders"
+                    ],
+                    "query": [
+                        {
+                            "key": "page",
+                            "value": "1"
+                        },
+                        {
+                            "key": "limit",
+                            "value": "10"
+                        },
+                        {
+                            "key": "assetId",
+                            "value": "{{assetId}}",
+                            "disabled": true
+                        },
+                        {
+                            "key": "side",
+                            "value": "LEND",
+                            "disabled": true
+                        },
+                        {
+                            "key": "status",
+                            "value": "OPEN",
+                            "disabled": true
+                        },
+                        {
+                            "key": "startDate",
+                            "value": "2026-01-01T00:00:00.000Z",
+                            "disabled": true
+                        },
+                        {
+                            "key": "endDate",
+                            "value": "2026-12-31T23:59:59.999Z",
+                            "disabled": true
+                        }
+                    ]
+                }
+            },
+            "response": [
+                {
+                    "name": "Success - Open orders",
+                    "originalRequest": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer DEV_TOKEN_0x71C7656EC7ab88b098defB751B7401B5f6d8976F",
+                                "type": "text"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base url}}portfolio/open-orders?page=1&limit=10",
+                            "host": [
+                                "{{base url}}portfolio"
+                            ],
+                            "path": [
+                                "open-orders"
+                            ],
+                            "query": [
+                                {
+                                    "key": "page",
+                                    "value": "1"
+                                },
+                                {
+                                    "key": "limit",
+                                    "value": "10"
+                                }
+                            ]
+                        }
+                    },
+                    "status": "OK",
+                    "code": 200,
+                    "_postman_previewlanguage": "json",
+                    "header": [
+                        {
+                            "key": "Content-Type",
+                            "value": "application/json"
+                        }
+                    ],
+                    "body": "{\n    \"statusCode\": 200,\n    \"data\": [\n        {\n            \"id\": \"d1e2f3a4-b5c6-7890-abcd-ef1234567890\",\n            \"side\": \"LEND\",\n            \"orderType\": \"LIMIT\",\n            \"rate\": 5.5,\n            \"amount\": \"1000.00\",\n            \"filledQuantity\": \"250.00\",\n            \"status\": \"PARTIALLY_FILLED\",\n            \"maturity\": \"2026-06-15T00:00:00.000Z\",\n            \"asset\": {\n                \"id\": \"f47ac10b-58cc-4372-a567-0e02b2c3d479\",\n                \"name\": \"USD Coin\",\n                \"symbol\": \"USDC\",\n                \"decimals\": 6,\n                \"imageUrl\": \"https://assets.coingecko.com/coins/images/6319/large/usdc.png\",\n                \"tokenAddress\": \"0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48\"\n            },\n            \"createdAt\": \"2026-03-15T10:30:00.000Z\"\n        },\n        {\n            \"id\": \"e2f3a4b5-c6d7-8901-bcde-f12345678901\",\n            \"side\": \"BORROW\",\n            \"orderType\": \"LIMIT\",\n            \"rate\": 7.2,\n            \"amount\": \"500.00\",\n            \"filledQuantity\": null,\n            \"status\": \"OPEN\",\n            \"maturity\": \"2026-09-30T00:00:00.000Z\",\n            \"asset\": {\n                \"id\": \"c5d6e7f8-9012-3456-789a-bcdef0123456\",\n                \"name\": \"Tether\",\n                \"symbol\": \"USDT\",\n                \"decimals\": 6,\n                \"imageUrl\": \"https://assets.coingecko.com/coins/images/325/large/Tether.png\",\n                \"tokenAddress\": \"0xdAC17F958D2ee523a2206206994597C13D831ec7\"\n            },\n            \"createdAt\": \"2026-03-14T08:15:00.000Z\"\n        }\n    ],\n    \"meta\": {\n        \"page\": 1,\n        \"limit\": 10,\n        \"totalData\": 2,\n        \"totalPages\": 1\n    }\n}"
+                }
+            ]
+        },
+        {
             "name": "Transaction history",
             "id": "a1b2c3d4-5678-9012-3456-789012345678",
             "request": {
@@ -277,6 +379,11 @@
                         {
                             "key": "limit",
                             "value": "10"
+                        },
+                        {
+                            "key": "assetId",
+                            "value": "{{assetId}}",
+                            "disabled": true
                         }
                     ]
                 }

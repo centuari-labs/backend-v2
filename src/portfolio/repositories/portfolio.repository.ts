@@ -363,8 +363,19 @@ export class PortfolioRepository extends Repository<Portfolio> {
         accountId: string,
         page: number,
         limit: number,
+        filters?: { assetId?: string },
     ): Promise<{ data: RawTransactionRow[]; total: number }> {
         const offset = (page - 1) * limit;
+        const params: any[] = [accountId];
+        let paramIndex = 2;
+
+        let whereClause = "WHERE o.account_id = $1";
+
+        if (filters?.assetId) {
+            whereClause += ` AND o.asset_id = $${paramIndex}`;
+            params.push(filters.assetId);
+            paramIndex++;
+        }
 
         const dataQuery = `
             SELECT o.id, o.side::text, o.type::text as order_type, o.rate,
@@ -385,20 +396,21 @@ export class PortfolioRepository extends Repository<Portfolio> {
                 FROM matches m
                 WHERE m.lend_order_market_id = o.id OR m.borrow_order_market_id = o.id
             ) mf ON true
-            WHERE o.account_id = $1
+            ${whereClause}
             ORDER BY o.created_at DESC
-            LIMIT $2 OFFSET $3
+            LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
         `;
+        params.push(limit, offset);
 
         const countQuery = `
             SELECT COUNT(*) as count
             FROM orders o
-            WHERE o.account_id = $1
+            ${whereClause}
         `;
 
         const [rows, countResult] = await Promise.all([
-            this.dataSource.query(dataQuery, [accountId, limit, offset]),
-            this.dataSource.query(countQuery, [accountId]),
+            this.dataSource.query(dataQuery, params),
+            this.dataSource.query(countQuery, params.slice(0, paramIndex - 1)),
         ]);
 
         return {
@@ -416,6 +428,7 @@ export class PortfolioRepository extends Repository<Portfolio> {
             status?: string;
             startDate?: string;
             endDate?: string;
+            assetId?: string;
         },
     ): Promise<{ data: RawOpenOrderRow[]; total: number }> {
         const offset = (page - 1) * limit;
@@ -447,6 +460,12 @@ export class PortfolioRepository extends Repository<Portfolio> {
         if (filters.endDate) {
             whereClause += ` AND o.created_at <= $${paramIndex}`;
             params.push(filters.endDate);
+            paramIndex++;
+        }
+
+        if (filters.assetId) {
+            whereClause += ` AND o.asset_id = $${paramIndex}`;
+            params.push(filters.assetId);
             paramIndex++;
         }
 

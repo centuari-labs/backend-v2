@@ -1,8 +1,12 @@
-import { IsOptional } from "class-validator";
+import { IsOptional, IsUUID } from "class-validator";
 import { Transform } from "class-transformer";
 import type { AssetDto } from "../../common/dto/asset.dto";
 
 export class TransactionHistoryQueryDto {
+    @IsOptional()
+    @IsUUID()
+    assetId?: string;
+    
     @IsOptional()
     @Transform(({ value }) => Number(value) || 1)
     page?: number = 1;

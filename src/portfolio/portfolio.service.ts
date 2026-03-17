@@ -644,6 +644,7 @@ export class PortfolioService {
                 account.id,
                 query.page ?? 1,
                 query.limit ?? 10,
+                { assetId: query.assetId },
             );
 
         const items: TransactionHistoryItem[] = rows.map((row) => ({
@@ -703,6 +704,7 @@ export class PortfolioService {
                     status: query.status,
                     startDate: query.startDate,
                     endDate: query.endDate,
+                    assetId: query.assetId,
                 },
             );
 

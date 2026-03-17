@@ -30,12 +30,32 @@
                 "url": {
                     "raw": "http://localhost:3000/repay",
                     "protocol": "http",
-                    "host": ["localhost"],
+                    "host": [
+                        "localhost"
+                    ],
                     "port": "3000",
-                    "path": ["repay"]
+                    "path": [
+                        "repay"
+                    ]
                 }
             },
-            "response": []
+            "response": [
+                {
+                    "id": "repay-resp-001",
+                    "name": "200 OK",
+                    "status": "OK",
+                    "code": 200,
+                    "_postman_previewlanguage": "json",
+                    "header": [
+                        {
+                            "key": "Content-Type",
+                            "value": "application/json"
+                        }
+                    ],
+                    "cookie": [],
+                    "body": "{\n  \"statusCode\": 200,\n  \"data\": {\n    \"txHash\": \"0xabc123def456789abc123def456789abc123def456789abc123def456789abcd\",\n    \"status\": \"SUCCESS\"\n  }\n}"
+                }
+            ]
         }
     ]
 }

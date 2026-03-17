@@ -35,11 +35,31 @@
                 },
                 "url": {
                     "raw": "{{BASE_URL}}faucet/request-tokens",
-                    "host": ["{{BASE_URL}}faucet"],
-                    "path": ["request-tokens"]
+                    "host": [
+                        "{{BASE_URL}}faucet"
+                    ],
+                    "path": [
+                        "request-tokens"
+                    ]
                 }
             },
-            "response": []
+            "response": [
+                {
+                    "id": "faucet-request-resp-001",
+                    "name": "200 OK",
+                    "status": "OK",
+                    "code": 200,
+                    "_postman_previewlanguage": "json",
+                    "header": [
+                        {
+                            "key": "Content-Type",
+                            "value": "application/json"
+                        }
+                    ],
+                    "cookie": [],
+                    "body": "{\n  \"statusCode\": 200,\n  \"data\": {\n    \"chainId\": 11155111,\n    \"recipientAddress\": \"0xYourWalletAddress\",\n    \"transactionHash\": \"0xabc123def456789abc123def456789abc123def456789abc123def456789abcd\",\n    \"blockNumber\": \"12345678\",\n    \"status\": \"SUCCESS\",\n    \"results\": [\n      {\n        \"tokenAddress\": \"0xYourUsdcContractAddress\",\n        \"amount\": \"1000000000\"\n      },\n      {\n        \"tokenAddress\": \"0xYourWethContractAddress\",\n        \"amount\": \"1000000000000000000\"\n      }\n    ]\n  }\n}"
+                }
+            ]
         },
         {
             "name": "Get tokens",
@@ -50,12 +70,34 @@
                 "url": {
                     "raw": "http://localhost:3000/faucet/all-tokens/11155111",
                     "protocol": "http",
-                    "host": ["localhost"],
+                    "host": [
+                        "localhost"
+                    ],
                     "port": "3000",
-                    "path": ["faucet", "all-tokens", "11155111"]
+                    "path": [
+                        "faucet",
+                        "all-tokens",
+                        "11155111"
+                    ]
                 }
             },
-            "response": []
+            "response": [
+                {
+                    "id": "faucet-tokens-resp-001",
+                    "name": "200 OK",
+                    "status": "OK",
+                    "code": 200,
+                    "_postman_previewlanguage": "json",
+                    "header": [
+                        {
+                            "key": "Content-Type",
+                            "value": "application/json"
+                        }
+                    ],
+                    "cookie": [],
+                    "body": "{\n  \"statusCode\": 200,\n  \"data\": [\n    \"0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48\",\n    \"0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2\"\n  ]\n}"
+                }
+            ]
         }
     ],
     "variable": [

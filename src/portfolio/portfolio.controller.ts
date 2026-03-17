@@ -9,11 +9,11 @@ import {
 } from "@nestjs/common";
 import { PortfolioService } from "./portfolio.service";
 import { TransactionHistoryQueryDto } from "./dto/transaction-history.dto";
+import { OpenOrdersQueryDto } from "./dto/open-orders.dto";
 import {
     GetMyAssetsQueryDto,
     MyAssetsResponseDto,
     MyPortfolioResponseDto,
-    LendBorrowAssetResponseDto,
     GetMyPositionResponseDto,
     MyPositionQueryDto,
     SetAssetAsCollateralDto,
@@ -97,6 +97,14 @@ export class PortfolioController {
             walletAddress,
             user.userId,
         );
+    }
+  
+    @Get("open-orders")
+    async getOpenOrders(
+        @Wallet() wallet: string,
+        @Query() query: OpenOrdersQueryDto,
+    ) {
+        return this.portfolioService.getOpenOrders(wallet, query);
     }
 
     @Get("transaction-history")

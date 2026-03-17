@@ -31,25 +31,31 @@ export class ViemService implements OnModuleInit {
     private readonly logger = new Logger(ViemService.name);
 
     private publicClients = new Map<number, PublicClient>();
-    private walletClients = new Map<string, WalletClient<Transport, Chain, Account>>();
+    private walletClients = new Map<
+        string,
+        WalletClient<Transport, Chain, Account>
+    >();
     private supportedChains = new Map<number, Chain>();
     /** Per-address transaction queue to prevent nonce races */
     private txQueues = new Map<string, Promise<any>>();
 
-    constructor(private readonly configService: ConfigService) { }
+    constructor(private readonly configService: ConfigService) {}
 
     onModuleInit() {
         this.initializeChains();
     }
 
     private initializeChains() {
-        const supportedChainsEnv = this.configService.get<string>("SUPPORTED_CHAINS");
+        const supportedChainsEnv =
+            this.configService.get<string>("SUPPORTED_CHAINS");
         if (!supportedChainsEnv) {
             this.logger.warn("No SUPPORTED_CHAINS defined in environment");
             return;
         }
 
-        const chainIds = supportedChainsEnv.split(",").map((id) => Number(id.trim()));
+        const chainIds = supportedChainsEnv
+            .split(",")
+            .map((id) => Number(id.trim()));
 
         for (const chainId of chainIds) {
             const chain = this.getViemChainById(chainId);
@@ -58,7 +64,9 @@ export class ViemService implements OnModuleInit {
                 continue;
             }
             this.supportedChains.set(chainId, chain);
-            this.logger.log(`Initialized support for chain: ${chain.name} (${chainId})`);
+            this.logger.log(
+                `Initialized support for chain: ${chain.name} (${chainId})`,
+            );
         }
     }
 
@@ -106,12 +114,20 @@ export class ViemService implements OnModuleInit {
         }
 
         const client = this.publicClients.get(chainId);
-        if (!client) throw new Error(`Failed to initialize public client for chain ${chainId}`);
+        if (!client)
+            throw new Error(
+                `Failed to initialize public client for chain ${chainId}`,
+            );
         return client;
     }
 
-    getWalletClient(privateKey: string, chainId: number): WalletClient<Transport, Chain, Account> {
-        const formattedKey = privateKey.startsWith("0x") ? privateKey : `0x${privateKey}`;
+    getWalletClient(
+        privateKey: string,
+        chainId: number,
+    ): WalletClient<Transport, Chain, Account> {
+        const formattedKey = privateKey.startsWith("0x")
+            ? privateKey
+            : `0x${privateKey}`;
         const account = privateKeyToAccount(formattedKey as `0x${string}`);
 
         const key = `${chainId}-${account.address}`;
@@ -126,8 +142,13 @@ export class ViemService implements OnModuleInit {
                 transport: http(rpc),
             });
 
-            this.walletClients.set(key, client as WalletClient<Transport, Chain, Account>);
-            this.logger.debug(`Created wallet client for ${account.address} on chain ${chainId}`);
+            this.walletClients.set(
+                key,
+                client as WalletClient<Transport, Chain, Account>,
+            );
+            this.logger.debug(
+                `Created wallet client for ${account.address} on chain ${chainId}`,
+            );
         }
 
         const client = this.walletClients.get(key);
@@ -136,11 +157,15 @@ export class ViemService implements OnModuleInit {
     }
 
     resetWalletClient(privateKey: string, chainId: number): void {
-        const formattedKey = privateKey.startsWith("0x") ? privateKey : `0x${privateKey}`;
+        const formattedKey = privateKey.startsWith("0x")
+            ? privateKey
+            : `0x${privateKey}`;
         const account = privateKeyToAccount(formattedKey as `0x${string}`);
         const key = `${chainId}-${account.address}`;
         this.walletClients.delete(key);
-        this.logger.warn(`Reset wallet client for ${account.address} on chain ${chainId} (nonce resync)`);
+        this.logger.warn(
+            `Reset wallet client for ${account.address} on chain ${chainId} (nonce resync)`,
+        );
     }
 
     generateWallet(): { address: string; privateKey: string } {
@@ -158,7 +183,7 @@ export class ViemService implements OnModuleInit {
         address: string,
         abi: readonly any[],
         functionName: string,
-        args: any[] = []
+        args: any[] = [],
     ): Promise<T> {
         const client = this.getPublicClient(chainId);
 
@@ -171,7 +196,7 @@ export class ViemService implements OnModuleInit {
             })) as T;
         } catch (error) {
             this.logger.error(
-                `Failed to read contract ${address} on chain ${chainId}, function ${functionName}: ${(error as Error).message}`
+                `Failed to read contract ${address} on chain ${chainId}, function ${functionName}: ${(error as Error).message}`,
             );
             throw error;
         }
@@ -189,15 +214,25 @@ export class ViemService implements OnModuleInit {
         abi: readonly any[],
         functionName: string,
         args: any[] = [],
-        options: ViemWriteContractOptions = {}
+        options: ViemWriteContractOptions = {},
     ): Promise<Hash | TransactionReceipt> {
         const walletClient = this.getWalletClient(privateKey, chainId);
         const queueKey = `${chainId}-${walletClient.account.address}`;
 
         const pending = this.txQueues.get(queueKey) ?? Promise.resolve();
         const next = pending
-            .catch(() => { }) // don't let a prior failure block the queue
-            .then(() => this.executeWriteContract(walletClient, chainId, address, abi, functionName, args, options));
+            .catch(() => {}) // don't let a prior failure block the queue
+            .then(() =>
+                this.executeWriteContract(
+                    walletClient,
+                    chainId,
+                    address,
+                    abi,
+                    functionName,
+                    args,
+                    options,
+                ),
+            );
         this.txQueues.set(queueKey, next);
 
         return next;
@@ -227,10 +262,12 @@ export class ViemService implements OnModuleInit {
                 nonce,
                 value: options.value,
                 gas: options.gas,
-                type: 'eip1559',
+                type: "eip1559",
             });
 
-            this.logger.log(`Transaction sent: ${hash} (Chain: ${chainId}, Function: ${functionName})`);
+            this.logger.log(
+                `Transaction sent: ${hash} (Chain: ${chainId}, Function: ${functionName})`,
+            );
 
             if (options.waitForReceipt) {
                 const publicClient = this.getPublicClient(chainId);
@@ -241,18 +278,24 @@ export class ViemService implements OnModuleInit {
             return hash;
         } catch (error) {
             this.logger.error(
-                `Failed to write contract ${address} on chain ${chainId}, function ${functionName}: ${(error as Error).message}`
+                `Failed to write contract ${address} on chain ${chainId}, function ${functionName}: ${(error as Error).message}`,
             );
             throw error;
         }
     }
 
-    async waitForTransaction(chainId: number, hash: Hash): Promise<TransactionReceipt> {
+    async waitForTransaction(
+        chainId: number,
+        hash: Hash,
+    ): Promise<TransactionReceipt> {
         const client = this.getPublicClient(chainId);
         return await client.waitForTransactionReceipt({ hash });
     }
 
-    async getTransactionReceipt(chainId: number, hash: Hash): Promise<TransactionReceipt> {
+    async getTransactionReceipt(
+        chainId: number,
+        hash: Hash,
+    ): Promise<TransactionReceipt> {
         const client = this.getPublicClient(chainId);
         try {
             return await client.getTransactionReceipt({ hash });

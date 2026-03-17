@@ -7,16 +7,34 @@ import { join, sep } from "node:path";
  * JS lives in dist/src/core/database/scripts.
  */
 export function getMigrationsDir(callerDirname: string): string {
-	const isCompiled = callerDirname.includes(`${sep}dist${sep}`);
-	return isCompiled
-		? join(callerDirname, "..", "..", "..", "..", "core", "database", "migrations")
-		: join(callerDirname, "..", "migrations");
+    const isCompiled = callerDirname.includes(`${sep}dist${sep}`);
+    return isCompiled
+        ? join(
+              callerDirname,
+              "..",
+              "..",
+              "..",
+              "..",
+              "core",
+              "database",
+              "migrations",
+          )
+        : join(callerDirname, "..", "migrations");
 }
 
 /** Same as getMigrationsDir but for the seeds directory. */
 export function getSeedsDir(callerDirname: string): string {
-	const isCompiled = callerDirname.includes(`${sep}dist${sep}`);
-	return isCompiled
-		? join(callerDirname, "..", "..", "..", "..", "core", "database", "seeds")
-		: join(callerDirname, "..", "seeds");
+    const isCompiled = callerDirname.includes(`${sep}dist${sep}`);
+    return isCompiled
+        ? join(
+              callerDirname,
+              "..",
+              "..",
+              "..",
+              "..",
+              "core",
+              "database",
+              "seeds",
+          )
+        : join(callerDirname, "..", "seeds");
 }

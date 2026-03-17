@@ -19,10 +19,12 @@ import { Wallet } from "../common/decorators/wallet.decorator";
 @Controller("portfolio")
 @UseGuards(AuthGuard)
 export class PortfolioController {
-    constructor(private readonly portfolioService: PortfolioService) { }
+    constructor(private readonly portfolioService: PortfolioService) {}
 
     @Get("my-portfolio")
-    async getMyPortfolio(@Wallet() wallet: string): Promise<MyPortfolioResponseDto> {
+    async getMyPortfolio(
+        @Wallet() wallet: string,
+    ): Promise<MyPortfolioResponseDto> {
         return this.portfolioService.getMyPortfolio(wallet);
     }
 
@@ -46,7 +48,9 @@ export class PortfolioController {
     }
 
     @Get("my-health-factor")
-    async getMyHealthFactor(@Wallet() wallet: string): Promise<MyHealthFactorResponseDto> {
+    async getMyHealthFactor(
+        @Wallet() wallet: string,
+    ): Promise<MyHealthFactorResponseDto> {
         return this.portfolioService.getMyHealthFactor(wallet);
     }
 
@@ -59,7 +63,9 @@ export class PortfolioController {
     }
 
     @Get("user-details")
-    async getUserDetails(@Wallet() wallet: string): Promise<UserDetailsResponseDto> {
+    async getUserDetails(
+        @Wallet() wallet: string,
+    ): Promise<UserDetailsResponseDto> {
         return this.portfolioService.getUserDetails(wallet);
     }
 

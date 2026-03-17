@@ -94,7 +94,7 @@ export class MyPositionQueryDto {
 
     limit?: number = 10;
 
-    type?: 'LEND' | 'BORROW';
+    type?: "LEND" | "BORROW";
 }
 
 export class MyPositionItemDto {
@@ -105,7 +105,7 @@ export class MyPositionItemDto {
     amountInUsd: number;
     isCollateral: boolean;
     imageUrl?: string | null;
-    side: 'LEND' | 'BORROW';
+    side: "LEND" | "BORROW";
     maturity?: number | null;
 }
 

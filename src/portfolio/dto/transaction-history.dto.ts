@@ -1,5 +1,6 @@
 import { IsOptional } from "class-validator";
 import { Transform } from "class-transformer";
+import type { AssetDto } from "../../common/dto/asset.dto";
 
 export class TransactionHistoryQueryDto {
     @IsOptional()
@@ -19,9 +20,7 @@ export interface TransactionHistoryItem {
     amount: string;
     filledQuantity: string | null;
     status: string;
-    symbol: string;
-    imageUrl: string | null;
-    decimals: number;
-    tokenAddress: string;
+    asset: AssetDto;
+    fee: string | null;
     createdAt: string;
 }

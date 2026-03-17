@@ -1,3 +1,3 @@
 export class UpdateNameDto {
-	name: string;
+    name: string;
 }

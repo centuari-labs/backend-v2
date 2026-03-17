@@ -20,4 +20,3 @@ export function compareTokensByPriority<
 
     return symbolA.localeCompare(symbolB);
 }
-

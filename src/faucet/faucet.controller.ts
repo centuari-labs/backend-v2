@@ -1,19 +1,36 @@
-import { Controller, Post, Body, Get, Param, ParseIntPipe, UsePipes, ValidationPipe } from "@nestjs/common";
+import {
+    Controller,
+    Post,
+    Body,
+    Get,
+    Param,
+    ParseIntPipe,
+    UsePipes,
+    ValidationPipe,
+} from "@nestjs/common";
 import { FaucetService } from "./faucet.service";
 import { RequestTokenDto, FaucetResponseDto } from "./dto/faucet.dto";
 
 @Controller("faucet")
 @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
 export class FaucetController {
-    constructor(private readonly faucetService: FaucetService) { }
+    constructor(private readonly faucetService: FaucetService) {}
 
     @Post("request-tokens")
-    async requestTokens(@Body() dto: RequestTokenDto): Promise<FaucetResponseDto> {
-        return this.faucetService.requestTokens(dto.chainId, dto.recipientAddress, dto.token);
+    async requestTokens(
+        @Body() dto: RequestTokenDto,
+    ): Promise<FaucetResponseDto> {
+        return this.faucetService.requestTokens(
+            dto.chainId,
+            dto.recipientAddress,
+            dto.token,
+        );
     }
 
     @Get("all-tokens/:chainId")
-    async getTokens(@Param("chainId", ParseIntPipe) chainId: number): Promise<string[]> {
+    async getTokens(
+        @Param("chainId", ParseIntPipe) chainId: number,
+    ): Promise<string[]> {
         return this.faucetService.getTokens(chainId);
     }
 }

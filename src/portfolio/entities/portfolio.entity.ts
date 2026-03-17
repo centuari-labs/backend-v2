@@ -12,7 +12,7 @@ import {
 
 @Entity("portfolio")
 export class Portfolio {
-    @PrimaryColumn('uuid')
+    @PrimaryColumn("uuid")
     id: string;
 
     @Column({ name: "asset_id", type: "uuid" })

@@ -127,9 +127,7 @@ describe("EventsGateway", () => {
         });
 
         it("should handle client disconnection", () => {
-            expect(() =>
-                gateway.handleDisconnect(mockClient),
-            ).not.toThrow();
+            expect(() => gateway.handleDisconnect(mockClient)).not.toThrow();
         });
     });
 
@@ -168,24 +166,18 @@ describe("EventsGateway", () => {
 
         it("should send cached orderbook when client subscribes", async () => {
             const ordersCallback = natsCallbacks.get("orders.>");
-            ordersCallback!(
-                createOrderMessage(),
-                "orders.lend.limit",
-            );
+            ordersCallback!(createOrderMessage(), "orders.lend.limit");
 
             await gateway.handleSubscribeOrderbook(mockClient, {
                 assetId: TEST_ASSET_ID,
             });
 
-            expect(mockClient.emit).toHaveBeenCalledWith(
-                "orderbook-update",
-                {
-                    assetId: TEST_ASSET_ID,
-                    lend: [{ rate: 5, amount: "1000000", orders: 1 }],
-                    borrow: [],
-                    timestamp: expect.any(Number),
-                },
-            );
+            expect(mockClient.emit).toHaveBeenCalledWith("orderbook-update", {
+                assetId: TEST_ASSET_ID,
+                lend: [{ rate: 5, amount: "1000000", orders: 1 }],
+                borrow: [],
+                timestamp: expect.any(Number),
+            });
         });
 
         it("should load from DB and send snapshot when cache is empty", async () => {
@@ -205,9 +197,7 @@ describe("EventsGateway", () => {
                 accountId: "account-123",
             });
 
-            expect(mockClient.join).toHaveBeenCalledWith(
-                "user:account-123",
-            );
+            expect(mockClient.join).toHaveBeenCalledWith("user:account-123");
             expect(result).toEqual({
                 success: true,
                 room: "user:account-123",
@@ -219,9 +209,7 @@ describe("EventsGateway", () => {
                 accountId: "account-123",
             });
 
-            expect(mockClient.join).toHaveBeenCalledWith(
-                "user:account-123",
-            );
+            expect(mockClient.join).toHaveBeenCalledWith("user:account-123");
             expect(result).toEqual({
                 success: true,
                 room: "user:account-123",
@@ -237,10 +225,7 @@ describe("EventsGateway", () => {
         describe("Order Creation", () => {
             it("should broadcast orderbook update when lend limit order created", () => {
                 const ordersCallback = natsCallbacks.get("orders.>");
-                ordersCallback!(
-                    createOrderMessage(),
-                    "orders.lend.limit",
-                );
+                ordersCallback!(createOrderMessage(), "orders.lend.limit");
 
                 expect(mockServer.to).toHaveBeenCalledWith(
                     `orderbook:${TEST_ASSET_ID}`,
@@ -249,9 +234,7 @@ describe("EventsGateway", () => {
                     "orderbook-update",
                     {
                         assetId: TEST_ASSET_ID,
-                        lend: [
-                            { rate: 5, amount: "1000000", orders: 1 },
-                        ],
+                        lend: [{ rate: 5, amount: "1000000", orders: 1 }],
                         borrow: [],
                         timestamp: expect.any(Number),
                     },
@@ -277,9 +260,7 @@ describe("EventsGateway", () => {
                     {
                         assetId: TEST_ASSET_ID,
                         lend: [],
-                        borrow: [
-                            { rate: 7.5, amount: "500000", orders: 1 },
-                        ],
+                        borrow: [{ rate: 7.5, amount: "500000", orders: 1 }],
                         timestamp: expect.any(Number),
                     },
                 );
@@ -301,7 +282,8 @@ describe("EventsGateway", () => {
                 ordersCallback!(
                     createOrderMessage({
                         orderId: "order-002",
-                        walletAddress: "0xAb9A004468A39cCC07e1f62B59F990f45304a222",
+                        walletAddress:
+                            "0xAb9A004468A39cCC07e1f62B59F990f45304a222",
                         rate: 500,
                         remainingAmount: "2000000",
                         originalAmount: "2000000",
@@ -309,13 +291,11 @@ describe("EventsGateway", () => {
                     "orders.lend.limit",
                 );
 
-                const emitCalls = (mockServer.emit as jest.Mock).mock
-                    .calls;
+                const emitCalls = (mockServer.emit as jest.Mock).mock.calls;
                 const orderbookCalls = emitCalls.filter(
                     (c) => c[0] === "orderbook-update",
                 );
-                const lastOrderbook =
-                    orderbookCalls[orderbookCalls.length - 1];
+                const lastOrderbook = orderbookCalls[orderbookCalls.length - 1];
                 expect(lastOrderbook[1].lend).toEqual([
                     { rate: 5, amount: "3000000", orders: 2 },
                 ]);
@@ -344,13 +324,11 @@ describe("EventsGateway", () => {
                     "orders.lend.limit",
                 );
 
-                const emitCalls = (mockServer.emit as jest.Mock).mock
-                    .calls;
+                const emitCalls = (mockServer.emit as jest.Mock).mock.calls;
                 const orderbookCalls = emitCalls.filter(
                     (c) => c[0] === "orderbook-update",
                 );
-                const lastOrderbook =
-                    orderbookCalls[orderbookCalls.length - 1];
+                const lastOrderbook = orderbookCalls[orderbookCalls.length - 1];
                 expect(lastOrderbook[1].lend).toEqual([
                     { rate: 8, amount: "1000000", orders: 1 },
                     { rate: 5, amount: "2000000", orders: 1 },
@@ -359,10 +337,7 @@ describe("EventsGateway", () => {
 
             it("should emit open-positions to user room for limit orders", () => {
                 const ordersCallback = natsCallbacks.get("orders.>");
-                ordersCallback!(
-                    createOrderMessage(),
-                    "orders.lend.limit",
-                );
+                ordersCallback!(createOrderMessage(), "orders.lend.limit");
 
                 // accountId in the gateway is set from walletAddress
                 expect(mockServer.to).toHaveBeenCalledWith(
@@ -391,8 +366,7 @@ describe("EventsGateway", () => {
                     "orders.lend.market",
                 );
 
-                const emitCalls = (mockServer.emit as jest.Mock).mock
-                    .calls;
+                const emitCalls = (mockServer.emit as jest.Mock).mock.calls;
                 const openPositionCalls = emitCalls.filter(
                     (c) => c[0] === "open-positions",
                 );
@@ -412,8 +386,7 @@ describe("EventsGateway", () => {
                     "orders.lend.market",
                 );
 
-                const emitCalls = (mockServer.emit as jest.Mock).mock
-                    .calls;
+                const emitCalls = (mockServer.emit as jest.Mock).mock.calls;
                 const orderbookCall = emitCalls.find(
                     (c) => c[0] === "orderbook-update",
                 );
@@ -456,8 +429,7 @@ describe("EventsGateway", () => {
                 expect(mockServer.to).toHaveBeenCalledWith(
                     `orderbook:${TEST_ASSET_ID}`,
                 );
-                const emitCalls = (mockServer.emit as jest.Mock).mock
-                    .calls;
+                const emitCalls = (mockServer.emit as jest.Mock).mock.calls;
                 const orderbookCall = emitCalls.find(
                     (c) => c[0] === "orderbook-update",
                 );
@@ -494,8 +466,7 @@ describe("EventsGateway", () => {
 
                 await new Promise((r) => setTimeout(r, 10));
 
-                const emitCalls = (mockServer.emit as jest.Mock).mock
-                    .calls;
+                const emitCalls = (mockServer.emit as jest.Mock).mock.calls;
                 const orderbookCall = emitCalls.find(
                     (c) => c[0] === "orderbook-update",
                 );
@@ -528,8 +499,7 @@ describe("EventsGateway", () => {
                 expect(mockServer.to).toHaveBeenCalledWith(
                     `user:${TEST_WALLET}`,
                 );
-                const emitCalls = (mockServer.emit as jest.Mock).mock
-                    .calls;
+                const emitCalls = (mockServer.emit as jest.Mock).mock.calls;
                 const activeCall = emitCalls.find(
                     (c) => c[0] === "active-positions",
                 );
@@ -563,8 +533,7 @@ describe("EventsGateway", () => {
 
                 await new Promise((r) => setTimeout(r, 10));
 
-                const emitCalls = (mockServer.emit as jest.Mock).mock
-                    .calls;
+                const emitCalls = (mockServer.emit as jest.Mock).mock.calls;
                 const openCall = emitCalls.find(
                     (c) => c[0] === "open-positions",
                 );
@@ -619,8 +588,7 @@ describe("EventsGateway", () => {
                     "orders.cancel",
                 );
 
-                const emitCalls = (mockServer.emit as jest.Mock).mock
-                    .calls;
+                const emitCalls = (mockServer.emit as jest.Mock).mock.calls;
                 const orderbookCall = emitCalls.find(
                     (c) => c[0] === "orderbook-update",
                 );
@@ -749,29 +717,25 @@ describe("EventsGateway", () => {
             const errorNatsService = {
                 subscribe: jest
                     .fn()
-                    .mockRejectedValue(
-                        new Error("NATS connection failed"),
-                    ),
+                    .mockRejectedValue(new Error("NATS connection failed")),
                 isConnected: jest.fn().mockReturnValue(true),
             } as any;
 
-            const module: TestingModule =
-                await Test.createTestingModule({
-                    providers: [
-                        EventsGateway,
-                        {
-                            provide: NatsService,
-                            useValue: errorNatsService,
-                        },
-                        {
-                            provide: DataSource,
-                            useValue: mockDataSource,
-                        },
-                    ],
-                }).compile();
+            const module: TestingModule = await Test.createTestingModule({
+                providers: [
+                    EventsGateway,
+                    {
+                        provide: NatsService,
+                        useValue: errorNatsService,
+                    },
+                    {
+                        provide: DataSource,
+                        useValue: mockDataSource,
+                    },
+                ],
+            }).compile();
 
-            const errorGateway =
-                module.get<EventsGateway>(EventsGateway);
+            const errorGateway = module.get<EventsGateway>(EventsGateway);
             errorGateway.server = mockServer;
 
             // afterInit returns a promise that catches errors internally
@@ -790,9 +754,7 @@ describe("EventsGateway", () => {
             ).not.toThrow();
 
             // Empty object for status update — unknown order, no crash
-            expect(() =>
-                ordersCallback!({}, "orders.status"),
-            ).not.toThrow();
+            expect(() => ordersCallback!({}, "orders.status")).not.toThrow();
         });
     });
 });

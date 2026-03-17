@@ -7,7 +7,9 @@ export interface MaturityValidationResult {
  * Compute the three allowed maturity timestamps (Unix seconds, UTC) for the
  * first day of the next three calendar months relative to the provided `now`.
  */
-export function getAllowedMaturitiesUtcSeconds(now: Date = new Date()): number[] {
+export function getAllowedMaturitiesUtcSeconds(
+    now: Date = new Date(),
+): number[] {
     const year = now.getUTCFullYear();
     const month = now.getUTCMonth(); // 0-based
 
@@ -65,4 +67,3 @@ export function validateMaturitiesUtcSeconds(
 
     return { isValid: true, allowedMaturities: allowed };
 }
-

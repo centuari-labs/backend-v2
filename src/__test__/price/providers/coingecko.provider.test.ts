@@ -9,7 +9,9 @@ describe("CoinGeckoProvider", () => {
     let loggerErrorSpy: jest.SpyInstance;
 
     beforeAll(() => {
-        loggerErrorSpy = jest.spyOn(Logger.prototype, "error").mockImplementation(() => { });
+        loggerErrorSpy = jest
+            .spyOn(Logger.prototype, "error")
+            .mockImplementation(() => {});
     });
 
     afterAll(() => {
@@ -64,7 +66,10 @@ describe("CoinGeckoProvider", () => {
         });
 
         it("should filter out tokens without coingeckoId and not call API when all filtered", async () => {
-            const tokenWithoutCoingecko = createToken({ coingeckoId: null, symbol: "LOCAL" });
+            const tokenWithoutCoingecko = createToken({
+                coingeckoId: null,
+                symbol: "LOCAL",
+            });
 
             const result = await provider.fetchPrices([tokenWithoutCoingecko]);
 
@@ -80,7 +85,10 @@ describe("CoinGeckoProvider", () => {
         });
 
         it("should deduplicate coin IDs and map correctly for multiple tokens with same coingeckoId", async () => {
-            const token1 = createToken({ symbol: "WBTC", coingeckoId: "bitcoin" });
+            const token1 = createToken({
+                symbol: "WBTC",
+                coingeckoId: "bitcoin",
+            });
             const token2 = createToken({
                 id: "uuid-token-002",
                 tokenAddress: "0xwbtc2234567890abcdef1234567890abcdef12",
@@ -133,7 +141,9 @@ describe("CoinGeckoProvider", () => {
 
         it("should return empty object when fetch throws (network error)", async () => {
             const token = createToken();
-            (fetchSpy as jest.Mock).mockRejectedValue(new Error("Network error"));
+            (fetchSpy as jest.Mock).mockRejectedValue(
+                new Error("Network error"),
+            );
 
             const result = await provider.fetchPrices([token]);
 
@@ -141,7 +151,10 @@ describe("CoinGeckoProvider", () => {
         });
 
         it("should only include tokens with numeric price in response", async () => {
-            const tokenUsdc = createToken({ symbol: "USDC", coingeckoId: "usd-coin" });
+            const tokenUsdc = createToken({
+                symbol: "USDC",
+                coingeckoId: "usd-coin",
+            });
             const tokenEth = createToken({
                 id: "uuid-token-002",
                 tokenAddress: "0xeth1234567890abcdef1234567890abcdef12",

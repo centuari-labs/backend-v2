@@ -41,5 +41,3 @@ export class CreateBorrowMarketOrderDto {
     @IsBoolean()
     autoRollover?: boolean;
 }
-
-

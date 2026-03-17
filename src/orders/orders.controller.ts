@@ -38,7 +38,11 @@ export class OrdersController {
         @Wallet() walletAddress: string,
         @CurrentUser() user: { userId: string },
     ): Promise<OrderResponse> {
-        return this.ordersService.createLendMarketOrder(dto, walletAddress, user.userId);
+        return this.ordersService.createLendMarketOrder(
+            dto,
+            walletAddress,
+            user.userId,
+        );
     }
 
     @Post("lend/limit")
@@ -48,7 +52,11 @@ export class OrdersController {
         @Wallet() walletAddress: string,
         @CurrentUser() user: { userId: string },
     ): Promise<OrderResponse> {
-        return this.ordersService.createLendLimitOrder(dto, walletAddress, user.userId);
+        return this.ordersService.createLendLimitOrder(
+            dto,
+            walletAddress,
+            user.userId,
+        );
     }
 
     @Post("borrow/market")
@@ -58,7 +66,11 @@ export class OrdersController {
         @Wallet() walletAddress: string,
         @CurrentUser() user: { userId: string },
     ): Promise<OrderResponse> {
-        return this.ordersService.createBorrowMarketOrder(dto, walletAddress, user.userId);
+        return this.ordersService.createBorrowMarketOrder(
+            dto,
+            walletAddress,
+            user.userId,
+        );
     }
 
     @Post("borrow/limit")
@@ -68,7 +80,11 @@ export class OrdersController {
         @Wallet() walletAddress: string,
         @CurrentUser() user: { userId: string },
     ): Promise<OrderResponse> {
-        return this.ordersService.createBorrowLimitOrder(dto, walletAddress, user.userId);
+        return this.ordersService.createBorrowLimitOrder(
+            dto,
+            walletAddress,
+            user.userId,
+        );
     }
 
     @Patch(":id/cancel")
@@ -78,5 +94,4 @@ export class OrdersController {
     ) {
         return this.ordersService.cancelOrder(id, walletAddress);
     }
-
 }

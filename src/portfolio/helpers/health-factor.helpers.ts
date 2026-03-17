@@ -57,12 +57,16 @@ export function computeHealthFactor(
 ): HealthFactorResult {
     let collateralUsd = 0;
     let weightedLtvSum = 0;
-    const decimalsSafe = (d: number) => (d != null && Number.isInteger(d) && d >= 0 ? d : 0);
+    const decimalsSafe = (d: number) =>
+        d != null && Number.isInteger(d) && d >= 0 ? d : 0;
 
     for (const pos of collateralPositions) {
         const decimals = decimalsSafe(pos.decimals);
-        const amountHuman = Number.parseFloat(baseUnitsToHuman(pos.amountBaseUnits, decimals));
-        const valueUsd = amountHuman * (Number.isFinite(pos.priceUsd) ? pos.priceUsd : 0);
+        const amountHuman = Number.parseFloat(
+            baseUnitsToHuman(pos.amountBaseUnits, decimals),
+        );
+        const valueUsd =
+            amountHuman * (Number.isFinite(pos.priceUsd) ? pos.priceUsd : 0);
         const ltvDecimal = (pos.ltvBps ?? 0) / 10_000;
         collateralUsd += valueUsd;
         weightedLtvSum += valueUsd * ltvDecimal;
@@ -71,16 +75,22 @@ export function computeHealthFactor(
     let existingDebtUsd = 0;
     for (const pos of debtPositions) {
         const decimals = decimalsSafe(pos.decimals);
-        const amountHuman = Number.parseFloat(baseUnitsToHuman(pos.amountBaseUnits, decimals));
-        existingDebtUsd += amountHuman * (Number.isFinite(pos.priceUsd) ? pos.priceUsd : 0);
+        const amountHuman = Number.parseFloat(
+            baseUnitsToHuman(pos.amountBaseUnits, decimals),
+        );
+        existingDebtUsd +=
+            amountHuman * (Number.isFinite(pos.priceUsd) ? pos.priceUsd : 0);
     }
 
     const additional = additionalDebtPositions ?? [];
     let additionalDebtUsdSum = additionalDebtUsd ?? 0;
     for (const pos of additional) {
         const decimals = decimalsSafe(pos.decimals);
-        const amountHuman = Number.parseFloat(baseUnitsToHuman(pos.amountBaseUnits, decimals));
-        additionalDebtUsdSum += amountHuman * (Number.isFinite(pos.priceUsd) ? pos.priceUsd : 0);
+        const amountHuman = Number.parseFloat(
+            baseUnitsToHuman(pos.amountBaseUnits, decimals),
+        );
+        additionalDebtUsdSum +=
+            amountHuman * (Number.isFinite(pos.priceUsd) ? pos.priceUsd : 0);
     }
 
     const totalDebtUsd = existingDebtUsd + additionalDebtUsdSum;
@@ -92,7 +102,8 @@ export function computeHealthFactor(
     if (totalDebtUsd <= 0) {
         healthFactor = HEALTH_FACTOR_NO_DEBT;
     } else {
-        const numerator = (collateralUsd - existingDebtUsd) * weightedLtvDecimal;
+        const numerator =
+            (collateralUsd - existingDebtUsd) * weightedLtvDecimal;
         healthFactor = numerator / totalDebtUsd;
         if (!Number.isFinite(healthFactor)) {
             healthFactor = 0;
@@ -111,9 +122,12 @@ export function computeHealthFactor(
 const HF_PRECISION = 4;
 const LTV_PRECISION = 4;
 
-export function formatHealthFactorResponse(
-    result: HealthFactorResult,
-): { collateralUsd: number; debtUsd: number; weightedLtv: number; healthFactor: number } {
+export function formatHealthFactorResponse(result: HealthFactorResult): {
+    collateralUsd: number;
+    debtUsd: number;
+    weightedLtv: number;
+    healthFactor: number;
+} {
     const hf =
         result.healthFactor === HEALTH_FACTOR_NO_DEBT
             ? Number.POSITIVE_INFINITY
@@ -122,6 +136,8 @@ export function formatHealthFactorResponse(
         collateralUsd: Number(result.collateralUsd.toFixed(2)),
         debtUsd: Number(result.debtUsd.toFixed(2)),
         weightedLtv: Number(result.weightedLtvDecimal.toFixed(LTV_PRECISION)),
-        healthFactor: Number.isFinite(hf) ? Number(hf.toFixed(HF_PRECISION)) : hf,
+        healthFactor: Number.isFinite(hf)
+            ? Number(hf.toFixed(HF_PRECISION))
+            : hf,
     };
 }

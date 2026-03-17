@@ -1,5 +1,9 @@
 import { z } from "zod";
-import { OrderSide, OrderStatus, OrderType } from "../constants/order.constants";
+import {
+    OrderSide,
+    OrderStatus,
+    OrderType,
+} from "../constants/order.constants";
 
 /**
  * Ethereum address validation schema
@@ -39,13 +43,22 @@ const baseOrderSchema = z.object({
     markets: z
         .array(marketSlotSchema)
         .min(1, "At least one market slot is required"),
-    timestamp: z.number().int().positive("Timestamp must be a positive integer"),
+    timestamp: z
+        .number()
+        .int()
+        .positive("Timestamp must be a positive integer"),
     side: z.nativeEnum(OrderSide),
     type: z.nativeEnum(OrderType),
     status: z.nativeEnum(OrderStatus).default(OrderStatus.Open),
-    originalAmount: z.string().regex(/^\d+$/, "Amount must be a positive integer string"),
-    remainingAmount: z.string().regex(/^\d+$/, "Amount must be a positive integer string"),
-    settlementFeeAmount: z.string().regex(/^\d+$/, "Fee amount must be a positive integer string"),
+    originalAmount: z
+        .string()
+        .regex(/^\d+$/, "Amount must be a positive integer string"),
+    remainingAmount: z
+        .string()
+        .regex(/^\d+$/, "Amount must be a positive integer string"),
+    settlementFeeAmount: z
+        .string()
+        .regex(/^\d+$/, "Fee amount must be a positive integer string"),
     remainingSettlementFeeAmount: z
         .string()
         .regex(/^\d+$/, "Fee amount must be a positive integer string")
@@ -96,4 +109,3 @@ export type LendLimitOrder = z.infer<typeof lendLimitOrderSchema>;
 export type BorrowMarketOrder = z.infer<typeof borrowMarketOrderSchema>;
 export type BorrowLimitOrder = z.infer<typeof borrowLimitOrderSchema>;
 export type MatchingEngineOrder = z.infer<typeof orderSchema>;
-

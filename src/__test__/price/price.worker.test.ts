@@ -10,8 +10,12 @@ describe("PriceWorker", () => {
     let loggerDebugSpy: jest.SpyInstance;
 
     beforeAll(() => {
-        loggerErrorSpy = jest.spyOn(Logger.prototype, "error").mockImplementation(() => {});
-        loggerDebugSpy = jest.spyOn(Logger.prototype, "debug").mockImplementation(() => {});
+        loggerErrorSpy = jest
+            .spyOn(Logger.prototype, "error")
+            .mockImplementation(() => {});
+        loggerDebugSpy = jest
+            .spyOn(Logger.prototype, "debug")
+            .mockImplementation(() => {});
     });
 
     afterAll(() => {
@@ -49,7 +53,9 @@ describe("PriceWorker", () => {
         });
 
         it("should not throw when fetchAndUpdatePrices rejects", async () => {
-            priceService.fetchAndUpdatePrices.mockRejectedValue(new Error("Provider error"));
+            priceService.fetchAndUpdatePrices.mockRejectedValue(
+                new Error("Provider error"),
+            );
 
             await expect(worker.handleInterval()).resolves.toBeUndefined();
         });

@@ -8,7 +8,13 @@ import { WithdrawController } from "./withdraw.controller";
 import { WithdrawService } from "./withdraw.service";
 
 @Module({
-    imports: [CoreModule, ConfigModule, TokensModule, PortfolioModule, OrdersModule],
+    imports: [
+        CoreModule,
+        ConfigModule,
+        TokensModule,
+        PortfolioModule,
+        OrdersModule,
+    ],
     controllers: [WithdrawController],
     providers: [WithdrawService],
 })

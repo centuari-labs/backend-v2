@@ -12,4 +12,4 @@ import { FaucetService } from "./faucet.service";
     providers: [FaucetService],
     exports: [FaucetService],
 })
-export class FaucetModule { }
+export class FaucetModule {}

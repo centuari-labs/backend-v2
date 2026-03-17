@@ -1,9 +1,14 @@
-import { Injectable, CanActivate, ExecutionContext, UnauthorizedException } from "@nestjs/common";
+import {
+    Injectable,
+    CanActivate,
+    ExecutionContext,
+    UnauthorizedException,
+} from "@nestjs/common";
 import { AuthStrategyFactory } from "./strategies/auth-strategy.factory";
 
 @Injectable()
 export class AuthGuard implements CanActivate {
-    constructor(private readonly strategyFactory: AuthStrategyFactory) { }
+    constructor(private readonly strategyFactory: AuthStrategyFactory) {}
 
     async canActivate(context: ExecutionContext): Promise<boolean> {
         const request = context.switchToHttp().getRequest();
@@ -16,7 +21,9 @@ export class AuthGuard implements CanActivate {
         const [type, token] = authHeader.split(" ");
 
         if (type !== "Bearer" || !token) {
-            throw new UnauthorizedException("Invalid authorization header format");
+            throw new UnauthorizedException(
+                "Invalid authorization header format",
+            );
         }
 
         try {

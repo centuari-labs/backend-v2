@@ -156,7 +156,9 @@ describe("TokensService", () => {
             tokensRepository.getActiveTokens.mockResolvedValue([mockToken]);
             tokensRepository.findByAssetId.mockResolvedValue(mockToken);
 
-            const decimals = await service.getTokenDecimalsByAssetId(mockToken.id);
+            const decimals = await service.getTokenDecimalsByAssetId(
+                mockToken.id,
+            );
 
             expect(decimals).toBe(mockToken.decimals);
         });

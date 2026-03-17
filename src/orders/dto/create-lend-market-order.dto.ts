@@ -42,5 +42,3 @@ export class CreateLendMarketOrderDto {
     @IsBoolean()
     autoRollover?: boolean;
 }
-
-

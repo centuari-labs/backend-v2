@@ -91,9 +91,13 @@ export class OrdersWorker implements OnModuleInit {
             );
             return;
         }
-        this.logger.log("OrdersWorker enabled — scheduling background initialization.");
+        this.logger.log(
+            "OrdersWorker enabled — scheduling background initialization.",
+        );
 
-        this.chainId = Number(this.configService.get<string>("DEPOSIT_CHAIN_ID") ?? "421614");
+        this.chainId = Number(
+            this.configService.get<string>("DEPOSIT_CHAIN_ID") ?? "421614",
+        );
         this.treasuryAddress =
             this.configService.get<string>("TREASURY_ADDRESS") ??
             (() => {
@@ -131,12 +135,18 @@ export class OrdersWorker implements OnModuleInit {
      * Converts a human-readable token amount (possibly a float) to base units as bigint,
      * truncating any excess decimal places beyond the token's decimals.
      */
-    private humanAmountToBaseUnitsBigInt(amount: number, decimals: number): bigint {
+    private humanAmountToBaseUnitsBigInt(
+        amount: number,
+        decimals: number,
+    ): bigint {
         const truncated = amount.toFixed(decimals);
         return BigInt(humanToBaseUnits(truncated, decimals));
     }
 
-    private async usdToTokenAmount(usdAmount: number, assetId: string): Promise<number> {
+    private async usdToTokenAmount(
+        usdAmount: number,
+        assetId: string,
+    ): Promise<number> {
         const price = await this.priceService.getPrice(assetId);
         if (price == null || price <= 0) {
             this.logger.warn(
@@ -152,11 +162,15 @@ export class OrdersWorker implements OnModuleInit {
     }
 
     private deriveBotAccounts(): BotAccount[] {
-        const operatorKey = this.configService.get<string>("OPERATOR_PRIVATE_KEY");
+        const operatorKey = this.configService.get<string>(
+            "OPERATOR_PRIVATE_KEY",
+        );
         if (!operatorKey) {
             throw new Error("OPERATOR_PRIVATE_KEY is not configured");
         }
-        const formattedKey = operatorKey.startsWith("0x") ? operatorKey : `0x${operatorKey}`;
+        const formattedKey = operatorKey.startsWith("0x")
+            ? operatorKey
+            : `0x${operatorKey}`;
         return Array.from({ length: NUM_BOT_ACCOUNTS }, (_, i) => {
             const derivedKey = keccak256(toHex(`${formattedKey}-bot-${i}`));
             const account = privateKeyToAccount(derivedKey as `0x${string}`);
@@ -170,9 +184,14 @@ export class OrdersWorker implements OnModuleInit {
 
     private async ensureAccountsExist(): Promise<void> {
         for (const bot of this.botAccounts) {
-            await this.orderRepository.getOrCreateAccount(bot.wallet, bot.privyUserId);
+            await this.orderRepository.getOrCreateAccount(
+                bot.wallet,
+                bot.privyUserId,
+            );
         }
-        this.logger.log(`Ensured ${this.botAccounts.length} bot accounts exist in DB`);
+        this.logger.log(
+            `Ensured ${this.botAccounts.length} bot accounts exist in DB`,
+        );
     }
 
     // ─── Seed Funding (one-shot on init) ──────────────────────────────
@@ -181,14 +200,22 @@ export class OrdersWorker implements OnModuleInit {
      * One-shot seed funding: call faucet once per bot, deposit everything into Treasury.
      */
     private async seedBotFunding(): Promise<void> {
-        const operatorKey = this.configService.get<string>("OPERATOR_PRIVATE_KEY");
+        const operatorKey = this.configService.get<string>(
+            "OPERATOR_PRIVATE_KEY",
+        );
         if (!operatorKey) {
-            this.logger.error("OPERATOR_PRIVATE_KEY is not configured; cannot fund bots");
+            this.logger.error(
+                "OPERATOR_PRIVATE_KEY is not configured; cannot fund bots",
+            );
             return;
         }
-        const formattedKey = operatorKey.startsWith("0x") ? operatorKey : `0x${operatorKey}`;
+        const formattedKey = operatorKey.startsWith("0x")
+            ? operatorKey
+            : `0x${operatorKey}`;
 
-        const assetIds = Array.from(new Set(this.assetMarketCache.map((e) => e.assetId)));
+        const assetIds = Array.from(
+            new Set(this.assetMarketCache.map((e) => e.assetId)),
+        );
         const tokens = await this.tokenRepository.find({
             where: { id: In(assetIds) },
         });
@@ -213,13 +240,16 @@ export class OrdersWorker implements OnModuleInit {
                 assetId: token.id,
                 tokenAddress: token.tokenAddress,
                 decimals: token.decimals,
-                isCollateral: collateralAddressSet.has(token.tokenAddress.toLowerCase()),
+                isCollateral: collateralAddressSet.has(
+                    token.tokenAddress.toLowerCase(),
+                ),
             });
         }
         for (const token of collateralTokens) {
             if (!token.tokenAddress || token.decimals == null) continue;
             // Avoid duplicates
-            if (allSpecs.some((s) => s.tokenAddress === token.tokenAddress)) continue;
+            if (allSpecs.some((s) => s.tokenAddress === token.tokenAddress))
+                continue;
             allSpecs.push({
                 assetId: token.id,
                 tokenAddress: token.tokenAddress,
@@ -324,17 +354,20 @@ export class OrdersWorker implements OnModuleInit {
         }
 
         // Deposit whatever wallet balance we have into Treasury
-        const account = await this.orderRepository.findAccountByWallet(bot.wallet);
+        const account = await this.orderRepository.findAccountByWallet(
+            bot.wallet,
+        );
 
         for (const spec of supportedSpecs) {
             try {
-                const walletBalance = await this.viemService.readContract<bigint>(
-                    this.chainId,
-                    spec.tokenAddress,
-                    erc20Abi,
-                    "balanceOf",
-                    [bot.wallet],
-                );
+                const walletBalance =
+                    await this.viemService.readContract<bigint>(
+                        this.chainId,
+                        spec.tokenAddress,
+                        erc20Abi,
+                        "balanceOf",
+                        [bot.wallet],
+                    );
                 if (walletBalance === 0n) continue;
 
                 const receipt = await this.writeContractWithNonceRetry(
@@ -397,7 +430,12 @@ export class OrdersWorker implements OnModuleInit {
         // Sync portfolio from on-chain balance for all supported tokens
         await Promise.all(
             supportedSpecs.map((s) =>
-                this.syncPortfolioFromOnChainBalance(bot, s.assetId, s.tokenAddress, s.isCollateral),
+                this.syncPortfolioFromOnChainBalance(
+                    bot,
+                    s.assetId,
+                    s.tokenAddress,
+                    s.isCollateral,
+                ),
             ),
         );
 
@@ -420,7 +458,10 @@ export class OrdersWorker implements OnModuleInit {
         }
     }
 
-    private async ensureGasForBot(operatorKey: string, botAddress: string): Promise<void> {
+    private async ensureGasForBot(
+        operatorKey: string,
+        botAddress: string,
+    ): Promise<void> {
         try {
             const publicClient = this.viemService.getPublicClient(this.chainId);
             const balance = await publicClient.getBalance({
@@ -429,9 +470,14 @@ export class OrdersWorker implements OnModuleInit {
             if (balance >= MIN_GAS_BALANCE_WEI) return;
 
             const operatorAccount = privateKeyToAccount(
-                (operatorKey.startsWith("0x") ? operatorKey : `0x${operatorKey}`) as `0x${string}`,
+                (operatorKey.startsWith("0x")
+                    ? operatorKey
+                    : `0x${operatorKey}`) as `0x${string}`,
             );
-            const walletClient = this.viemService.getWalletClient(operatorKey, this.chainId);
+            const walletClient = this.viemService.getWalletClient(
+                operatorKey,
+                this.chainId,
+            );
             const hash = await walletClient.sendTransaction({
                 account: operatorAccount,
                 to: botAddress as `0x${string}`,
@@ -466,7 +512,9 @@ export class OrdersWorker implements OnModuleInit {
             );
             if (onChainBalance === 0n) return;
 
-            const account = await this.orderRepository.findAccountByWallet(bot.wallet);
+            const account = await this.orderRepository.findAccountByWallet(
+                bot.wallet,
+            );
             if (!account) return;
 
             const portfolioId = portfolioUuidFor(
@@ -499,9 +547,13 @@ export class OrdersWorker implements OnModuleInit {
         if (this.topUpInProgress.has(bot.wallet)) return;
         this.topUpInProgress.add(bot.wallet);
         try {
-            const operatorKey = this.configService.get<string>("OPERATOR_PRIVATE_KEY");
+            const operatorKey = this.configService.get<string>(
+                "OPERATOR_PRIVATE_KEY",
+            );
             if (!operatorKey) return;
-            const formattedKey = operatorKey.startsWith("0x") ? operatorKey : `0x${operatorKey}`;
+            const formattedKey = operatorKey.startsWith("0x")
+                ? operatorKey
+                : `0x${operatorKey}`;
 
             const collateralTokens = await this.tokenRepository.find({
                 where: {
@@ -524,7 +576,9 @@ export class OrdersWorker implements OnModuleInit {
 
             const collateralAssetIds = collateralTokens.map((t) => t.id);
             await this.faucetAndDeposit(bot, specs, collateralAssetIds);
-            this.logger.log(`[topUpCollateral] Topped up collateral for bot ${bot.wallet}`);
+            this.logger.log(
+                `[topUpCollateral] Topped up collateral for bot ${bot.wallet}`,
+            );
         } finally {
             this.topUpInProgress.delete(bot.wallet);
         }
@@ -533,18 +587,25 @@ export class OrdersWorker implements OnModuleInit {
     /**
      * On-demand loan token top-up: faucet once + deposit for a single bot and token.
      */
-    private async topUpLoanTokenForBot(bot: BotAccount, assetId: string): Promise<void> {
+    private async topUpLoanTokenForBot(
+        bot: BotAccount,
+        assetId: string,
+    ): Promise<void> {
         const key = `lend-${bot.wallet}`;
         if (this.topUpInProgress.has(key)) return;
         this.topUpInProgress.add(key);
         try {
-            const operatorKey = this.configService.get<string>("OPERATOR_PRIVATE_KEY");
+            const operatorKey = this.configService.get<string>(
+                "OPERATOR_PRIVATE_KEY",
+            );
             if (!operatorKey) return;
             const formattedKey = operatorKey.startsWith("0x")
                 ? operatorKey
                 : `0x${operatorKey}`;
 
-            const token = await this.tokenRepository.findOne({ where: { id: assetId } });
+            const token = await this.tokenRepository.findOne({
+                where: { id: assetId },
+            });
             if (!token?.tokenAddress || token.decimals == null) return;
 
             await this.ensureGasForBot(formattedKey, bot.wallet);
@@ -619,11 +680,18 @@ export class OrdersWorker implements OnModuleInit {
         for (const entry of this.assetMarketCache) {
             try {
                 const { assetId, marketIds, symbol } = entry;
-                const lendMin = await this.usdToTokenAmount(LEND_QUANTITY_USD_MIN, assetId);
-                const lendMax = await this.usdToTokenAmount(LEND_QUANTITY_USD_MAX, assetId);
+                const lendMin = await this.usdToTokenAmount(
+                    LEND_QUANTITY_USD_MIN,
+                    assetId,
+                );
+                const lendMax = await this.usdToTokenAmount(
+                    LEND_QUANTITY_USD_MAX,
+                    assetId,
+                );
                 const amount = this.randomQuantity(lendMin, lendMax);
 
-                const decimals = await this.tokensService.getTokenDecimalsByAssetId(assetId);
+                const decimals =
+                    await this.tokensService.getTokenDecimalsByAssetId(assetId);
                 if (decimals == null) {
                     this.logger.debug(
                         `[OrdersWorker] Skipping lend for ${symbol}: no decimals for asset ${assetId}`,
@@ -631,10 +699,11 @@ export class OrdersWorker implements OnModuleInit {
                     continue;
                 }
                 const quantityBaseUnits = humanToBaseUnits(amount, decimals);
-                let account = await this.pickAccountWithSufficientBalanceForLend(
-                    assetId,
-                    quantityBaseUnits,
-                );
+                let account =
+                    await this.pickAccountWithSufficientBalanceForLend(
+                        assetId,
+                        quantityBaseUnits,
+                    );
                 if (!account) {
                     // Top up once and retry
                     const fallbackBot = this.pickAvailableBotForTopUp("lend");
@@ -643,10 +712,11 @@ export class OrdersWorker implements OnModuleInit {
                             `[OrdersWorker] No bot with sufficient balance for ${symbol}; topping up for ${fallbackBot.wallet}`,
                         );
                         await this.topUpLoanTokenForBot(fallbackBot, assetId);
-                        account = await this.pickAccountWithSufficientBalanceForLend(
-                            assetId,
-                            quantityBaseUnits,
-                        );
+                        account =
+                            await this.pickAccountWithSufficientBalanceForLend(
+                                assetId,
+                                quantityBaseUnits,
+                            );
                     }
                 }
                 if (!account) {
@@ -662,7 +732,9 @@ export class OrdersWorker implements OnModuleInit {
                         account.wallet,
                         account.privyUserId,
                     );
-                    this.logger.debug(`[LEND MARKET] ${symbol} amount=${amount}`);
+                    this.logger.debug(
+                        `[LEND MARKET] ${symbol} amount=${amount}`,
+                    );
                 } else {
                     const rate = this.randomRate(LEND_RATE_MIN, LEND_RATE_MAX);
                     await this.ordersService.createLendLimitOrder(
@@ -670,7 +742,9 @@ export class OrdersWorker implements OnModuleInit {
                         account.wallet,
                         account.privyUserId,
                     );
-                    this.logger.debug(`[LEND LIMIT] ${symbol} amount=${amount} rate=${rate}bp`);
+                    this.logger.debug(
+                        `[LEND LIMIT] ${symbol} amount=${amount} rate=${rate}bp`,
+                    );
                 }
             } catch (error) {
                 this.logger.warn(
@@ -695,11 +769,21 @@ export class OrdersWorker implements OnModuleInit {
         for (const entry of this.assetMarketCache) {
             try {
                 const { assetId, marketIds, symbol } = entry;
-                const borrowMin = await this.usdToTokenAmount(BORROW_QUANTITY_USD_MIN, assetId);
-                const borrowMax = await this.usdToTokenAmount(BORROW_QUANTITY_USD_MAX, assetId);
+                const borrowMin = await this.usdToTokenAmount(
+                    BORROW_QUANTITY_USD_MIN,
+                    assetId,
+                );
+                const borrowMax = await this.usdToTokenAmount(
+                    BORROW_QUANTITY_USD_MAX,
+                    assetId,
+                );
                 const amount = this.randomQuantity(borrowMin, borrowMax);
 
-                let account = await this.pickAccountWithSufficientHealthForBorrow(assetId, amount);
+                let account =
+                    await this.pickAccountWithSufficientHealthForBorrow(
+                        assetId,
+                        amount,
+                    );
                 if (!account) {
                     // Top up collateral once and retry
                     const fallbackBot = this.pickAvailableBotForTopUp();
@@ -713,7 +797,11 @@ export class OrdersWorker implements OnModuleInit {
                         `[OrdersWorker] No bot with sufficient HF for ${symbol} amount=${amount}; topping up collateral for ${fallbackBot.wallet}`,
                     );
                     await this.topUpCollateralForBot(fallbackBot);
-                    account = await this.pickAccountWithSufficientHealthForBorrow(assetId, amount);
+                    account =
+                        await this.pickAccountWithSufficientHealthForBorrow(
+                            assetId,
+                            amount,
+                        );
                 }
                 if (!account) {
                     this.logger.debug(
@@ -728,15 +816,22 @@ export class OrdersWorker implements OnModuleInit {
                         account.wallet,
                         account.privyUserId,
                     );
-                    this.logger.debug(`[BORROW MARKET] ${symbol} amount=${amount}`);
+                    this.logger.debug(
+                        `[BORROW MARKET] ${symbol} amount=${amount}`,
+                    );
                 } else {
-                    const rate = this.randomRate(BORROW_RATE_MIN, BORROW_RATE_MAX);
+                    const rate = this.randomRate(
+                        BORROW_RATE_MIN,
+                        BORROW_RATE_MAX,
+                    );
                     await this.ordersService.createBorrowLimitOrder(
                         { assetId, amount, marketIds, rate },
                         account.wallet,
                         account.privyUserId,
                     );
-                    this.logger.debug(`[BORROW LIMIT] ${symbol} amount=${amount} rate=${rate}bp`);
+                    this.logger.debug(
+                        `[BORROW LIMIT] ${symbol} amount=${amount} rate=${rate}bp`,
+                    );
                 }
             } catch (error) {
                 const err = error as Error;
@@ -810,20 +905,24 @@ export class OrdersWorker implements OnModuleInit {
     ): Promise<BotAccount | null> {
         const candidates: BotAccount[] = [];
         for (const bot of this.botAccounts) {
-            const account = await this.orderRepository.findAccountByWallet(bot.wallet);
+            const account = await this.orderRepository.findAccountByWallet(
+                bot.wallet,
+            );
             if (!account) continue;
 
-            const portfolioBalanceRaw = await this.portfolioService.getAssetBalance(
-                account.id,
-                assetId,
-            );
+            const portfolioBalanceRaw =
+                await this.portfolioService.getAssetBalance(
+                    account.id,
+                    assetId,
+                );
             const portfolioBalance = BigInt(portfolioBalanceRaw);
 
-            const totalOpenOrders = await this.orderRepository.getTotalOpenQuantity(
-                account.id,
-                assetId,
-                OrderSide.Lend,
-            );
+            const totalOpenOrders =
+                await this.orderRepository.getTotalOpenQuantity(
+                    account.id,
+                    assetId,
+                    OrderSide.Lend,
+                );
 
             const availableBalance = portfolioBalance - totalOpenOrders;
 
@@ -850,24 +949,31 @@ export class OrdersWorker implements OnModuleInit {
 
         const candidates: BotAccount[] = [];
         for (const bot of this.botAccounts) {
-            const account = await this.orderRepository.findAccountByWallet(bot.wallet);
+            const account = await this.orderRepository.findAccountByWallet(
+                bot.wallet,
+            );
             if (!account) continue;
 
-            const hfResult = await this.portfolioService.getHealthFactorForAccount(account.id, {
-                additionalBorrowUsd: newOrderUsd,
-                includeOpenOrders: true,
-            });
+            const hfResult =
+                await this.portfolioService.getHealthFactorForAccount(
+                    account.id,
+                    {
+                        additionalBorrowUsd: newOrderUsd,
+                        includeOpenOrders: true,
+                    },
+                );
 
             this.logger.debug(
                 `HF check bot=${bot.wallet.slice(0, 8)} account=${account.id} ` +
-                `hf=${hfResult.healthFactor} collateralUsd=${hfResult.collateralUsd} ` +
-                `debtUsd=${hfResult.debtUsd} weightedLtv=${hfResult.weightedLtvDecimal} ` +
-                `additionalBorrowUsd=${newOrderUsd}`,
+                    `hf=${hfResult.healthFactor} collateralUsd=${hfResult.collateralUsd} ` +
+                    `debtUsd=${hfResult.debtUsd} weightedLtv=${hfResult.weightedLtvDecimal} ` +
+                    `additionalBorrowUsd=${newOrderUsd}`,
             );
 
             if (
                 hfResult.healthFactor === HEALTH_FACTOR_NO_DEBT ||
-                (Number.isFinite(hfResult.healthFactor) && hfResult.healthFactor >= 1)
+                (Number.isFinite(hfResult.healthFactor) &&
+                    hfResult.healthFactor >= 1)
             ) {
                 candidates.push(bot);
             }
@@ -886,13 +992,17 @@ export class OrdersWorker implements OnModuleInit {
     }
 
     private randomAccount() {
-        return this.botAccounts[Math.floor(Math.random() * this.botAccounts.length)];
+        return this.botAccounts[
+            Math.floor(Math.random() * this.botAccounts.length)
+        ];
     }
 
     /**
      * Returns a bot not currently in topUpInProgress, or null if all are busy.
      */
-    private pickAvailableBotForTopUp(keyPrefix: string = ""): BotAccount | null {
+    private pickAvailableBotForTopUp(
+        keyPrefix: string = "",
+    ): BotAccount | null {
         const shuffled = [...this.botAccounts].sort(() => Math.random() - 0.5);
         for (const bot of shuffled) {
             const key = keyPrefix ? `${keyPrefix}-${bot.wallet}` : bot.wallet;

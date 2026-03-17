@@ -31,4 +31,4 @@ import { EventsGateway } from "./websocket/websocket.gateway";
         EventsGateway,
     ],
 })
-export class CoreModule { }
+export class CoreModule {}

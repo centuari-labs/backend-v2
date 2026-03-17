@@ -1,14 +1,32 @@
-import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
+import {
+    BadRequestException,
+    Injectable,
+    NotFoundException,
+} from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
 import { Token } from "../tokens/entities/token.entity";
 import { PriceService } from "../price/price.service";
 import { TokensService } from "../tokens/tokens.service";
+import type { TransactionHistoryItem } from "./dto/transaction-history.dto";
 import { TransactionHistoryQueryDto } from "./dto/transaction-history.dto";
-import { MyPortfolioResponseDto, GetMyAssetsQueryDto, MyAssetsResponseDto, LendBorrowAssetResponseDto, GetMyPositionResponseDto, MyPositionQueryDto, SetAssetAsCollateralDto, MyHealthFactorResponseDto, UserDetailsResponseDto } from "./dto/portfolio.dto";
+import {
+    MyPortfolioResponseDto,
+    GetMyAssetsQueryDto,
+    MyAssetsResponseDto,
+    LendBorrowAssetResponseDto,
+    GetMyPositionResponseDto,
+    MyPositionQueryDto,
+    SetAssetAsCollateralDto,
+    MyHealthFactorResponseDto,
+    UserDetailsResponseDto,
+} from "./dto/portfolio.dto";
 import { PortfolioRepository } from "./repositories/portfolio.repository";
 import { OrderRepository } from "../orders/repositories/order.repository";
-import { calculateUsdAmount, createPaginatedResponse } from "./helpers/position.helpers";
+import {
+    calculateUsdAmount,
+    createPaginatedResponse,
+} from "./helpers/position.helpers";
 import { baseUnitsToHuman } from "../common/utils/number.utils";
 import {
     computeHealthFactor,
@@ -29,7 +47,7 @@ export class PortfolioService {
         private readonly tokensService: TokensService,
         private readonly portfolioRepository: PortfolioRepository,
         private readonly orderRepository: OrderRepository,
-    ) { }
+    ) {}
 
     async getMyPortfolio(wallet: string): Promise<MyPortfolioResponseDto> {
         const account = await this.orderRepository.findAccountByWallet(wallet);
@@ -41,17 +59,22 @@ export class PortfolioService {
 
         let totalBalanceUsd = 0;
 
-        const [portfolio, lendPositions, suppliedAssets, borrowedAssets] = await Promise.all([
-            this.portfolioRepository.getUserTotalBalances(account.id),
-            this.portfolioRepository.getUserLendPositionsForApr(account.id),
-            this.portfolioRepository.getUserSuppliedAssets(account.id),
-            this.portfolioRepository.getUserBorrowedAssets(account.id),
-        ]);
+        const [portfolio, lendPositions, suppliedAssets, borrowedAssets] =
+            await Promise.all([
+                this.portfolioRepository.getUserTotalBalances(account.id),
+                this.portfolioRepository.getUserLendPositionsForApr(account.id),
+                this.portfolioRepository.getUserSuppliedAssets(account.id),
+                this.portfolioRepository.getUserBorrowedAssets(account.id),
+            ]);
 
         for (const deposit of portfolio) {
-            const decimals = await this.tokensService.getTokenDecimalsByAssetId(deposit.asset_id);
+            const decimals = await this.tokensService.getTokenDecimalsByAssetId(
+                deposit.asset_id,
+            );
             if (decimals == null) continue;
-            const amountHuman = Number(baseUnitsToHuman(deposit.total_amount, decimals));
+            const amountHuman = Number(
+                baseUnitsToHuman(deposit.total_amount, decimals),
+            );
             const price = allPrices[deposit.asset_id.toLowerCase()];
             if (price !== undefined) {
                 totalBalanceUsd += amountHuman * price;
@@ -65,11 +88,18 @@ export class PortfolioService {
             let totalAmount = 0;
 
             for (const position of lendPositions) {
-                const decimals = await this.tokensService.getTokenDecimalsByAssetId(position.asset_id);
+                const decimals =
+                    await this.tokensService.getTokenDecimalsByAssetId(
+                        position.asset_id,
+                    );
                 if (decimals == null) continue;
 
-                const amountHuman = Number(baseUnitsToHuman(position.amount, decimals));
-                const sharesHuman = Number(baseUnitsToHuman(position.shares, decimals));
+                const amountHuman = Number(
+                    baseUnitsToHuman(position.amount, decimals),
+                );
+                const sharesHuman = Number(
+                    baseUnitsToHuman(position.shares, decimals),
+                );
 
                 if (amountHuman <= 0) continue;
 
@@ -91,9 +121,13 @@ export class PortfolioService {
 
         let suppliedAssetsUsd = 0;
         for (const position of suppliedAssets) {
-            const decimals = await this.tokensService.getTokenDecimalsByAssetId(position.asset_id);
+            const decimals = await this.tokensService.getTokenDecimalsByAssetId(
+                position.asset_id,
+            );
             if (decimals == null) continue;
-            const amountHuman = Number(baseUnitsToHuman(position.amount, decimals));
+            const amountHuman = Number(
+                baseUnitsToHuman(position.amount, decimals),
+            );
             if (amountHuman <= 0) continue;
 
             const price = allPrices[position.asset_id.toLowerCase()];
@@ -104,9 +138,13 @@ export class PortfolioService {
 
         let borrowedAssetsUsd = 0;
         for (const position of borrowedAssets) {
-            const decimals = await this.tokensService.getTokenDecimalsByAssetId(position.asset_id);
+            const decimals = await this.tokensService.getTokenDecimalsByAssetId(
+                position.asset_id,
+            );
             if (decimals == null) continue;
-            const amountHuman = Number(baseUnitsToHuman(position.amount, decimals));
+            const amountHuman = Number(
+                baseUnitsToHuman(position.amount, decimals),
+            );
             if (amountHuman <= 0) continue;
 
             const price = allPrices[position.asset_id.toLowerCase()];
@@ -116,16 +154,19 @@ export class PortfolioService {
         }
 
         const availableBalanceUsdRaw = totalBalanceUsd - suppliedAssetsUsd;
-        const availableBalanceUsd = availableBalanceUsdRaw > 0 ? availableBalanceUsdRaw : 0;
+        const availableBalanceUsd =
+            availableBalanceUsdRaw > 0 ? availableBalanceUsdRaw : 0;
 
-        const allocationTotalUsd = availableBalanceUsd + suppliedAssetsUsd + borrowedAssetsUsd;
+        const allocationTotalUsd =
+            availableBalanceUsd + suppliedAssetsUsd + borrowedAssetsUsd;
 
         let availableBalancePct = 0;
         let suppliedAssetsPct = 0;
         let borrowedAssetsPct = 0;
 
         if (allocationTotalUsd > 0) {
-            availableBalancePct = (availableBalanceUsd / allocationTotalUsd) * 100;
+            availableBalancePct =
+                (availableBalanceUsd / allocationTotalUsd) * 100;
             suppliedAssetsPct = (suppliedAssetsUsd / allocationTotalUsd) * 100;
             borrowedAssetsPct = (borrowedAssetsUsd / allocationTotalUsd) * 100;
         }
@@ -145,7 +186,18 @@ export class PortfolioService {
         };
     }
 
-    async getLendBorrowAssets(wallet: string, days = 90): Promise<LendBorrowAssetResponseDto & { chartData: { date: string; lendAmount: string; borrowAmount: string }[] }> {
+    async getLendBorrowAssets(
+        wallet: string,
+        days = 90,
+    ): Promise<
+        LendBorrowAssetResponseDto & {
+            chartData: {
+                date: string;
+                lendAmount: string;
+                borrowAmount: string;
+            }[];
+        }
+    > {
         const account = await this.orderRepository.findAccountByWallet(wallet);
         if (!account) {
             throw new NotFoundException("Account not found");
@@ -161,9 +213,13 @@ export class PortfolioService {
 
         let suppliedAssetsUsd = 0;
         for (const position of suppliedAssets) {
-            const decimals = await this.tokensService.getTokenDecimalsByAssetId(position.asset_id);
+            const decimals = await this.tokensService.getTokenDecimalsByAssetId(
+                position.asset_id,
+            );
             if (decimals == null) continue;
-            const amountHuman = Number(baseUnitsToHuman(position.amount, decimals));
+            const amountHuman = Number(
+                baseUnitsToHuman(position.amount, decimals),
+            );
             if (amountHuman <= 0) continue;
             const price = allPrices[position.asset_id.toLowerCase()];
             if (price === undefined) continue;
@@ -172,20 +228,23 @@ export class PortfolioService {
 
         let borrowedAssetsUsd = 0;
         for (const position of borrowedAssets) {
-            const decimals = await this.tokensService.getTokenDecimalsByAssetId(position.asset_id);
+            const decimals = await this.tokensService.getTokenDecimalsByAssetId(
+                position.asset_id,
+            );
             if (decimals == null) continue;
-            const amountHuman = Number(baseUnitsToHuman(position.amount, decimals));
+            const amountHuman = Number(
+                baseUnitsToHuman(position.amount, decimals),
+            );
             if (amountHuman <= 0) continue;
             const price = allPrices[position.asset_id.toLowerCase()];
             if (price === undefined) continue;
             borrowedAssetsUsd += amountHuman * price;
         }
 
-        const chartRows =
-            await this.portfolioRepository.getUserDailyLendBorrow(
-                account.id,
-                days,
-            );
+        const chartRows = await this.portfolioRepository.getUserDailyLendBorrow(
+            account.id,
+            days,
+        );
 
         const chartData = chartRows.map((row) => ({
             date: new Date(row.date).toISOString().split("T")[0],
@@ -196,7 +255,9 @@ export class PortfolioService {
         return {
             suppliedAssets: Number(suppliedAssetsUsd.toFixed(2)),
             borrowedAssets: Number(borrowedAssetsUsd.toFixed(2)),
-            healthFactor: Number.isFinite(formatted.healthFactor) ? formatted.healthFactor : 0,
+            healthFactor: Number.isFinite(formatted.healthFactor)
+                ? formatted.healthFactor
+                : 0,
             chartData,
         };
     }
@@ -219,7 +280,9 @@ export class PortfolioService {
         );
     }
 
-    async getMyHealthFactor(wallet: string): Promise<MyHealthFactorResponseDto> {
+    async getMyHealthFactor(
+        wallet: string,
+    ): Promise<MyHealthFactorResponseDto> {
         const account = await this.orderRepository.findAccountByWallet(wallet);
         if (!account) {
             throw new NotFoundException("Account not found");
@@ -237,12 +300,14 @@ export class PortfolioService {
         debtPositions: DebtPositionInput[];
         additionalDebtPositions?: DebtPositionInput[];
     }> {
-        const [collateralRows, debtRows, tokens, allPrices] = await Promise.all([
-            this.portfolioRepository.getUserCollateralAssets(accountId),
-            this.portfolioRepository.getUserBorrowedAssets(accountId),
-            this.tokenRepository.find(),
-            Promise.resolve(this.priceService.getPrices()),
-        ]);
+        const [collateralRows, debtRows, tokens, allPrices] = await Promise.all(
+            [
+                this.portfolioRepository.getUserCollateralAssets(accountId),
+                this.portfolioRepository.getUserBorrowedAssets(accountId),
+                this.tokenRepository.find(),
+                Promise.resolve(this.priceService.getPrices()),
+            ],
+        );
 
         const tokenMap = new Map(tokens.map((t) => [t.id, t]));
         const priceMap = new Map<string, number>();
@@ -253,18 +318,24 @@ export class PortfolioService {
 
         // Fetch LTV from risk table for collateral tokens (token.averageLTV is only set for loan tokens)
         const collateralAssetIds = collateralRows.map((r) => r.asset_id);
-        const riskParams = collateralAssetIds.length > 0
-            ? await this.portfolioRepository.getRiskParamsByCollateralTokenIds(collateralAssetIds)
-            : [];
-        const riskLtvMap = new Map(riskParams.map((r) => [r.asset_id, Number(r.avg_ltv)]));
+        const riskParams =
+            collateralAssetIds.length > 0
+                ? await this.portfolioRepository.getRiskParamsByCollateralTokenIds(
+                      collateralAssetIds,
+                  )
+                : [];
+        const riskLtvMap = new Map(
+            riskParams.map((r) => [r.asset_id, Number(r.avg_ltv)]),
+        );
 
         const collateralPositions: CollateralPositionInput[] = [];
         for (const row of collateralRows) {
             const token = tokenMap.get(row.asset_id);
             const decimals = token?.decimals ?? 0;
             const priceUsd = priceMap.get(row.asset_id) ?? 0;
-            const ltvBps = riskLtvMap.get(row.asset_id)
-                ?? (token?.averageLTV != null ? Number(token.averageLTV) : 0);
+            const ltvBps =
+                riskLtvMap.get(row.asset_id) ??
+                (token?.averageLTV != null ? Number(token.averageLTV) : 0);
             collateralPositions.push({
                 assetId: row.asset_id,
                 amountBaseUnits: row.amount,
@@ -302,13 +373,16 @@ export class PortfolioService {
         }
 
         if (options?.includeOpenOrders) {
-            const openOrders = await this.orderRepository.getOpenBorrowOrders(accountId);
+            const openOrders =
+                await this.orderRepository.getOpenBorrowOrders(accountId);
             for (const order of openOrders) {
                 const token = tokenMap.get(order.assetId);
                 const decimals = token?.decimals ?? 0;
                 const priceUsd = priceMap.get(order.assetId) ?? 0;
 
-                const remainingAmountBaseUnits = (BigInt(order.quantity) - BigInt(order.filledQuantity)).toString();
+                const remainingAmountBaseUnits = (
+                    BigInt(order.quantity) - BigInt(order.filledQuantity)
+                ).toString();
 
                 additionalDebtPositions.push({
                     assetId: order.assetId,
@@ -322,23 +396,34 @@ export class PortfolioService {
         return {
             collateralPositions,
             debtPositions,
-            additionalDebtPositions: additionalDebtPositions.length > 0 ? additionalDebtPositions : undefined
+            additionalDebtPositions:
+                additionalDebtPositions.length > 0
+                    ? additionalDebtPositions
+                    : undefined,
         };
     }
 
     async calculateOpenBorrowOrdersUsd(accountId: string): Promise<number> {
-        const openOrders = await this.orderRepository.getOpenBorrowOrders(accountId);
+        const openOrders =
+            await this.orderRepository.getOpenBorrowOrders(accountId);
         let totalUsd = 0;
         const allPrices = this.priceService.getPrices();
 
         for (const order of openOrders) {
             const price = allPrices[order.assetId.toLowerCase()];
-            const decimals = await this.tokensService.getTokenDecimalsByAssetId(order.assetId);
+            const decimals = await this.tokensService.getTokenDecimalsByAssetId(
+                order.assetId,
+            );
             if (price != null && decimals != null) {
-                const remainingAmountHuman = Number(baseUnitsToHuman(
-                    (BigInt(order.quantity) - BigInt(order.filledQuantity)).toString(),
-                    decimals
-                ));
+                const remainingAmountHuman = Number(
+                    baseUnitsToHuman(
+                        (
+                            BigInt(order.quantity) -
+                            BigInt(order.filledQuantity)
+                        ).toString(),
+                        decimals,
+                    ),
+                );
                 totalUsd += remainingAmountHuman * price;
             }
         }
@@ -349,9 +434,12 @@ export class PortfolioService {
     async checkAvailableBalanceForLend(
         accountId: string,
         assetId: string,
-        quantityBaseUnits: string
+        quantityBaseUnits: string,
     ): Promise<void> {
-        const portfolioBalanceRaw = await this.getAssetBalance(accountId, assetId);
+        const portfolioBalanceRaw = await this.getAssetBalance(
+            accountId,
+            assetId,
+        );
         const portfolioBalance = BigInt(portfolioBalanceRaw);
 
         const totalOpenOrders = await this.orderRepository.getTotalOpenQuantity(
@@ -363,11 +451,16 @@ export class PortfolioService {
         const availableBalance = portfolioBalance - totalOpenOrders;
 
         if (BigInt(quantityBaseUnits) > availableBalance) {
-            throw new BadRequestException("Insufficient portfolio balance for this order");
+            throw new BadRequestException(
+                "Insufficient portfolio balance for this order",
+            );
         }
     }
 
-    async getMyAssets(wallet: string, query: GetMyAssetsQueryDto): Promise<MyAssetsResponseDto> {
+    async getMyAssets(
+        wallet: string,
+        query: GetMyAssetsQueryDto,
+    ): Promise<MyAssetsResponseDto> {
         const { page = 1, limit = 10 } = query;
 
         const account = await this.orderRepository.findAccountByWallet(wallet);
@@ -375,11 +468,12 @@ export class PortfolioService {
             return createPaginatedResponse([], 0, page, limit);
         }
 
-        const { data: userAssets, total } = await this.portfolioRepository.getUserAssets(
-            account.id,
-            page,
-            limit
-        );
+        const { data: userAssets, total } =
+            await this.portfolioRepository.getUserAssets(
+                account.id,
+                page,
+                limit,
+            );
 
         if (userAssets.length === 0) {
             return createPaginatedResponse([], total, page, limit);
@@ -388,7 +482,9 @@ export class PortfolioService {
         const assetIds = userAssets.map((ua) => ua.asset_id);
         const [tokens, riskParams] = await Promise.all([
             this.portfolioRepository.getTokensByAssetIds(assetIds),
-            this.portfolioRepository.getRiskParamsByCollateralTokenIds(assetIds),
+            this.portfolioRepository.getRiskParamsByCollateralTokenIds(
+                assetIds,
+            ),
         ]);
 
         const tokenMap = new Map(tokens.map((t) => [t.id, t]));
@@ -420,7 +516,10 @@ export class PortfolioService {
         return createPaginatedResponse(data, total, page, limit);
     }
 
-    async getMyPosition(wallet: string, query: MyPositionQueryDto): Promise<GetMyPositionResponseDto> {
+    async getMyPosition(
+        wallet: string,
+        query: MyPositionQueryDto,
+    ): Promise<GetMyPositionResponseDto> {
         const { page = 1, limit = 10, type } = query;
 
         const account = await this.orderRepository.findAccountByWallet(wallet);
@@ -428,12 +527,13 @@ export class PortfolioService {
             throw new NotFoundException("Account not found");
         }
 
-        const { data: positions, total } = await this.portfolioRepository.getUserPositions(
-            account.id,
-            type,
-            page,
-            limit
-        );
+        const { data: positions, total } =
+            await this.portfolioRepository.getUserPositions(
+                account.id,
+                type,
+                page,
+                limit,
+            );
 
         if (positions.length === 0) {
             return createPaginatedResponse([], total, page, limit);
@@ -444,7 +544,9 @@ export class PortfolioService {
         const data = positions.map((position) => {
             const price = allPrices[position.asset_id.toLowerCase()];
             const decimals = Number(position.decimals) || 0;
-            const quantityHuman = Number(baseUnitsToHuman(position.quantity, decimals));
+            const quantityHuman = Number(
+                baseUnitsToHuman(position.quantity, decimals),
+            );
 
             return {
                 id: position.position_id,
@@ -454,8 +556,10 @@ export class PortfolioService {
                 amountInUsd: calculateUsdAmount(quantityHuman, price ?? 0),
                 isCollateral: false,
                 imageUrl: position.image_url ?? null,
-                side: position.side as 'LEND' | 'BORROW',
-                maturity: position.maturity ? new Date(position.maturity).getTime() / 1000 : null,
+                side: position.side as "LEND" | "BORROW",
+                maturity: position.maturity
+                    ? new Date(position.maturity).getTime() / 1000
+                    : null,
                 apr: Number(position.rate) || 0,
             };
         });
@@ -463,8 +567,16 @@ export class PortfolioService {
         return createPaginatedResponse(data, total, page, limit);
     }
 
-    async setAssetAsCollateral(wallet: string, body: SetAssetAsCollateralDto): Promise<void> {
-        if (!body || !body.assetIds || !Array.isArray(body.assetIds) || body.assetIds.length === 0) {
+    async setAssetAsCollateral(
+        wallet: string,
+        body: SetAssetAsCollateralDto,
+    ): Promise<void> {
+        if (
+            !body ||
+            !body.assetIds ||
+            !Array.isArray(body.assetIds) ||
+            body.assetIds.length === 0
+        ) {
             throw new Error("Invalid request body: assetIds array is required");
         }
 
@@ -473,17 +585,25 @@ export class PortfolioService {
             throw new NotFoundException("Account not found");
         }
 
-        await this.portfolioRepository.setAssetAsCollateral(account.id, body.assetIds, body.isCollateral);
+        await this.portfolioRepository.setAssetAsCollateral(
+            account.id,
+            body.assetIds,
+            body.isCollateral,
+        );
     }
 
     async getTransactionHistory(
         wallet: string,
         query: TransactionHistoryQueryDto,
     ) {
-        const account =
-            await this.orderRepository.findAccountByWallet(wallet);
+        const account = await this.orderRepository.findAccountByWallet(wallet);
         if (!account) {
-            return createPaginatedResponse([], 0, query.page ?? 1, query.limit ?? 10);
+            return createPaginatedResponse(
+                [],
+                0,
+                query.page ?? 1,
+                query.limit ?? 10,
+            );
         }
 
         const { data: rows, total } =
@@ -493,15 +613,12 @@ export class PortfolioService {
                 query.limit ?? 10,
             );
 
-        const items = rows.map((row) => ({
+        const items: TransactionHistoryItem[] = rows.map((row) => ({
             id: row.id,
             side: row.side,
             orderType: row.order_type,
             rate: Number(row.rate) || 0,
-            amount: baseUnitsToHuman(
-                row.amount,
-                Number(row.decimals) || 0,
-            ),
+            amount: baseUnitsToHuman(row.amount, Number(row.decimals) || 0),
             filledQuantity: row.filled_quantity
                 ? baseUnitsToHuman(
                       row.filled_quantity,
@@ -509,10 +626,18 @@ export class PortfolioService {
                   )
                 : null,
             status: row.status,
-            symbol: row.symbol,
-            imageUrl: row.image_url,
-            decimals: Number(row.decimals) || 0,
-            tokenAddress: row.token_address,
+            asset: {
+                id: row.asset_id,
+                name: row.name,
+                symbol: row.symbol,
+                decimals: Number(row.decimals) || 0,
+                imageUrl: row.image_url,
+                tokenAddress: row.token_address,
+            },
+            fee:
+                row.total_fee && row.total_fee !== "0"
+                    ? baseUnitsToHuman(row.total_fee, Number(row.decimals) || 0)
+                    : null,
             createdAt: new Date(row.created_at).toISOString(),
         }));
 
@@ -525,8 +650,9 @@ export class PortfolioService {
     }
 
     async getAssetBalance(accountId: string, assetId: string): Promise<string> {
-        const balances = await this.portfolioRepository.getUserTotalBalances(accountId);
-        const match = balances.find(b => b.asset_id === assetId);
+        const balances =
+            await this.portfolioRepository.getUserTotalBalances(accountId);
+        const match = balances.find((b) => b.asset_id === assetId);
         return match ? match.total_amount : "0";
     }
 
@@ -569,9 +695,12 @@ export class PortfolioService {
 
         // Get risk params for all portfolio asset IDs
         const assetIds = portfolioBalances.map((b) => b.asset_id);
-        const riskParams = assetIds.length > 0
-            ? await this.portfolioRepository.getRiskParamsByCollateralTokenIds(assetIds)
-            : [];
+        const riskParams =
+            assetIds.length > 0
+                ? await this.portfolioRepository.getRiskParamsByCollateralTokenIds(
+                      assetIds,
+                  )
+                : [];
         const riskMap = new Map(riskParams.map((r) => [r.asset_id, r]));
 
         // Build asset details
@@ -581,12 +710,19 @@ export class PortfolioService {
             const risk = riskMap.get(balance.asset_id);
             const price = allPrices[balance.asset_id.toLowerCase()] ?? 0;
 
-            const totalBalanceHuman = Number(baseUnitsToHuman(balance.total_amount, decimals));
+            const totalBalanceHuman = Number(
+                baseUnitsToHuman(balance.total_amount, decimals),
+            );
 
             const lockedBaseUnits = lockedMap.get(balance.asset_id) ?? "0";
-            const lockedHuman = Number(baseUnitsToHuman(lockedBaseUnits, decimals));
+            const lockedHuman = Number(
+                baseUnitsToHuman(lockedBaseUnits, decimals),
+            );
 
-            const availableBalance = Math.max(0, totalBalanceHuman - lockedHuman);
+            const availableBalance = Math.max(
+                0,
+                totalBalanceHuman - lockedHuman,
+            );
             const availableBalanceUsd = availableBalance * price;
 
             const ltv = risk ? Number(risk.avg_ltv) / 10000 : 0;
@@ -606,7 +742,11 @@ export class PortfolioService {
 
         // Compute settled debt
         let settledDebtUsd = 0;
-        const debts: { assetId: string; debtAmount: number; debtAmountUsd: number }[] = [];
+        const debts: {
+            assetId: string;
+            debtAmount: number;
+            debtAmountUsd: number;
+        }[] = [];
         for (const row of borrowedAssets) {
             const token = tokenMap.get(row.asset_id);
             const decimals = token?.decimals ?? 0;
@@ -627,8 +767,12 @@ export class PortfolioService {
             const token = tokenMap.get(order.assetId);
             const decimals = token?.decimals ?? 0;
             const price = allPrices[order.assetId.toLowerCase()] ?? 0;
-            const remainingBaseUnits = (BigInt(order.quantity) - BigInt(order.filledQuantity)).toString();
-            const remainingHuman = Number(baseUnitsToHuman(remainingBaseUnits, decimals));
+            const remainingBaseUnits = (
+                BigInt(order.quantity) - BigInt(order.filledQuantity)
+            ).toString();
+            const remainingHuman = Number(
+                baseUnitsToHuman(remainingBaseUnits, decimals),
+            );
             pendingDebtUsd += remainingHuman * price;
         }
 

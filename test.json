@@ -6,9 +6,7 @@
             "orderId": "b66a2641-3339-4a48-805c-6da248f33dee",
             "walletAddress": "0x44a95B161A038de26cB16A45CC2580685176D966",
             "assetId": "b66a2641-3339-4a48-805c-6da248f33dee",
-            "maturities": [
-                1720000000
-            ],
+            "maturities": [1720000000],
             "timestamp": 1768942652795,
             "side": "lend",
             "type": "limit",

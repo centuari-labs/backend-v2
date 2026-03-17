@@ -4,7 +4,7 @@ import type { AuthUser, IAuthStrategy } from "./auth-strategy.interface";
 
 @Injectable()
 export class PrivyAuthStrategy implements IAuthStrategy {
-    constructor(private readonly privyService: PrivyService) { }
+    constructor(private readonly privyService: PrivyService) {}
 
     async validate(token: string): Promise<AuthUser> {
         const result = await this.privyService.verify(token);
@@ -29,15 +29,15 @@ export class PrivyAuthStrategy implements IAuthStrategy {
         try {
             const user = await this.privyService.getUser(userId);
             const walletAccounts = user.linkedAccounts.filter(
-                (account: any) => account.type === 'wallet'
+                (account: any) => account.type === "wallet",
             );
 
             // Prefer external wallet over Privy embedded wallet
             const externalWallet = walletAccounts.find(
-                (w: any) => w.walletClientType !== 'privy',
+                (w: any) => w.walletClientType !== "privy",
             );
             const embeddedWallet = walletAccounts.find(
-                (w: any) => w.walletClientType === 'privy',
+                (w: any) => w.walletClientType === "privy",
             );
             const wallet = externalWallet ?? embeddedWallet;
 

@@ -40,28 +40,22 @@ describe("CoinGeckoProvider with DB tokens (integration)", () => {
         await dataSource.destroy();
     });
 
-    it(
-        "should fetch prices for all tokens with coingeckoId in DB",
-        async () => {
-            const tokens = await tokensRepository.getActiveTokens();
-            const tokensWithCoingecko = tokens.filter((t) => t.coingeckoId);
+    it("should fetch prices for all tokens with coingeckoId in DB", async () => {
+        const tokens = await tokensRepository.getActiveTokens();
+        const tokensWithCoingecko = tokens.filter((t) => t.coingeckoId);
 
-            expect(
-                tokensWithCoingecko.length,
-            ).toBeGreaterThan(0);
+        expect(tokensWithCoingecko.length).toBeGreaterThan(0);
 
-            const prices = await provider.fetchPrices(tokens);
+        const prices = await provider.fetchPrices(tokens);
 
-            const missing: string[] = [];
-            for (const token of tokensWithCoingecko) {
-                const price = prices[token.symbol];
-                if (typeof price !== "number" || price <= 0) {
-                    missing.push(`${token.symbol} (${token.coingeckoId})`);
-                }
+        const missing: string[] = [];
+        for (const token of tokensWithCoingecko) {
+            const price = prices[token.symbol];
+            if (typeof price !== "number" || price <= 0) {
+                missing.push(`${token.symbol} (${token.coingeckoId})`);
             }
+        }
 
-            expect(missing).toEqual([]);
-        },
-        15_000,
-    );
+        expect(missing).toEqual([]);
+    }, 15_000);
 });

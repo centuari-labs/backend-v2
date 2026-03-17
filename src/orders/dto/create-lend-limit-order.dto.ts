@@ -50,5 +50,3 @@ export class CreateLendLimitOrderDto {
     @IsBoolean()
     autoRollover?: boolean;
 }
-
-

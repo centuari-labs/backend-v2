@@ -14,8 +14,12 @@ describe("FaucetService", () => {
     let loggerLogSpy: jest.SpyInstance;
 
     beforeAll(() => {
-        loggerErrorSpy = jest.spyOn(Logger.prototype, "error").mockImplementation(() => { });
-        loggerLogSpy = jest.spyOn(Logger.prototype, "log").mockImplementation(() => { });
+        loggerErrorSpy = jest
+            .spyOn(Logger.prototype, "error")
+            .mockImplementation(() => {});
+        loggerLogSpy = jest
+            .spyOn(Logger.prototype, "log")
+            .mockImplementation(() => {});
     });
 
     afterAll(() => {
@@ -59,7 +63,10 @@ describe("FaucetService", () => {
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 FaucetService,
-                { provide: getRepositoryToken(Token), useValue: mockTokenRepository },
+                {
+                    provide: getRepositoryToken(Token),
+                    useValue: mockTokenRepository,
+                },
                 { provide: ViemService, useValue: mockViemService },
                 { provide: ConfigService, useValue: mockConfigService },
             ],
@@ -77,7 +84,7 @@ describe("FaucetService", () => {
     function setupConfig(overrides: Record<string, string | undefined> = {}) {
         configService.get.mockImplementation((key: string) => {
             const defaults: Record<string, string> = {
-                "OPERATOR_PRIVATE_KEY": OPERATOR_KEY,
+                OPERATOR_PRIVATE_KEY: OPERATOR_KEY,
                 [`FAUCET_ADDRESS_${CHAIN_ID}`]: FAUCET_ADDRESS,
                 [`FAUCET_TOKENS_${CHAIN_ID}`]: TOKENS_ENV,
             };
@@ -89,12 +96,20 @@ describe("FaucetService", () => {
     describe("requestTokens", () => {
         it("should mint all configured tokens for recipient", async () => {
             setupConfig();
-            viemService.readContract.mockResolvedValue([true, MAX_PER_REQUEST, BigInt(3600)]);
+            viemService.readContract.mockResolvedValue([
+                true,
+                MAX_PER_REQUEST,
+                BigInt(3600),
+            ]);
             viemService.writeContract
                 .mockResolvedValueOnce(makeTxReceipt("0xaaa") as any)
                 .mockResolvedValueOnce(makeTxReceipt("0xbbb") as any);
 
-            const result = await service.requestTokens(CHAIN_ID, RECIPIENT_ADDRESS, "all-assets");
+            const result = await service.requestTokens(
+                CHAIN_ID,
+                RECIPIENT_ADDRESS,
+                "all-assets",
+            );
 
             expect(result.chainId).toBe(CHAIN_ID);
             expect(result.recipientAddress).toBe(RECIPIENT_ADDRESS);
@@ -118,12 +133,20 @@ describe("FaucetService", () => {
 
         it("should return error entry for a failed token without aborting others", async () => {
             setupConfig();
-            viemService.readContract.mockResolvedValue([true, MAX_PER_REQUEST, BigInt(3600)]);
+            viemService.readContract.mockResolvedValue([
+                true,
+                MAX_PER_REQUEST,
+                BigInt(3600),
+            ]);
             viemService.writeContract
                 .mockResolvedValueOnce(makeTxReceipt("0xaaa") as any)
                 .mockRejectedValueOnce(new Error("Transaction reverted"));
 
-            const result = await service.requestTokens(CHAIN_ID, RECIPIENT_ADDRESS, "all-assets");
+            const result = await service.requestTokens(
+                CHAIN_ID,
+                RECIPIENT_ADDRESS,
+                "all-assets",
+            );
 
             // First token succeeded -- top-level receipt reflects that
             expect(result.status).toBe("success");
@@ -140,9 +163,15 @@ describe("FaucetService", () => {
             viemService.readContract
                 .mockResolvedValueOnce([false, MAX_PER_REQUEST, BigInt(3600)])
                 .mockResolvedValueOnce([true, MAX_PER_REQUEST, BigInt(3600)]);
-            viemService.writeContract.mockResolvedValueOnce(makeTxReceipt("0xbbb") as any);
+            viemService.writeContract.mockResolvedValueOnce(
+                makeTxReceipt("0xbbb") as any,
+            );
 
-            const result = await service.requestTokens(CHAIN_ID, RECIPIENT_ADDRESS, "all-assets");
+            const result = await service.requestTokens(
+                CHAIN_ID,
+                RECIPIENT_ADDRESS,
+                "all-assets",
+            );
 
             // Second token succeeded -- top-level receipt reflects that
             expect(result.status).toBe("success");
@@ -153,9 +182,13 @@ describe("FaucetService", () => {
         });
 
         it("should fall back to mock when operator key is missing", async () => {
-            setupConfig({ "OPERATOR_PRIVATE_KEY": undefined });
+            setupConfig({ OPERATOR_PRIVATE_KEY: undefined });
 
-            const result = await service.requestTokens(CHAIN_ID, RECIPIENT_ADDRESS, "all-assets");
+            const result = await service.requestTokens(
+                CHAIN_ID,
+                RECIPIENT_ADDRESS,
+                "all-assets",
+            );
 
             expect(result.status).toBe("success");
             expect(result.results).toHaveLength(2);
@@ -166,7 +199,11 @@ describe("FaucetService", () => {
         it("should fall back to mock when faucet address is missing", async () => {
             setupConfig({ [`FAUCET_ADDRESS_${CHAIN_ID}`]: undefined });
 
-            const result = await service.requestTokens(CHAIN_ID, RECIPIENT_ADDRESS, "all-assets");
+            const result = await service.requestTokens(
+                CHAIN_ID,
+                RECIPIENT_ADDRESS,
+                "all-assets",
+            );
 
             expect(result.status).toBe("success");
             expect(result.results).toHaveLength(2);
@@ -177,7 +214,11 @@ describe("FaucetService", () => {
             setupConfig({ [`FAUCET_TOKENS_${CHAIN_ID}`]: undefined });
 
             await expect(
-                service.requestTokens(CHAIN_ID, RECIPIENT_ADDRESS, "all-assets"),
+                service.requestTokens(
+                    CHAIN_ID,
+                    RECIPIENT_ADDRESS,
+                    "all-assets",
+                ),
             ).rejects.toThrow(BadRequestException);
 
             expect(viemService.readContract).not.toHaveBeenCalled();
@@ -185,9 +226,15 @@ describe("FaucetService", () => {
 
         it("should return error entry when readContract fails for a token", async () => {
             setupConfig();
-            viemService.readContract.mockRejectedValue(new Error("RPC call failed"));
+            viemService.readContract.mockRejectedValue(
+                new Error("RPC call failed"),
+            );
 
-            const result = await service.requestTokens(CHAIN_ID, RECIPIENT_ADDRESS, "all-assets");
+            const result = await service.requestTokens(
+                CHAIN_ID,
+                RECIPIENT_ADDRESS,
+                "all-assets",
+            );
 
             // All tokens failed -- top-level status is "failed"
             expect(result.status).toBe("failed");

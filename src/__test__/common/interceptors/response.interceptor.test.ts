@@ -29,9 +29,7 @@ describe("ResponseInterceptor", () => {
         const ctx = createMockContext(200);
         const handler = createMockCallHandler({ foo: "bar" });
 
-        const result = await lastValueFrom(
-            interceptor.intercept(ctx, handler),
-        );
+        const result = await lastValueFrom(interceptor.intercept(ctx, handler));
 
         expect(result).toEqual({
             statusCode: 200,
@@ -43,9 +41,7 @@ describe("ResponseInterceptor", () => {
         const ctx = createMockContext(200);
         const handler = createMockCallHandler(null);
 
-        const result = await lastValueFrom(
-            interceptor.intercept(ctx, handler),
-        );
+        const result = await lastValueFrom(interceptor.intercept(ctx, handler));
 
         expect(result).toEqual({ statusCode: 200, data: null });
     });
@@ -54,9 +50,7 @@ describe("ResponseInterceptor", () => {
         const ctx = createMockContext(200);
         const handler = createMockCallHandler([1, 2, 3]);
 
-        const result = await lastValueFrom(
-            interceptor.intercept(ctx, handler),
-        );
+        const result = await lastValueFrom(interceptor.intercept(ctx, handler));
 
         expect(result).toEqual({ statusCode: 200, data: [1, 2, 3] });
     });
@@ -72,9 +66,7 @@ describe("ResponseInterceptor", () => {
         const ctx = createMockContext(200);
         const handler = createMockCallHandler(paginatedResult);
 
-        const result = await lastValueFrom(
-            interceptor.intercept(ctx, handler),
-        );
+        const result = await lastValueFrom(interceptor.intercept(ctx, handler));
 
         expect(result).toEqual({
             statusCode: 200,
@@ -93,9 +85,7 @@ describe("ResponseInterceptor", () => {
         const ctx = createMockContext(200);
         const handler = createMockCallHandler(objectWithData);
 
-        const result = await lastValueFrom(
-            interceptor.intercept(ctx, handler),
-        );
+        const result = await lastValueFrom(interceptor.intercept(ctx, handler));
 
         // Wrapped normally since there's no 'page' key
         expect(result).toEqual({
@@ -108,9 +98,7 @@ describe("ResponseInterceptor", () => {
         const ctx = createMockContext(201);
         const handler = createMockCallHandler({ id: "abc" });
 
-        const result = await lastValueFrom(
-            interceptor.intercept(ctx, handler),
-        );
+        const result = await lastValueFrom(interceptor.intercept(ctx, handler));
 
         expect(result).toEqual({
             statusCode: 201,
@@ -122,9 +110,7 @@ describe("ResponseInterceptor", () => {
         const ctx = createMockContext(200);
         const handler = createMockCallHandler("hello");
 
-        const result = await lastValueFrom(
-            interceptor.intercept(ctx, handler),
-        );
+        const result = await lastValueFrom(interceptor.intercept(ctx, handler));
 
         expect(result).toEqual({ statusCode: 200, data: "hello" });
     });
@@ -138,9 +124,7 @@ describe("ResponseInterceptor", () => {
         const ctx = createMockContext(201);
         const handler = createMockCallHandler(orderResponse);
 
-        const result = await lastValueFrom(
-            interceptor.intercept(ctx, handler),
-        );
+        const result = await lastValueFrom(interceptor.intercept(ctx, handler));
 
         // Since orderResponse has no 'page' key, it's wrapped normally
         // This produces the double envelope: { statusCode: 201, data: { statusCode: 201, data: {...} } }

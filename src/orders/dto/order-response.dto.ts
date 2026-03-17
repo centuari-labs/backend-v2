@@ -1,5 +1,9 @@
 import { HttpStatus } from "@nestjs/common";
-import { OrderSide, OrderStatus, OrderType } from "../constants/order.constants";
+import {
+    OrderSide,
+    OrderStatus,
+    OrderType,
+} from "../constants/order.constants";
 
 export interface OrderResponseData {
     orderId: string;
@@ -23,7 +27,7 @@ export interface OrderResponseData {
     side: OrderSide;
     type: OrderType;
     status: OrderStatus;
-    originalAmount: string; 
+    originalAmount: string;
     settlementFeeAmount: string;
     autoRollover: boolean;
     /**

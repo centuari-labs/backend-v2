@@ -12,7 +12,10 @@ import { TokensService } from "../tokens/tokens.service";
 import { PortfolioRepository } from "../portfolio/repositories/portfolio.repository";
 import { OrderRepository } from "../orders/repositories/order.repository";
 import { treasuryAbi } from "../../abis/treasury";
-import type { WithdrawRequestDto, WithdrawResponseDto } from "./dto/withdraw.dto";
+import type {
+    WithdrawRequestDto,
+    WithdrawResponseDto,
+} from "./dto/withdraw.dto";
 
 @Injectable()
 export class WithdrawService {
@@ -112,13 +115,12 @@ export class WithdrawService {
             // Deduct from portfolio
             const newAmount = availableAmount - amountNum;
             if (newAmount <= 0) {
-                await queryRunner.query(
-                    `DELETE FROM portfolio WHERE id = $1`,
-                    [portfolioRow[0].id],
-                );
+                await queryRunner.query("DELETE FROM portfolio WHERE id = $1", [
+                    portfolioRow[0].id,
+                ]);
             } else {
                 await queryRunner.query(
-                    `UPDATE portfolio SET amount = $1, updated_at = NOW() WHERE id = $2`,
+                    "UPDATE portfolio SET amount = $1, updated_at = NOW() WHERE id = $2",
                     [newAmount.toString(), portfolioRow[0].id],
                 );
             }

@@ -20,4 +20,4 @@ import { RepayRepository } from "./repositories/repay.repository";
     providers: [RepayService, RepayRepository],
     exports: [RepayService, RepayRepository],
 })
-export class RepayModule { }
+export class RepayModule {}

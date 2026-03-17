@@ -43,11 +43,7 @@ describe("Auth Flow Integration", () => {
 
         beforeEach(async () => {
             const module: TestingModule = await Test.createTestingModule({
-                providers: [
-                    AuthGuard,
-                    AuthStrategyFactory,
-                    PrivyAuthStrategy,
-                ],
+                providers: [AuthGuard, AuthStrategyFactory, PrivyAuthStrategy],
             }).compile();
 
             guard = module.get<AuthGuard>(AuthGuard);

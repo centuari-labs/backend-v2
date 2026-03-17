@@ -124,6 +124,3 @@ describe("calculateSettlementFee", () => {
         expect(calculateSettlementFee(100, 1, 100, 5)).toBe(1);
     });
 });
-
-
-

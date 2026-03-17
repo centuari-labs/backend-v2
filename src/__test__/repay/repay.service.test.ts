@@ -6,7 +6,11 @@ import { OrderRepository } from "../../orders/repositories/order.repository";
 import { RepayRepository } from "../../repay/repositories/repay.repository";
 import { MarketRepositories } from "../../market/repository/market.repository";
 import { ConfigService } from "@nestjs/config";
-import { BadRequestException, NotFoundException, InternalServerErrorException } from "@nestjs/common";
+import {
+    BadRequestException,
+    NotFoundException,
+    InternalServerErrorException,
+} from "@nestjs/common";
 import { parseUnits } from "viem";
 import { DataSource, EntityManager } from "typeorm";
 
@@ -33,7 +37,10 @@ describe("RepayService", () => {
         } as any;
 
         dataSource = {
-            transaction: jest.fn(async (cb: (m: EntityManager) => Promise<any>) => await cb(manager)),
+            transaction: jest.fn(
+                async (cb: (m: EntityManager) => Promise<any>) =>
+                    await cb(manager),
+            ),
         } as any;
 
         repayRepository = {
@@ -79,37 +86,67 @@ describe("RepayService", () => {
             decimals: 18,
         };
         const account = { id: "acc-1" };
-        const market = { id: marketId, assetId, maturity: maturity.toISOString(), decimals: 18, tokenAddress: "0xtoken" };
+        const market = {
+            id: marketId,
+            assetId,
+            maturity: maturity.toISOString(),
+            decimals: 18,
+            tokenAddress: "0xtoken",
+        };
 
         it("should successfully repay part of a borrow position", async () => {
-            orderRepository.getOrCreateAccount.mockResolvedValue(account as any);
+            orderRepository.getOrCreateAccount.mockResolvedValue(
+                account as any,
+            );
             repayRepository.getMarketWithAsset.mockResolvedValue(market as any);
-            repayRepository.getUserTotalDebt.mockResolvedValue(parseUnits("200", 18).toString());
+            repayRepository.getUserTotalDebt.mockResolvedValue(
+                parseUnits("200", 18).toString(),
+            );
             repayRepository.getBorrowPositions.mockResolvedValue([
-                { id: "pos-1", debt: parseUnits("200", 18).toString() }
+                { id: "pos-1", debt: parseUnits("200", 18).toString() },
             ]);
-            viemService.writeContract.mockResolvedValue({ transactionHash: "0xtx" } as any);
+            viemService.writeContract.mockResolvedValue({
+                transactionHash: "0xtx",
+            } as any);
 
             const result = await service.repay(dto, walletAddress, privyUserId);
 
             expect(result).toEqual({ txHash: "0xtx", status: "success" });
-            expect(repayRepository.getMarketWithAsset).toHaveBeenCalledWith(marketId);
-            expect(repayRepository.updateBorrowPositionDebt).toHaveBeenCalledWith(manager, "pos-1", parseUnits("100", 18).toString());
+            expect(repayRepository.getMarketWithAsset).toHaveBeenCalledWith(
+                marketId,
+            );
+            expect(
+                repayRepository.updateBorrowPositionDebt,
+            ).toHaveBeenCalledWith(
+                manager,
+                "pos-1",
+                parseUnits("100", 18).toString(),
+            );
         });
 
         it("should throw NotFoundException if market not found", async () => {
-            orderRepository.getOrCreateAccount.mockResolvedValue(account as any);
+            orderRepository.getOrCreateAccount.mockResolvedValue(
+                account as any,
+            );
             repayRepository.getMarketWithAsset.mockResolvedValue(null);
 
-            await expect(service.repay(dto, walletAddress, privyUserId)).rejects.toThrow(NotFoundException);
+            await expect(
+                service.repay(dto, walletAddress, privyUserId),
+            ).rejects.toThrow(NotFoundException);
         });
 
         it("should throw BadRequestException if repay amount > total debt", async () => {
-            orderRepository.getOrCreateAccount.mockResolvedValue(account as any);
+            orderRepository.getOrCreateAccount.mockResolvedValue(
+                account as any,
+            );
             repayRepository.getMarketWithAsset.mockResolvedValue(market as any);
-            repayRepository.getUserTotalDebt.mockResolvedValue(parseUnits("50", 18).toString());
+            repayRepository.getUserTotalDebt.mockResolvedValue(
+                parseUnits("50", 18).toString(),
+            );
 
-            await expect(service.repay(dto, walletAddress, privyUserId)).rejects.toThrow(BadRequestException);
+            await expect(
+                service.repay(dto, walletAddress, privyUserId),
+            ).rejects.toThrow(BadRequestException);
         });
     });
 });

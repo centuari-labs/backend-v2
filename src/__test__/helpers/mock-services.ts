@@ -1,14 +1,16 @@
-import type { OrderRepository } from '../../orders/repositories/order.repository';
-import type { NatsService } from '../../core/nats/nats.service';
-import type { EventsGateway } from '../../core/websocket/websocket.gateway';
-import type { TokensService } from '../../tokens/tokens.service';
-import type { PriceService } from '../../price/price.service';
-import type { MarketRepositories } from '../../market/repository/market.repository';
-import type { PortfolioService } from '../../portfolio/portfolio.service';
-import type { OrdersService } from '../../orders/orders.service';
-import type { DataSource, ObjectLiteral, Repository } from 'typeorm';
+import type { OrderRepository } from "../../orders/repositories/order.repository";
+import type { NatsService } from "../../core/nats/nats.service";
+import type { EventsGateway } from "../../core/websocket/websocket.gateway";
+import type { TokensService } from "../../tokens/tokens.service";
+import type { PriceService } from "../../price/price.service";
+import type { MarketRepositories } from "../../market/repository/market.repository";
+import type { PortfolioService } from "../../portfolio/portfolio.service";
+import type { OrdersService } from "../../orders/orders.service";
+import type { DataSource, ObjectLiteral, Repository } from "typeorm";
 
-export function createMockOrderRepository(): Partial<jest.Mocked<OrderRepository>> {
+export function createMockOrderRepository(): Partial<
+    jest.Mocked<OrderRepository>
+> {
     return {
         create: jest.fn(),
         save: jest.fn(),
@@ -52,15 +54,21 @@ export function createMockPriceService(): Partial<jest.Mocked<PriceService>> {
     } as any;
 }
 
-export function createMockMarketRepository(): Partial<jest.Mocked<MarketRepositories>> {
+export function createMockMarketRepository(): Partial<
+    jest.Mocked<MarketRepositories>
+> {
     return {
         getMarketsByIds: jest.fn().mockResolvedValue([]),
     } as any;
 }
 
-export function createMockPortfolioService(): Partial<jest.Mocked<PortfolioService>> {
+export function createMockPortfolioService(): Partial<
+    jest.Mocked<PortfolioService>
+> {
     return {
-        getHealthFactorForAccount: jest.fn().mockResolvedValue({ healthFactor: 2 }),
+        getHealthFactorForAccount: jest
+            .fn()
+            .mockResolvedValue({ healthFactor: 2 }),
         calculateOpenBorrowOrdersUsd: jest.fn().mockResolvedValue(0),
         checkAvailableBalanceForLend: jest.fn().mockResolvedValue(undefined),
     } as any;
@@ -76,7 +84,9 @@ export function createMockOrdersService(): Partial<jest.Mocked<OrdersService>> {
     } as any;
 }
 
-export function createMockRepository<T extends ObjectLiteral>(): Partial<jest.Mocked<Repository<T>>> {
+export function createMockRepository<T extends ObjectLiteral>(): Partial<
+    jest.Mocked<Repository<T>>
+> {
     return {
         find: jest.fn(),
         findOne: jest.fn(),

@@ -2,7 +2,9 @@ import { IsString, Matches } from "class-validator";
 
 export class ConfirmDepositDto {
     @IsString()
-    @Matches(/^0x[a-fA-F0-9]{64}$/, { message: "txHash must be a valid transaction hash" })
+    @Matches(/^0x[a-fA-F0-9]{64}$/, {
+        message: "txHash must be a valid transaction hash",
+    })
     txHash: string;
 }
 

@@ -14,19 +14,29 @@ export class AuthController {
     constructor(private readonly authService: AuthService) {}
 
     @Post("validate")
-    async validate(@Body() body: ValidateWalletDto): Promise<DepositWalletResponse> {
-        return this.authService.validateAndCreateDepositWallet(body.wallet_address);
+    async validate(
+        @Body() body: ValidateWalletDto,
+    ): Promise<DepositWalletResponse> {
+        return this.authService.validateAndCreateDepositWallet(
+            body.wallet_address,
+        );
     }
 
     @Post("login")
     @UseGuards(AuthGuard)
     async login(@CurrentUser() user: AuthUser) {
-        return this.authService.loginOrCreateAccount(user.userId, user.walletAddress);
+        return this.authService.loginOrCreateAccount(
+            user.userId,
+            user.walletAddress,
+        );
     }
 
     @Patch("name")
     @UseGuards(AuthGuard)
-    async updateName(@CurrentUser() user: AuthUser, @Body() body: UpdateNameDto) {
+    async updateName(
+        @CurrentUser() user: AuthUser,
+        @Body() body: UpdateNameDto,
+    ) {
         return this.authService.updateName(user.userId, body.name);
     }
 }

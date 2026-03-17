@@ -62,7 +62,11 @@ describe("ViemService", () => {
         });
 
         it("should verify valid address", () => {
-            expect(service.isValidAddress("0x742d35Cc6634C0532925a3b844Bc454e4438f44e")).toBe(true);
+            expect(
+                service.isValidAddress(
+                    "0x742d35Cc6634C0532925a3b844Bc454e4438f44e",
+                ),
+            ).toBe(true);
             expect(service.isValidAddress("invalid-address")).toBe(false);
         });
     });
@@ -70,12 +74,16 @@ describe("ViemService", () => {
     describe("getPublicClient", () => {
         it("should throw error for unsupported chain", () => {
             service.onModuleInit();
-            expect(() => service.getPublicClient(999999)).toThrow("Unsupported or unconfigured chainId: 999999");
+            expect(() => service.getPublicClient(999999)).toThrow(
+                "Unsupported or unconfigured chainId: 999999",
+            );
         });
 
         it("should reuse existing client", () => {
             service.onModuleInit();
-            (createPublicClient as jest.Mock).mockReturnValue({ id: "mock-client" });
+            (createPublicClient as jest.Mock).mockReturnValue({
+                id: "mock-client",
+            });
 
             const client1 = service.getPublicClient(11155111);
             const client2 = service.getPublicClient(11155111);

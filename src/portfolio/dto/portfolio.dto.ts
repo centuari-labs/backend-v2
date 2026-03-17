@@ -121,3 +121,36 @@ export class SetAssetAsCollateralDto {
     assetIds: string[];
     isCollateral: boolean;
 }
+
+export class UserAssetDetailDto {
+    assetId: string;
+    /** Portfolio balance in human-readable units (NOT deducted) */
+    totalBalance: number;
+    /** Amount locked in open lend orders (human-readable) */
+    lockedInOrders: number;
+    /** Available = totalBalance - lockedInOrders (human-readable) */
+    availableBalance: number;
+    /** USD value of available balance */
+    availableBalanceUsd: number;
+    isCollateral: boolean;
+    ltv: number;
+    liquidationThreshold: number;
+}
+
+export class UserDebtDetailDto {
+    assetId: string;
+    debtAmount: number;
+    debtAmountUsd: number;
+}
+
+export class UserDetailsResponseDto {
+    assets: UserAssetDetailDto[];
+    /** Total debt in USD = settled borrow debts + open borrow orders */
+    totalDebtUsd: number;
+    /** Settled debt only (from borrow_positions) */
+    settledDebtUsd: number;
+    /** Pending debt from open borrow orders */
+    pendingDebtUsd: number;
+    /** Total debt broken down per asset (settled only) */
+    debts: UserDebtDetailDto[];
+}

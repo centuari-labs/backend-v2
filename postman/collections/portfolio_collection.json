@@ -28,12 +28,18 @@
           }
         },
         "url": {
-          "raw": "{{base url}}portfolio/lend-borrow-assets",
+          "raw": "{{base url}}portfolio/lend-borrow-assets?days=90",
           "host": [
             "{{base url}}portfolio"
           ],
           "path": [
             "lend-borrow-assets"
+          ],
+          "query": [
+            {
+              "key": "days",
+              "value": "90"
+            }
           ]
         }
       },

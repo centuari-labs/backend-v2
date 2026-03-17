@@ -10,7 +10,9 @@ import {
     MyPositionQueryDto,
     SetAssetAsCollateralDto,
     MyHealthFactorResponseDto,
+    UserDetailsResponseDto,
 } from "./dto/portfolio.dto";
+import { ChartDataQueryDto } from "./dto/chart-data.dto";
 import { AuthGuard } from "../common/guards/auth.guard";
 import { Wallet } from "../common/decorators/wallet.decorator";
 
@@ -33,8 +35,14 @@ export class PortfolioController {
     }
 
     @Get("lend-borrow-assets")
-    async getLendAndBorrowAssets(@Wallet() wallet: string): Promise<LendBorrowAssetResponseDto> {
-        return this.portfolioService.getLendBorrowAssets(wallet);
+    async getLendAndBorrowAssets(
+        @Wallet() wallet: string,
+        @Query() query: ChartDataQueryDto,
+    ) {
+        return this.portfolioService.getLendBorrowAssets(
+            wallet,
+            query.days ?? 90,
+        );
     }
 
     @Get("my-health-factor")
@@ -48,6 +56,11 @@ export class PortfolioController {
         @Query() query: MyPositionQueryDto,
     ): Promise<GetMyPositionResponseDto> {
         return this.portfolioService.getMyPosition(wallet, query);
+    }
+
+    @Get("user-details")
+    async getUserDetails(@Wallet() wallet: string): Promise<UserDetailsResponseDto> {
+        return this.portfolioService.getUserDetails(wallet);
     }
 
     @Put("is-collateral")

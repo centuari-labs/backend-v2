@@ -244,6 +244,42 @@ export class PortfolioRepository extends Repository<Portfolio> {
         );
     }
 
+    async getUserDailyLendBorrow(
+        accountId: string,
+        days: number,
+    ): Promise<
+        { date: string; lend_amount: string; borrow_amount: string }[]
+    > {
+        const query = `
+            SELECT
+                d.date::date as date,
+                COALESCE(lend.total, 0) as lend_amount,
+                COALESCE(borrow.total, 0) as borrow_amount
+            FROM generate_series(
+                CURRENT_DATE - ($2 || ' days')::interval,
+                CURRENT_DATE,
+                '1 day'::interval
+            ) AS d(date)
+            LEFT JOIN (
+                SELECT DATE(m.created_at) as date, SUM(m.match_amount) as total
+                FROM matches m
+                WHERE m.lender_account_id = $1
+                AND m.created_at >= CURRENT_DATE - ($2 || ' days')::interval
+                GROUP BY DATE(m.created_at)
+            ) lend ON lend.date = d.date::date
+            LEFT JOIN (
+                SELECT DATE(m.created_at) as date, SUM(m.match_amount) as total
+                FROM matches m
+                WHERE m.borrower_account_id = $1
+                AND m.created_at >= CURRENT_DATE - ($2 || ' days')::interval
+                GROUP BY DATE(m.created_at)
+            ) borrow ON borrow.date = d.date::date
+            ORDER BY d.date ASC
+        `;
+
+        return this.dataSource.query(query, [accountId, days]);
+    }
+
     async setAssetAsCollateral(accountId: string, assetIds: string[], isCollateral: boolean) {
         return this.createQueryBuilder('portfolio')
             .update({ isCollateral })

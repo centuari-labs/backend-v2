@@ -1,11 +1,11 @@
 import { Injectable, Logger, OnModuleInit } from "@nestjs/common";
 import { Interval } from "@nestjs/schedule";
 import { InjectRepository } from "@nestjs/typeorm";
-import { randomUUID } from "crypto";
 import { Repository } from "typeorm";
 import { Market } from "./entities/market.entity";
 import { Token } from "../tokens/entities/token.entity";
 import { getAllowedMaturitiesUtcSeconds } from "../orders/utils/maturity.utils";
+import { computeMarketId } from "./utils/market-id.utils";
 
 const MARKET_MATURITIES_REFRESH_INTERVAL_MS = 24 * 60 * 60 * 1000; // once per day
 @Injectable()
@@ -89,8 +89,14 @@ export class MarketWorker implements OnModuleInit {
                 }
 
                 try {
+                    const maturityUnixSeconds = Math.floor(
+                        maturity.getTime() / 1000,
+                    );
                     const market = this.marketRepository.create({
-                        id: randomUUID(),
+                        id: computeMarketId(
+                            token.tokenAddress,
+                            maturityUnixSeconds,
+                        ),
                         assetId: token.id,
                         maturity,
                     });

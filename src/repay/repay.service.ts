@@ -11,6 +11,7 @@ import { parseUnits } from "viem";
 import type { TransactionReceipt } from "viem";
 import { centuariAbi } from "../../abis/centuari";
 
+//@todo : move this into portofolio controller instead
 @Injectable()
 export class RepayService {
     private readonly logger = new Logger(RepayService.name);

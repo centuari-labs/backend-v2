@@ -6,7 +6,6 @@ import {
     HttpStatus,
     Param,
     ParseUUIDPipe,
-    Patch,
     Post,
     UseGuards,
 } from "@nestjs/common";
@@ -87,7 +86,7 @@ export class OrdersController {
         );
     }
 
-    @Patch(":id/cancel")
+    @Post(":id/cancel")
     async cancelOrder(
         @Param("id", ParseUUIDPipe) id: string,
         @Wallet() walletAddress: string,

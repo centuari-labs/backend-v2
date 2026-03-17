@@ -232,6 +232,54 @@
                     "body": "{\n  \"statusCode\": 201,\n  \"data\": {\n    \"orderId\": \"44444444-5555-6666-7777-888888888888\",\n    \"walletAddress\": \"0x1234567890abcdef1234567890abcdef12345678\",\n    \"assetId\": \"b66a2641-3339-4a48-805c-6da248f33dee\",\n    \"markets\": [\n      {\n        \"marketId\": \"00000000-0000-0000-0000-000000000001\",\n        \"maturity\": 1737052800\n      }\n    ],\n    \"timestamp\": 1736966400,\n    \"side\": \"BORROW\",\n    \"type\": \"MARKET\",\n    \"status\": \"OPEN\",\n    \"originalAmount\": \"10\",\n    \"settlementFeeAmount\": \"0.1\",\n    \"autoRollover\": false,\n    \"rate\": 2,\n    \"createdAt\": \"2025-01-15T10:00:00.000Z\",\n    \"updatedAt\": \"2025-01-15T10:00:00.000Z\"\n  }\n}"
                 }
             ]
+        },
+        {
+            "name": "Cancel order",
+            "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+            "request": {
+                "method": "POST",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{localhost}}orders/:id/cancel",
+                    "host": [
+                        "{{localhost}}orders"
+                    ],
+                    "path": [
+                        ":id",
+                        "cancel"
+                    ],
+                    "variable": [
+                        {
+                            "key": "id",
+                            "value": "",
+                            "description": "Order UUID to cancel"
+                        }
+                    ]
+                }
+            },
+            "response": [
+                {
+                    "id": "order-cancel-resp-001",
+                    "name": "200 OK",
+                    "status": "OK",
+                    "code": 200,
+                    "_postman_previewlanguage": "json",
+                    "header": [
+                        {
+                            "key": "Content-Type",
+                            "value": "application/json"
+                        }
+                    ],
+                    "cookie": [],
+                    "body": "{\n  \"statusCode\": 200,\n  \"data\": {\n    \"orderId\": \"11111111-2222-3333-4444-555555555555\",\n    \"status\": \"CANCELLED\"\n  }\n}"
+                }
+            ]
         }
     ]
 }

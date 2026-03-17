@@ -144,7 +144,7 @@ export class PortfolioService {
         };
     }
 
-    async getLendBorrowAssets(wallet: string): Promise<LendBorrowAssetResponseDto> {
+    async getLendBorrowAssets(wallet: string, days = 90): Promise<LendBorrowAssetResponseDto & { chartData: { date: string; lendAmount: string; borrowAmount: string }[] }> {
         const account = await this.orderRepository.findAccountByWallet(wallet);
         if (!account) {
             throw new NotFoundException("Account not found");
@@ -180,10 +180,23 @@ export class PortfolioService {
             borrowedAssetsUsd += amountHuman * price;
         }
 
+        const chartRows =
+            await this.portfolioRepository.getUserDailyLendBorrow(
+                account.id,
+                days,
+            );
+
+        const chartData = chartRows.map((row) => ({
+            date: new Date(row.date).toISOString().split("T")[0],
+            lendAmount: String(row.lend_amount),
+            borrowAmount: String(row.borrow_amount),
+        }));
+
         return {
             suppliedAssets: Number(suppliedAssetsUsd.toFixed(2)),
             borrowedAssets: Number(borrowedAssetsUsd.toFixed(2)),
             healthFactor: Number.isFinite(formatted.healthFactor) ? formatted.healthFactor : 0,
+            chartData,
         };
     }
 

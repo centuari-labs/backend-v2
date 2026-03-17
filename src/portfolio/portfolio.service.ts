@@ -4,6 +4,7 @@ import { Repository } from "typeorm";
 import { Token } from "../tokens/entities/token.entity";
 import { PriceService } from "../price/price.service";
 import { TokensService } from "../tokens/tokens.service";
+import { TransactionHistoryQueryDto } from "./dto/transaction-history.dto";
 import { MyPortfolioResponseDto, GetMyAssetsQueryDto, MyAssetsResponseDto, LendBorrowAssetResponseDto, GetMyPositionResponseDto, MyPositionQueryDto, SetAssetAsCollateralDto, MyHealthFactorResponseDto, UserDetailsResponseDto } from "./dto/portfolio.dto";
 import { PortfolioRepository } from "./repositories/portfolio.repository";
 import { OrderRepository } from "../orders/repositories/order.repository";
@@ -473,6 +474,54 @@ export class PortfolioService {
         }
 
         await this.portfolioRepository.setAssetAsCollateral(account.id, body.assetIds, body.isCollateral);
+    }
+
+    async getTransactionHistory(
+        wallet: string,
+        query: TransactionHistoryQueryDto,
+    ) {
+        const account =
+            await this.orderRepository.findAccountByWallet(wallet);
+        if (!account) {
+            return createPaginatedResponse([], 0, query.page ?? 1, query.limit ?? 10);
+        }
+
+        const { data: rows, total } =
+            await this.portfolioRepository.getTransactionHistory(
+                account.id,
+                query.page ?? 1,
+                query.limit ?? 10,
+            );
+
+        const items = rows.map((row) => ({
+            id: row.id,
+            side: row.side,
+            orderType: row.order_type,
+            rate: Number(row.rate) || 0,
+            amount: baseUnitsToHuman(
+                row.amount,
+                Number(row.decimals) || 0,
+            ),
+            filledQuantity: row.filled_quantity
+                ? baseUnitsToHuman(
+                      row.filled_quantity,
+                      Number(row.decimals) || 0,
+                  )
+                : null,
+            status: row.status,
+            symbol: row.symbol,
+            imageUrl: row.image_url,
+            decimals: Number(row.decimals) || 0,
+            tokenAddress: row.token_address,
+            createdAt: new Date(row.created_at).toISOString(),
+        }));
+
+        return createPaginatedResponse(
+            items,
+            total,
+            query.page ?? 1,
+            query.limit ?? 10,
+        );
     }
 
     async getAssetBalance(accountId: string, assetId: string): Promise<string> {

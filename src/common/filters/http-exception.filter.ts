@@ -22,8 +22,8 @@ export class AllExceptionsFilter implements ExceptionFilter {
             exception instanceof HttpException
                 ? exception.getResponse()
                 : process.env.NODE_ENV === "production"
-                  ? "Internal server error"
-                  : `Internal server error: ${(exception as Error).message}`;
+                ? "Internal server error"
+                : `Internal server error: ${exception instanceof Error ? exception.message : String(exception)}`;
 
         response.status(status).json({
             success: false,

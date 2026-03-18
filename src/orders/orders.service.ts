@@ -207,11 +207,14 @@ export class OrdersService {
         const decimals = await this.tokensService.getTokenDecimalsByAssetId(
             dto.assetId,
         );
-        const quantityBaseUnits = humanToBaseUnits(dto.amount, decimals!);
+        if (decimals == null) {
+            throw new BadRequestException("Token decimals not configured");
+        }
+        const quantityBaseUnits = humanToBaseUnits(dto.amount, decimals);
         const settlementFee = await this.computeSettlementFee(
             dto.assetId,
             dto.amount,
-            decimals!,
+            decimals,
         );
 
         const hasCounterparty =
@@ -459,7 +462,13 @@ export class OrdersService {
             SETTLEMENT_FEE_MAX_CAP_USD,
         );
         if (feeHuman === 0) return "0";
-        return humanToBaseUnits(feeHuman.toString(), decimals);
+        // Truncate fee to token's decimal precision to avoid "Too many decimal places"
+        const feeTruncated =
+            decimals > 0
+                ? Number(feeHuman.toFixed(decimals))
+                : Math.floor(feeHuman);
+        if (feeTruncated === 0) return "0";
+        return humanToBaseUnits(feeTruncated.toString(), decimals);
     }
 
     private async mapToResponse(

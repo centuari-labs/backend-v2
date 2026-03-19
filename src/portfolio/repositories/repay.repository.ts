@@ -6,6 +6,29 @@ import { Token } from "../../tokens/entities/token.entity";
 export class RepayRepository {
     constructor(private readonly dataSource: DataSource) {}
 
+    async getBorrowPositionById(
+        positionId: string,
+        accountId: string,
+        manager?: EntityManager,
+    ): Promise<any> {
+        const qb = (manager || this.dataSource)
+            .createQueryBuilder()
+            .select("bp.id", "id")
+            .addSelect("bp.debt", "debt")
+            .addSelect("bp.market_id", "marketId")
+            .addSelect("bp.account_id", "accountId")
+            .from("borrow_positions", "bp")
+            .where("bp.id = :positionId", { positionId })
+            .andWhere("bp.account_id = :accountId", { accountId })
+            .andWhere("bp.debt > 0");
+
+        if (manager) {
+            qb.setLock("pessimistic_write");
+        }
+
+        return qb.getRawOne();
+    }
+
     async getUserTotalDebt(
         accountId: string,
         marketId: string,

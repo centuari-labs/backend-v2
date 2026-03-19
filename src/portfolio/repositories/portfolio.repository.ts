@@ -521,6 +521,29 @@ export class PortfolioRepository extends Repository<Portfolio> {
         );
     }
 
+    async getLendPositionById(
+        positionId: string,
+        accountId: string,
+        manager?: EntityManager,
+    ): Promise<any> {
+        const queryRunner = manager
+            ? manager.createQueryBuilder()
+            : this.dataSource.createQueryBuilder();
+
+        let qb = queryRunner
+            .select("lp")
+            .from("lend_positions", "lp")
+            .where("lp.id = :positionId", { positionId })
+            .andWhere("lp.account_id = :accountId", { accountId })
+            .andWhere("lp.shares > 0");
+
+        if (manager) {
+            qb = qb.setLock("pessimistic_write");
+        }
+
+        return qb.getRawOne();
+    }
+
     async getLendPositions(
         accountId: string,
         marketId: string,

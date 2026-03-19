@@ -91,7 +91,6 @@ export class PortfolioController {
         return this.portfolioService.setAssetAsCollateral(wallet, body);
     }
 
-    //@todo : change to use position id instead of market id
     @Post("withdraw-lend-position")
     async withdrawLendPosition(
         @Body() dto: WithdrawLendPositionDto,

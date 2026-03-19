@@ -44,6 +44,7 @@ describe("RepayService", () => {
         } as any;
 
         repayRepository = {
+            getBorrowPositionById: jest.fn(),
             getMarketWithAsset: jest.fn(),
             getUserTotalDebt: jest.fn(),
             getBorrowPositions: jest.fn(),
@@ -76,16 +77,18 @@ describe("RepayService", () => {
     describe("repay", () => {
         const walletAddress = "0xwallet";
         const privyUserId = "privy-1";
+        const positionId = "pos-1";
         const marketId = "market-1";
         const assetId = "asset-1";
         const maturity = new Date(1710240000 * 1000);
-        const dto = { marketId, amount: "100" };
-        const token = {
-            id: assetId,
-            tokenAddress: "0xtoken",
-            decimals: 18,
-        };
+        const dto = { positionId, amount: "100" };
         const account = { id: "acc-1" };
+        const position = {
+            id: positionId,
+            debt: parseUnits("200", 18).toString(),
+            marketId,
+            accountId: account.id,
+        };
         const market = {
             id: marketId,
             assetId,
@@ -98,13 +101,10 @@ describe("RepayService", () => {
             orderRepository.getOrCreateAccount.mockResolvedValue(
                 account as any,
             );
-            repayRepository.getMarketWithAsset.mockResolvedValue(market as any);
-            repayRepository.getUserTotalDebt.mockResolvedValue(
-                parseUnits("200", 18).toString(),
+            repayRepository.getBorrowPositionById.mockResolvedValue(
+                position as any,
             );
-            repayRepository.getBorrowPositions.mockResolvedValue([
-                { id: "pos-1", debt: parseUnits("200", 18).toString() },
-            ]);
+            repayRepository.getMarketWithAsset.mockResolvedValue(market as any);
             viemService.writeContract.mockResolvedValue({
                 transactionHash: "0xtx",
             } as any);
@@ -112,6 +112,9 @@ describe("RepayService", () => {
             const result = await service.repay(dto, walletAddress, privyUserId);
 
             expect(result).toEqual({ txHash: "0xtx", status: "success" });
+            expect(
+                repayRepository.getBorrowPositionById,
+            ).toHaveBeenCalledWith(positionId, account.id);
             expect(repayRepository.getMarketWithAsset).toHaveBeenCalledWith(
                 marketId,
             );
@@ -119,30 +122,34 @@ describe("RepayService", () => {
                 repayRepository.updateBorrowPositionDebt,
             ).toHaveBeenCalledWith(
                 manager,
-                "pos-1",
+                positionId,
                 parseUnits("100", 18).toString(),
             );
         });
 
-        it("should throw NotFoundException if market not found", async () => {
+        it("should throw NotFoundException if position not found", async () => {
             orderRepository.getOrCreateAccount.mockResolvedValue(
                 account as any,
             );
-            repayRepository.getMarketWithAsset.mockResolvedValue(null);
+            repayRepository.getBorrowPositionById.mockResolvedValue(null);
 
             await expect(
                 service.repay(dto, walletAddress, privyUserId),
             ).rejects.toThrow(NotFoundException);
         });
 
-        it("should throw BadRequestException if repay amount > total debt", async () => {
+        it("should throw BadRequestException if repay amount > position debt", async () => {
+            const smallDebtPosition = {
+                ...position,
+                debt: parseUnits("50", 18).toString(),
+            };
             orderRepository.getOrCreateAccount.mockResolvedValue(
                 account as any,
             );
-            repayRepository.getMarketWithAsset.mockResolvedValue(market as any);
-            repayRepository.getUserTotalDebt.mockResolvedValue(
-                parseUnits("50", 18).toString(),
+            repayRepository.getBorrowPositionById.mockResolvedValue(
+                smallDebtPosition as any,
             );
+            repayRepository.getMarketWithAsset.mockResolvedValue(market as any);
 
             await expect(
                 service.repay(dto, walletAddress, privyUserId),

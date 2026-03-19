@@ -45,33 +45,32 @@ export class RepayService {
         walletAddress: string,
         privyUserId: string,
     ): Promise<RepayResponseDto> {
-        const { marketId, amount } = dto;
+        const { positionId, amount } = dto;
 
         const accountId = await this.orderRepository
             .getOrCreateAccount(walletAddress, privyUserId)
             .then((a) => a.id);
 
-        const market = await this.repayRepository.getMarketWithAsset(marketId);
+        const position =
+            await this.repayRepository.getBorrowPositionById(
+                positionId,
+                accountId,
+            );
+        if (!position) {
+            throw new NotFoundException("Borrow position not found");
+        }
+
+        const market = await this.repayRepository.getMarketWithAsset(
+            position.marketId,
+        );
         if (!market) throw new NotFoundException("Market not found");
 
-        const totalDebtStr = await this.repayRepository.getUserTotalDebt(
-            accountId,
-            marketId,
-        );
-        const totalDebtBaseUnits = BigInt(totalDebtStr);
+        const positionDebt = BigInt(position.debt);
         const repayAmountBaseUnits = this.parseRepayAmount(
             amount,
             market.decimals ?? 18,
-            totalDebtBaseUnits,
+            positionDebt,
         );
-
-        const positions = await this.repayRepository.getBorrowPositions(
-            accountId,
-            marketId,
-        );
-        if (!positions || positions.length === 0) {
-            throw new BadRequestException("No active borrow positions found");
-        }
 
         const maturityDate = market.maturity ? new Date(market.maturity) : null;
         const maturityUnix = maturityDate
@@ -90,11 +89,10 @@ export class RepayService {
         );
 
         await this.updateDatabaseState(
-            positions,
+            positionId,
             repayAmountBaseUnits,
             txHash,
             accountId,
-            marketId,
         );
 
         return { txHash, status: "success" };
@@ -162,36 +160,31 @@ export class RepayService {
     }
 
     private async updateDatabaseState(
-        positions: any[],
+        positionId: string,
         repayAmount: bigint,
         txHash: string,
         accountId: string,
-        marketId: string,
     ): Promise<void> {
         try {
             await this.dataSource.transaction(async (manager) => {
-                const targetPositions =
-                    await this.repayRepository.getBorrowPositions(
+                const position =
+                    await this.repayRepository.getBorrowPositionById(
+                        positionId,
                         accountId,
-                        marketId,
                         manager,
                     );
-
-                let remaining = repayAmount;
-                for (const pos of targetPositions) {
-                    if (remaining <= 0n) break;
-
-                    const debt = BigInt(pos.debt);
-                    const toRepay = remaining >= debt ? debt : remaining;
-                    const newDebt = debt - toRepay;
-
-                    await this.repayRepository.updateBorrowPositionDebt(
-                        manager,
-                        pos.id,
-                        newDebt.toString(),
-                    );
-                    remaining -= toRepay;
+                if (!position) {
+                    throw new NotFoundException("Borrow position not found");
                 }
+
+                const debt = BigInt(position.debt);
+                const newDebt = debt - repayAmount;
+
+                await this.repayRepository.updateBorrowPositionDebt(
+                    manager,
+                    positionId,
+                    newDebt.toString(),
+                );
             });
             this.logger.log(`Repay DB state updated for tx: ${txHash}`);
         } catch (error: any) {

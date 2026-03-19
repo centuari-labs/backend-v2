@@ -8,6 +8,7 @@ import type { RepayRequestDto, RepayResponseDto } from "./dto/repay.dto";
 export class RepayController {
     constructor(private readonly repayService: RepayService) {}
 
+    //@todo : change to use position id instead of market id
     @Post()
     @UseGuards(AuthGuard)
     async repay(

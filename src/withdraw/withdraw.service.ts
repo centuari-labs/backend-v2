@@ -44,6 +44,7 @@ export class WithdrawService {
         dto: WithdrawRequestDto,
         walletAddress: string,
     ): Promise<WithdrawResponseDto> {
+        //@todo : make sure that before withdraw health factor is greater than 1.0
         const { assetId, amount } = dto;
 
         // Validate amount is positive

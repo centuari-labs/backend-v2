@@ -130,6 +130,9 @@ export class SetAssetAsCollateralDto {
 
 export class UserAssetDetailDto {
     assetId: string;
+    symbol: string;
+    name: string;
+    imageUrl: string | null;
     /** Portfolio balance in human-readable units (NOT deducted) */
     totalBalance: number;
     /** Amount locked in open lend orders (human-readable) */
@@ -159,4 +162,10 @@ export class UserDetailsResponseDto {
     pendingDebtUsd: number;
     /** Total debt broken down per asset (settled only) */
     debts: UserDebtDetailDto[];
+    /** Health factor; may be Infinity when there is no debt. */
+    healthFactor: number;
+    /** Total collateral value in USD */
+    collateralUsd: number;
+    /** Weighted LTV across all collateral (decimal, e.g. 0.75 = 75%) */
+    weightedLtv: number;
 }

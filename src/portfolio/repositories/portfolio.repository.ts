@@ -174,10 +174,7 @@ export class PortfolioRepository extends Repository<Portfolio> {
                 .select("lp.id", "position_id")
                 .addSelect("lp.asset_id", "asset_id")
                 .addSelect("'LEND'", "side")
-                .addSelect(
-                    "CASE WHEN lp.amount > 0 THEN ((lp.shares / lp.amount - 1) * 100) ELSE 0 END",
-                    "rate",
-                )
+                .addSelect("COALESCE(lp.apr, 0)", "rate")
                 .addSelect("lp.amount", "quantity")
                 .addSelect("t.symbol", "symbol")
                 .addSelect("t.name", "name")
@@ -222,10 +219,7 @@ export class PortfolioRepository extends Repository<Portfolio> {
                 .select("bp.id", "position_id")
                 .addSelect("bp.asset_id", "asset_id")
                 .addSelect("'BORROW'", "side")
-                .addSelect(
-                    "CASE WHEN bp.amount > 0 THEN ((bp.debt / bp.amount - 1) * 100) ELSE 0 END",
-                    "rate",
-                )
+                .addSelect("COALESCE(bp.apr, 0)", "rate")
                 .addSelect("bp.debt", "quantity")
                 .addSelect("t.symbol", "symbol")
                 .addSelect("t.name", "name")
@@ -298,32 +292,33 @@ export class PortfolioRepository extends Repository<Portfolio> {
     async getUserDailyLendBorrow(
         accountId: string,
         days: number,
-    ): Promise<{ date: string; lend_amount: string; borrow_amount: string }[]> {
+    ): Promise<
+        {
+            date: string;
+            asset_id: string;
+            decimals: number;
+            lend_amount: string;
+            borrow_amount: string;
+        }[]
+    > {
         const query = `
             SELECT
-                d.date::date as date,
-                COALESCE(lend.total, 0) as lend_amount,
-                COALESCE(borrow.total, 0) as borrow_amount
-            FROM generate_series(
-                CURRENT_DATE - ($2 || ' days')::interval,
-                CURRENT_DATE,
-                '1 day'::interval
-            ) AS d(date)
-            LEFT JOIN (
-                SELECT DATE(m.created_at) as date, SUM(m.match_amount) as total
+                combined.date,
+                combined.asset_id,
+                a.decimals,
+                COALESCE(combined.lend_amount, 0) as lend_amount,
+                COALESCE(combined.borrow_amount, 0) as borrow_amount
+            FROM (
+                SELECT DATE(m.created_at) as date, m.asset_id,
+                    SUM(CASE WHEN m.lender_account_id = $1 THEN m.match_amount ELSE 0 END) as lend_amount,
+                    SUM(CASE WHEN m.borrower_account_id = $1 THEN m.match_amount ELSE 0 END) as borrow_amount
                 FROM matches m
-                WHERE m.lender_account_id = $1
+                WHERE (m.lender_account_id = $1 OR m.borrower_account_id = $1)
                 AND m.created_at >= CURRENT_DATE - ($2 || ' days')::interval
-                GROUP BY DATE(m.created_at)
-            ) lend ON lend.date = d.date::date
-            LEFT JOIN (
-                SELECT DATE(m.created_at) as date, SUM(m.match_amount) as total
-                FROM matches m
-                WHERE m.borrower_account_id = $1
-                AND m.created_at >= CURRENT_DATE - ($2 || ' days')::interval
-                GROUP BY DATE(m.created_at)
-            ) borrow ON borrow.date = d.date::date
-            ORDER BY d.date ASC
+                GROUP BY DATE(m.created_at), m.asset_id
+            ) combined
+            JOIN assets a ON a.id = combined.asset_id
+            ORDER BY combined.date ASC
         `;
 
         return this.dataSource.query(query, [accountId, days]);

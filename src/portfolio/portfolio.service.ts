@@ -278,11 +278,56 @@ export class PortfolioService {
             days,
         );
 
-        const chartData = chartRows.map((row) => ({
-            date: new Date(row.date).toISOString().split("T")[0],
-            lendAmount: String(row.lend_amount),
-            borrowAmount: String(row.borrow_amount),
-        }));
+        // Aggregate per-token rows into per-day USD values
+        const dailyUsdMap = new Map<
+            string,
+            { lendUsd: number; borrowUsd: number }
+        >();
+
+        for (const row of chartRows) {
+            const dateKey = new Date(row.date).toISOString().split("T")[0];
+            const decimals = row.decimals ?? 18;
+
+            const lendHuman = Number(
+                baseUnitsToHuman(String(row.lend_amount), decimals),
+            );
+            const borrowHuman = Number(
+                baseUnitsToHuman(String(row.borrow_amount), decimals),
+            );
+
+            const price = allPrices[row.asset_id.toLowerCase()] ?? 0;
+
+            const entry = dailyUsdMap.get(dateKey) ?? {
+                lendUsd: 0,
+                borrowUsd: 0,
+            };
+            entry.lendUsd += lendHuman * price;
+            entry.borrowUsd += borrowHuman * price;
+            dailyUsdMap.set(dateKey, entry);
+        }
+
+        // Fill all days in the range so the chart has a continuous series
+        const chartData: {
+            date: string;
+            lendAmount: string;
+            borrowAmount: string;
+        }[] = [];
+        const today = new Date();
+        for (let i = days; i >= 0; i--) {
+            const d = new Date(today);
+            d.setDate(d.getDate() - i);
+            const dateKey = d.toISOString().split("T")[0];
+            const entry = dailyUsdMap.get(dateKey);
+            chartData.push({
+                date: dateKey,
+                lendAmount: entry
+                    ? String(Number(entry.lendUsd.toFixed(2)))
+                    : "0",
+                borrowAmount: entry
+                    ? String(Number(entry.borrowUsd.toFixed(2)))
+                    : "0",
+            });
+        }
 
         return {
             suppliedAssets: Number(suppliedAssetsUsd.toFixed(2)),
@@ -956,6 +1001,7 @@ export class PortfolioService {
             openBorrowOrders,
             userAssets,
             tokens,
+            healthFactorResult,
         ] = await Promise.all([
             this.portfolioRepository.getUserTotalBalances(account.id),
             this.orderRepository.getOpenLendAmountsByAccount(account.id),
@@ -963,6 +1009,7 @@ export class PortfolioService {
             this.orderRepository.getOpenBorrowOrders(account.id),
             this.portfolioRepository.getUserAssets(account.id, 1, 1000),
             this.tokenRepository.find(),
+            this.getHealthFactorForAccount(account.id),
         ]);
 
         const allPrices = this.priceService.getPrices();
@@ -1023,6 +1070,9 @@ export class PortfolioService {
 
             return {
                 assetId: balance.asset_id,
+                symbol: token?.symbol || "UNKNOWN",
+                name: token?.name || "Unknown Token",
+                imageUrl: token?.imageUrl ?? null,
                 totalBalance: totalBalanceHuman,
                 lockedInOrders: lockedHuman,
                 availableBalance,
@@ -1071,12 +1121,17 @@ export class PortfolioService {
 
         const totalDebtUsd = settledDebtUsd + pendingDebtUsd;
 
+        const formattedHf = formatHealthFactorResponse(healthFactorResult);
+
         return {
             assets,
             totalDebtUsd: Number(totalDebtUsd.toFixed(2)),
             settledDebtUsd: Number(settledDebtUsd.toFixed(2)),
             pendingDebtUsd: Number(pendingDebtUsd.toFixed(2)),
             debts,
+            healthFactor: formattedHf.healthFactor,
+            collateralUsd: formattedHf.collateralUsd,
+            weightedLtv: formattedHf.weightedLtv,
         };
     }
 }

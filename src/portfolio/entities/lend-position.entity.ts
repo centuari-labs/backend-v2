@@ -29,6 +29,9 @@ export class LendPosition {
     @Column({ name: "amount", type: "numeric" })
     amount: string;
 
+    @Column({ name: "apr", type: "numeric", default: 0 })
+    apr: string;
+
     @Column({ name: "cbt_asset_id", type: "uuid", nullable: true })
     cbtAssetId: string;
 

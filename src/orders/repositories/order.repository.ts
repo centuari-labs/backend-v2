@@ -63,12 +63,12 @@ export class OrderRepository extends Repository<Order> {
         const rawResults = await this.createQueryBuilder("order")
             .select("order.assetId", "assetId")
             .addSelect(
-                "MIN(NULLIF(CASE WHEN order.side = :borrowSide THEN order.rate ELSE NULL END, 0))",
-                "lowestBorrow",
+                "MAX(CASE WHEN order.side = :borrowSide THEN order.rate ELSE 0 END)",
+                "highestBorrow",
             )
             .addSelect(
-                "MAX(CASE WHEN order.side = :lendSide THEN order.rate ELSE 0 END)",
-                "highestLend",
+                "MIN(NULLIF(CASE WHEN order.side = :lendSide THEN order.rate ELSE NULL END, 0))",
+                "lowestLend",
             )
             .where("order.status = :status", { status: OrderStatus.Open })
             .setParameters({
@@ -81,11 +81,11 @@ export class OrderRepository extends Repository<Order> {
         const rateMap = new Map<string, { borrow: number; lend: number }>();
         for (const rate of rawResults) {
             rateMap.set(rate.assetId, {
-                borrow: rate.lowestBorrow
-                    ? Number.parseFloat(rate.lowestBorrow)
+                borrow: rate.highestBorrow
+                    ? Number.parseFloat(rate.highestBorrow)
                     : 0,
-                lend: rate.highestLend
-                    ? Number.parseFloat(rate.highestLend)
+                lend: rate.lowestLend
+                    ? Number.parseFloat(rate.lowestLend)
                     : 0,
             });
         }

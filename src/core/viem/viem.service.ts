@@ -249,10 +249,18 @@ export class ViemService implements OnModuleInit {
     ): Promise<Hash | TransactionReceipt> {
         try {
             const publicClient = this.getPublicClient(chainId);
-            const nonce = await publicClient.getTransactionCount({
-                address: walletClient.account.address,
-                blockTag: "pending",
-            });
+            const [nonce, block] = await Promise.all([
+                publicClient.getTransactionCount({
+                    address: walletClient.account.address,
+                    blockTag: "pending",
+                }),
+                publicClient.getBlock({ blockTag: "latest" }),
+            ]);
+
+            const baseFee = block.baseFeePerGas ?? 0n;
+            const maxPriorityFeePerGas = 1_500_000n;
+            const maxFeePerGas =
+                (baseFee * 3n) / 2n + maxPriorityFeePerGas;
 
             const hash = await walletClient.writeContract({
                 address: address as `0x${string}`,
@@ -262,6 +270,8 @@ export class ViemService implements OnModuleInit {
                 nonce,
                 value: options.value,
                 gas: options.gas,
+                maxFeePerGas,
+                maxPriorityFeePerGas,
                 type: "eip1559",
             });
 

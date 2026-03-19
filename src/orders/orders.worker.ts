@@ -23,9 +23,9 @@ import { humanToBaseUnits } from "../common/utils/number.utils";
 import { PriceService } from "../price/price.service";
 import { HEALTH_FACTOR_NO_DEBT } from "../portfolio/helpers/health-factor.helpers";
 
-const LEND_INSERT_INTERVAL_MS = 15000;
-const BORROW_INSERT_INTERVAL_MS = 15000;
-const CACHE_REFRESH_INTERVAL_MS = 60000;
+const LEND_INSERT_INTERVAL_MS = 90_000;
+const BORROW_INSERT_INTERVAL_MS = 90_000;
+const CACHE_REFRESH_INTERVAL_MS = 600_000;
 
 const LEND_RATE_MIN = 500;
 const LEND_RATE_MAX = 1500;

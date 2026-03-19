@@ -54,10 +54,17 @@ export class PortfolioRepository extends Repository<Portfolio> {
 
     async getUserTotalBalances(
         accountId: string,
-    ): Promise<{ asset_id: string; total_amount: string }[]> {
+    ): Promise<
+        {
+            asset_id: string;
+            total_amount: string;
+            total_locked_amount: string;
+        }[]
+    > {
         return this.createQueryBuilder("portfolio")
             .select("portfolio.asset_id", "asset_id")
             .addSelect("SUM(portfolio.amount)", "total_amount")
+            .addSelect("SUM(portfolio.locked_amount)", "total_locked_amount")
             .where("portfolio.account_id = :accountId", { accountId })
             .groupBy("portfolio.asset_id")
             .getRawMany();

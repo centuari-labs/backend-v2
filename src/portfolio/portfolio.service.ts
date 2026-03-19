@@ -474,13 +474,19 @@ export class PortfolioService {
         );
         const portfolioBalance = BigInt(portfolioBalanceRaw);
 
+        const lockedAmount = await this.getLockedAmount(
+            accountId,
+            assetId,
+        );
+
         const totalOpenOrders = await this.orderRepository.getTotalOpenQuantity(
             accountId,
             assetId,
             OrderSide.Lend,
         );
 
-        const availableBalance = portfolioBalance - totalOpenOrders;
+        const availableBalance =
+            portfolioBalance - lockedAmount - totalOpenOrders;
 
         if (BigInt(quantityBaseUnits) > availableBalance) {
             throw new BadRequestException(
@@ -750,6 +756,17 @@ export class PortfolioService {
         return match ? match.total_amount : "0";
     }
 
+    async getLockedAmount(
+        accountId: string,
+        assetId: string,
+    ): Promise<bigint> {
+        const result = await this.portfolioRepository.findOne({
+            where: { accountId, assetId },
+            select: ["lockedAmount"],
+        });
+        return BigInt(result?.lockedAmount ?? "0");
+    }
+
     async withdrawLendPosition(
         dto: WithdrawLendPositionDto,
         walletAddress: string,
@@ -984,9 +1001,15 @@ export class PortfolioService {
                 baseUnitsToHuman(balance.total_amount, decimals),
             );
 
-            const lockedBaseUnits = lockedMap.get(balance.asset_id) ?? "0";
+            const lockedInOrdersBaseUnits =
+                lockedMap.get(balance.asset_id) ?? "0";
+            const lockedInSettlementBaseUnits =
+                balance.total_locked_amount ?? "0";
+            const totalLockedBaseUnits =
+                BigInt(lockedInOrdersBaseUnits) +
+                BigInt(lockedInSettlementBaseUnits);
             const lockedHuman = Number(
-                baseUnitsToHuman(lockedBaseUnits, decimals),
+                baseUnitsToHuman(totalLockedBaseUnits.toString(), decimals),
             );
 
             const availableBalance = Math.max(

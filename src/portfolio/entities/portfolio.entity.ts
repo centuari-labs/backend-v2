@@ -32,6 +32,9 @@ export class Portfolio {
     @Column({ name: "amount", type: "numeric" })
     amount: string;
 
+    @Column({ name: "locked_amount", type: "numeric", default: "0" })
+    lockedAmount: string;
+
     @Column({ name: "is_collateral", type: "boolean", default: false })
     isCollateral: boolean;
 

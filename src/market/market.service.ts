@@ -94,8 +94,8 @@ export class MarketService {
                         : null,
                 },
                 // rates in DB are stored as basis points; convert to human percentage for responses
-                borrow_rate: toPercentage(rates.borrow),
-                lend_rate: toPercentage(rates.lend),
+                borrow_rate: toPercentage(rates.lend),
+                lend_rate: toPercentage(rates.borrow),
                 // averageLTV is stored as basis points on the token entity
                 collateral_factor: toPercentage(asset.averageLTV),
             };

@@ -91,13 +91,19 @@ export class PortfolioService {
 
         let totalBalanceUsd = 0;
 
-        const [portfolio, lendPositions, suppliedAssets, borrowedAssets] =
-            await Promise.all([
-                this.portfolioRepository.getUserTotalBalances(account.id),
-                this.portfolioRepository.getUserLendPositionsForApr(account.id),
-                this.portfolioRepository.getUserSuppliedAssets(account.id),
-                this.portfolioRepository.getUserBorrowedAssets(account.id),
-            ]);
+        const [
+            portfolio,
+            allLendPositions,
+            activeLendPositions,
+            suppliedAssets,
+            borrowedAssets,
+        ] = await Promise.all([
+            this.portfolioRepository.getUserTotalBalances(account.id),
+            this.portfolioRepository.getAllLendPositions(account.id),
+            this.portfolioRepository.getUserLendPositionsForApr(account.id),
+            this.portfolioRepository.getUserSuppliedAssets(account.id),
+            this.portfolioRepository.getUserBorrowedAssets(account.id),
+        ]);
 
         for (const deposit of portfolio) {
             const decimals = await this.tokensService.getTokenDecimalsByAssetId(
@@ -113,13 +119,36 @@ export class PortfolioService {
             }
         }
 
-        let netAPR = 0;
         let allTimeReturnUsd = 0;
-        if (lendPositions.length > 0) {
+        for (const position of allLendPositions) {
+            const decimals =
+                await this.tokensService.getTokenDecimalsByAssetId(
+                    position.asset_id,
+                );
+            if (decimals == null) continue;
+
+            const amountHuman = Number(
+                baseUnitsToHuman(position.amount, decimals),
+            );
+            const originalSharesHuman = Number(
+                baseUnitsToHuman(position.original_shares, decimals),
+            );
+
+            if (amountHuman <= 0) continue;
+
+            const price = allPrices[position.asset_id.toLowerCase()];
+            if (price !== undefined) {
+                const gainHuman = originalSharesHuman - amountHuman;
+                allTimeReturnUsd += gainHuman * price;
+            }
+        }
+
+        let netAPR = 0;
+        if (activeLendPositions.length > 0) {
             let totalWeightedAPR = 0;
             let totalAmount = 0;
 
-            for (const position of lendPositions) {
+            for (const position of activeLendPositions) {
                 const decimals =
                     await this.tokensService.getTokenDecimalsByAssetId(
                         position.asset_id,
@@ -129,21 +158,12 @@ export class PortfolioService {
                 const amountHuman = Number(
                     baseUnitsToHuman(position.amount, decimals),
                 );
-                const sharesHuman = Number(
-                    baseUnitsToHuman(position.shares, decimals),
-                );
 
                 if (amountHuman <= 0) continue;
 
-                const apr = sharesHuman / amountHuman - 1;
-                totalWeightedAPR += apr * amountHuman;
+                const positionApr = Number(position.apr) / 10000;
+                totalWeightedAPR += positionApr * amountHuman;
                 totalAmount += amountHuman;
-
-                const price = allPrices[position.asset_id.toLowerCase()];
-                if (price !== undefined) {
-                    const gainHuman = sharesHuman - amountHuman;
-                    allTimeReturnUsd += gainHuman * price;
-                }
             }
 
             if (totalAmount > 0) {
@@ -563,15 +583,20 @@ export class PortfolioService {
         }
 
         const assetIds = userAssets.map((ua) => ua.asset_id);
-        const [tokens, riskParams] = await Promise.all([
+        const [tokens, riskParams, openLendAmounts] = await Promise.all([
             this.portfolioRepository.getTokensByAssetIds(assetIds),
             this.portfolioRepository.getRiskParamsByCollateralTokenIds(
                 assetIds,
             ),
+            this.orderRepository.getOpenLendAmountsByAccount(account.id),
         ]);
 
         const tokenMap = new Map(tokens.map((t) => [t.id, t]));
         const riskMap = new Map(riskParams.map((r) => [r.asset_id, r]));
+        const openLendMap = new Map<string, string>();
+        for (const row of openLendAmounts) {
+            openLendMap.set(row.assetId, row.lockedAmount);
+        }
         const allPrices = this.priceService.getPrices();
 
         const data = userAssets.map((ua) => {
@@ -579,7 +604,25 @@ export class PortfolioService {
             const risk = riskMap.get(ua.asset_id);
             const price = allPrices[ua.asset_id.toLowerCase()];
             const decimals = token?.decimals ?? 0;
-            const amountHuman = Number(baseUnitsToHuman(ua.amount, decimals));
+
+            const totalAmountHuman = Number(
+                baseUnitsToHuman(ua.amount, decimals),
+            );
+
+            const openLendBaseUnits =
+                openLendMap.get(ua.asset_id) ?? "0";
+            const lockedBaseUnits = ua.locked_amount ?? "0";
+            const totalLockedBaseUnits =
+                BigInt(openLendBaseUnits) + BigInt(lockedBaseUnits);
+            const lockedHuman = Number(
+                baseUnitsToHuman(totalLockedBaseUnits.toString(), decimals),
+            );
+
+            const walletBalance = Math.max(
+                0,
+                totalAmountHuman - lockedHuman,
+            );
+
             // risk table stores basis points (e.g. 7500 = 75%)
             const ltv = risk ? Number(risk.avg_ltv) / 10000 : 0;
             const liquidationThreshold = risk ? Number(risk.avg_lt) / 10000 : 0;
@@ -587,8 +630,8 @@ export class PortfolioService {
                 assetId: ua.asset_id,
                 symbol: token?.symbol || "UNKNOWN",
                 name: token?.name || "Unknown Token",
-                walletBalance: amountHuman,
-                amountInUsd: calculateUsdAmount(amountHuman, price ?? 0),
+                walletBalance,
+                amountInUsd: calculateUsdAmount(walletBalance, price ?? 0),
                 isCollateral: !!ua.is_collateral,
                 imageUrl: token?.imageUrl ?? null,
                 ltv,
@@ -636,7 +679,7 @@ export class PortfolioService {
                 id: position.position_id,
                 symbol: position.symbol,
                 name: position.name,
-                walletBalance: quantityHuman,
+                shares: quantityHuman,
                 amountInUsd: calculateUsdAmount(quantityHuman, price ?? 0),
                 isCollateral: false,
                 imageUrl: position.image_url ?? null,

@@ -724,7 +724,7 @@ describe("PortfolioService", () => {
                 limit: 10,
             });
 
-            expect(result.data[0].walletBalance).toBe(1000);
+            expect(result.data[0].shares).toBe(1000);
         });
 
         it("should calculate USD amount correctly for positions", async () => {

@@ -42,7 +42,9 @@ export interface RawTransactionRow {
 export interface LendPositionForApr {
     asset_id: string;
     shares: string;
+    original_shares: string;
     amount: string;
+    apr: string;
     created_at: Date;
 }
 
@@ -77,11 +79,29 @@ export class PortfolioRepository extends Repository<Portfolio> {
             .createQueryBuilder()
             .select("lp.asset_id", "asset_id")
             .addSelect("lp.shares", "shares")
+            .addSelect("lp.original_shares", "original_shares")
             .addSelect("lp.amount", "amount")
+            .addSelect("lp.apr", "apr")
             .addSelect("lp.created_at", "created_at")
             .from("lend_positions", "lp")
             .where("lp.account_id = :accountId", { accountId })
             .andWhere("lp.shares > 0")
+            .getRawMany();
+    }
+
+    async getAllLendPositions(
+        accountId: string,
+    ): Promise<LendPositionForApr[]> {
+        return this.dataSource
+            .createQueryBuilder()
+            .select("lp.asset_id", "asset_id")
+            .addSelect("lp.shares", "shares")
+            .addSelect("lp.original_shares", "original_shares")
+            .addSelect("lp.amount", "amount")
+            .addSelect("lp.apr", "apr")
+            .addSelect("lp.created_at", "created_at")
+            .from("lend_positions", "lp")
+            .where("lp.account_id = :accountId", { accountId })
             .getRawMany();
     }
 
@@ -140,6 +160,7 @@ export class PortfolioRepository extends Repository<Portfolio> {
             .select([
                 "portfolio.asset_id AS asset_id",
                 "portfolio.amount AS amount",
+                "portfolio.locked_amount AS locked_amount",
                 "portfolio.is_collateral AS is_collateral",
             ])
             .where("portfolio.account_id = :accountId", { accountId })
@@ -174,8 +195,8 @@ export class PortfolioRepository extends Repository<Portfolio> {
                 .select("lp.id", "position_id")
                 .addSelect("lp.asset_id", "asset_id")
                 .addSelect("'LEND'", "side")
-                .addSelect("COALESCE(lp.apr, 0)", "rate")
-                .addSelect("lp.amount", "quantity")
+                .addSelect("COALESCE(lp.apr, 0) / 100.0", "rate")
+                .addSelect("lp.shares", "quantity")
                 .addSelect("t.symbol", "symbol")
                 .addSelect("t.name", "name")
                 .addSelect("t.token_address", "token_address")
@@ -187,7 +208,7 @@ export class PortfolioRepository extends Repository<Portfolio> {
                 .innerJoin("assets", "t", "lp.asset_id = t.id")
                 .leftJoin("markets", "m", "lp.market_id = m.id")
                 .where("lp.account_id = :accountId", { accountId })
-                .andWhere("lp.amount > 0");
+                .andWhere("lp.shares > 0");
 
             if (assetId) {
                 lendQuery.andWhere("lp.asset_id = :assetId", { assetId });
@@ -198,7 +219,7 @@ export class PortfolioRepository extends Repository<Portfolio> {
                 .select("COUNT(*)", "count")
                 .from("lend_positions", "lp")
                 .where("lp.account_id = :accountId", { accountId })
-                .andWhere("lp.amount > 0");
+                .andWhere("lp.shares > 0");
 
             if (assetId) {
                 countQuery.andWhere("lp.asset_id = :assetId", { assetId });
@@ -219,7 +240,7 @@ export class PortfolioRepository extends Repository<Portfolio> {
                 .select("bp.id", "position_id")
                 .addSelect("bp.asset_id", "asset_id")
                 .addSelect("'BORROW'", "side")
-                .addSelect("COALESCE(bp.apr, 0)", "rate")
+                .addSelect("COALESCE(bp.apr, 0) / 100.0", "rate")
                 .addSelect("bp.debt", "quantity")
                 .addSelect("t.symbol", "symbol")
                 .addSelect("t.name", "name")

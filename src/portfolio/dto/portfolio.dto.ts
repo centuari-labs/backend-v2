@@ -107,12 +107,13 @@ export class MyPositionItemDto {
     id: string;
     symbol: string;
     name: string;
-    walletBalance: number;
+    shares: number;
     amountInUsd: number;
     isCollateral: boolean;
     imageUrl?: string | null;
     side: "LEND" | "BORROW";
     maturity?: number | null;
+    apr: number;
 }
 
 export class GetMyPositionResponseDto {

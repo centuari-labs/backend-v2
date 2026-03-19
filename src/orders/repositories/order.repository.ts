@@ -92,6 +92,12 @@ export class OrderRepository extends Repository<Order> {
         return rateMap;
     }
 
+    async getOrderById(id: string): Promise<Order | null> {
+        return this.findOne({
+            where: { id },
+        });
+    }
+
     async getOpenOrders(assetId?: string): Promise<Order[]> {
         return this.find({
             where: {

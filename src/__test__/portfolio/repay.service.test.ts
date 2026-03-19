@@ -1,9 +1,9 @@
 import { Test, TestingModule } from "@nestjs/testing";
-import { RepayService } from "../../repay/repay.service";
+import { RepayService } from "../../portfolio/repay.service";
 import { ViemService } from "../../core/viem/viem.service";
 import { TokensService } from "../../tokens/tokens.service";
 import { OrderRepository } from "../../orders/repositories/order.repository";
-import { RepayRepository } from "../../repay/repositories/repay.repository";
+import { RepayRepository } from "../../portfolio/repositories/repay.repository";
 import { MarketRepositories } from "../../market/repository/market.repository";
 import { ConfigService } from "@nestjs/config";
 import {

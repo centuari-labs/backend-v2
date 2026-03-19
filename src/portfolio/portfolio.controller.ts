@@ -8,6 +8,7 @@ import {
     Put,
 } from "@nestjs/common";
 import { PortfolioService } from "./portfolio.service";
+import { RepayService } from "./repay.service";
 import { TransactionHistoryQueryDto } from "./dto/transaction-history.dto";
 import { OpenOrdersQueryDto } from "./dto/open-orders.dto";
 import {
@@ -24,11 +25,15 @@ import { ChartDataQueryDto } from "./dto/chart-data.dto";
 import { AuthGuard } from "../common/guards/auth.guard";
 import { Wallet, CurrentUser } from "../common/decorators/wallet.decorator";
 import { WithdrawLendPositionDto } from "./dto/withdraw-lend-position.dto";
+import { RepayRequestDto, type RepayResponseDto } from "./dto/repay.dto";
 
 @Controller("portfolio")
 @UseGuards(AuthGuard)
 export class PortfolioController {
-    constructor(private readonly portfolioService: PortfolioService) {}
+    constructor(
+        private readonly portfolioService: PortfolioService,
+        private readonly repayService: RepayService,
+    ) {}
 
     @Get("my-portfolio")
     async getMyPortfolio(
@@ -106,6 +111,15 @@ export class PortfolioController {
         @Query() query: OpenOrdersQueryDto,
     ) {
         return this.portfolioService.getOpenOrders(wallet, query);
+    }
+
+    @Post("repay")
+    async repay(
+        @Body() dto: RepayRequestDto,
+        @Wallet() walletAddress: string,
+        @CurrentUser() user: { userId: string },
+    ): Promise<RepayResponseDto> {
+        return this.repayService.repay(dto, walletAddress, user.userId);
     }
 
     @Get("transaction-history")

@@ -14,7 +14,7 @@ import { treasuryAbi } from "../abis/Treasury";
 
 const STATE_KEY = "treasury-deposited";
 const MAX_BLOCK_RANGE = 2000n;
-const DEFAULT_POLL_INTERVAL_MS = 10_000;
+const DEFAULT_POLL_INTERVAL_MS = 60_000;
 
 const depositedEvent = parseAbiItem(
     "event Deposited(address indexed user, address indexed token, uint256 amount)",

@@ -51,7 +51,7 @@ export class OrdersService {
         private readonly priceService: PriceService,
         private readonly marketRepository: MarketRepositories,
         private readonly portfolioService: PortfolioService,
-    ) {}
+    ) { }
 
     async getOrCreateAccount(
         walletAddress: string,
@@ -399,23 +399,16 @@ export class OrdersService {
     }
 
     async cancelOrder(orderId: string, walletAddress: string): Promise<Order> {
-        // Find the order
-        const orders = await this.orderRepository.getOpenOrders(orderId);
+        const order = await this.orderRepository.getOrderById(orderId);
 
-        if (!orders.length) {
+        if (!order) {
             throw new NotFoundException(`Order with ID ${orderId} not found`);
         }
 
         const account =
             await this.orderRepository.findAccountByWallet(walletAddress);
 
-        if (!account) {
-            throw new ForbiddenException("Account not found for this wallet");
-        }
-
-        const accountId = account.id;
-
-        if (orders[0].accountId !== accountId) {
+        if (!account || order.accountId !== account.id) {
             throw new ForbiddenException("You do not own this order");
         }
 
@@ -424,15 +417,15 @@ export class OrdersService {
             OrderStatus.PartiallyFilled,
         ] as OrderStatus[];
 
-        if (!cancellableStatuses.includes(orders[0].status)) {
+        if (!cancellableStatuses.includes(order.status)) {
             throw new BadRequestException(
                 "Order can only be cancelled when status is open or partial",
             );
         }
 
-        orders[0].status = OrderStatus.Cancelled;
+        order.status = OrderStatus.Cancelled;
 
-        const updatedOrder = await this.orderRepository.save(orders[0]);
+        const updatedOrder = await this.orderRepository.save(order);
 
         // Publish cancellation event to NATS
         await this.publishCancelOrderToNats(orderId, walletAddress);

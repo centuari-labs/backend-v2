@@ -41,7 +41,7 @@ import {
     calculateUsdAmount,
     createPaginatedResponse,
 } from "./helpers/position.helpers";
-import { baseUnitsToHuman } from "../common/utils/number.utils";
+import { baseUnitsToHuman, safeBigInt } from "../common/utils/number.utils";
 import { getFirstEventFromReceipt } from "../common/utils/event.utils";
 import {
     computeHealthFactor,
@@ -111,7 +111,7 @@ export class PortfolioService {
             );
             if (decimals == null) continue;
             const amountHuman = Number(
-                baseUnitsToHuman(deposit.total_amount, decimals),
+                baseUnitsToHuman(deposit.total_amount ?? "0", decimals),
             );
             const price = allPrices[deposit.asset_id.toLowerCase()];
             if (price !== undefined) {
@@ -128,10 +128,10 @@ export class PortfolioService {
             if (decimals == null) continue;
 
             const amountHuman = Number(
-                baseUnitsToHuman(position.amount, decimals),
+                baseUnitsToHuman(position.amount ?? "0", decimals),
             );
             const originalSharesHuman = Number(
-                baseUnitsToHuman(position.original_shares, decimals),
+                baseUnitsToHuman(position.original_shares ?? "0", decimals),
             );
 
             if (amountHuman <= 0) continue;
@@ -156,7 +156,7 @@ export class PortfolioService {
                 if (decimals == null) continue;
 
                 const amountHuman = Number(
-                    baseUnitsToHuman(position.amount, decimals),
+                    baseUnitsToHuman(position.amount ?? "0", decimals),
                 );
 
                 if (amountHuman <= 0) continue;
@@ -178,7 +178,7 @@ export class PortfolioService {
             );
             if (decimals == null) continue;
             const amountHuman = Number(
-                baseUnitsToHuman(position.amount, decimals),
+                baseUnitsToHuman(position.amount ?? "0", decimals),
             );
             if (amountHuman <= 0) continue;
 
@@ -195,7 +195,7 @@ export class PortfolioService {
             );
             if (decimals == null) continue;
             const amountHuman = Number(
-                baseUnitsToHuman(position.amount, decimals),
+                baseUnitsToHuman(position.amount ?? "0", decimals),
             );
             if (amountHuman <= 0) continue;
 
@@ -388,7 +388,7 @@ export class PortfolioService {
         const adjusted = collateralPositions.map((pos) => {
             if (pos.assetId !== assetId) return pos;
             const reduced =
-                BigInt(pos.amountBaseUnits) -
+                safeBigInt(pos.amountBaseUnits) -
                 BigInt(collateralReductionBaseUnits);
             return {
                 ...pos,
@@ -561,7 +561,7 @@ export class PortfolioService {
             accountId,
             assetId,
         );
-        const portfolioBalance = BigInt(portfolioBalanceRaw);
+        const portfolioBalance = safeBigInt(portfolioBalanceRaw);
 
         const lockedAmount = await this.getLockedAmount(
             accountId,
@@ -605,7 +605,7 @@ export class PortfolioService {
             accountId,
             assetId,
         );
-        const portfolioBalance = BigInt(portfolioBalanceRaw);
+        const portfolioBalance = safeBigInt(portfolioBalanceRaw);
 
         if (totalFees > portfolioBalance) {
             throw new BadRequestException(
@@ -660,14 +660,14 @@ export class PortfolioService {
             const decimals = token?.decimals ?? 0;
 
             const totalAmountHuman = Number(
-                baseUnitsToHuman(ua.amount, decimals),
+                baseUnitsToHuman(ua.amount ?? "0", decimals),
             );
 
             const openLendBaseUnits =
                 openLendMap.get(ua.asset_id) ?? "0";
             const lockedBaseUnits = ua.locked_amount ?? "0";
             const totalLockedBaseUnits =
-                BigInt(openLendBaseUnits) + BigInt(lockedBaseUnits);
+                safeBigInt(openLendBaseUnits) + safeBigInt(lockedBaseUnits);
             const lockedHuman = Number(
                 baseUnitsToHuman(totalLockedBaseUnits.toString(), decimals),
             );
@@ -906,7 +906,7 @@ export class PortfolioService {
             where: { accountId, assetId },
             select: ["lockedAmount"],
         });
-        return BigInt(result?.lockedAmount ?? "0");
+        return safeBigInt(result?.lockedAmount ?? "0");
     }
 
     async withdrawLendPosition(
@@ -1142,7 +1142,7 @@ export class PortfolioService {
             const price = allPrices[balance.asset_id.toLowerCase()] ?? 0;
 
             const totalBalanceHuman = Number(
-                baseUnitsToHuman(balance.total_amount, decimals),
+                baseUnitsToHuman(balance.total_amount ?? "0", decimals),
             );
 
             const lockedInOrdersBaseUnits =
@@ -1150,8 +1150,8 @@ export class PortfolioService {
             const lockedInSettlementBaseUnits =
                 balance.total_locked_amount ?? "0";
             const totalLockedBaseUnits =
-                BigInt(lockedInOrdersBaseUnits) +
-                BigInt(lockedInSettlementBaseUnits);
+                safeBigInt(lockedInOrdersBaseUnits) +
+                safeBigInt(lockedInSettlementBaseUnits);
             const lockedHuman = Number(
                 baseUnitsToHuman(totalLockedBaseUnits.toString(), decimals),
             );
@@ -1191,7 +1191,7 @@ export class PortfolioService {
             const token = tokenMap.get(row.asset_id);
             const decimals = token?.decimals ?? 0;
             const price = allPrices[row.asset_id.toLowerCase()] ?? 0;
-            const debtHuman = Number(baseUnitsToHuman(row.amount, decimals));
+            const debtHuman = Number(baseUnitsToHuman(row.amount ?? "0", decimals));
             const debtUsd = debtHuman * price;
             settledDebtUsd += debtUsd;
             debts.push({

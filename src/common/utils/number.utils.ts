@@ -98,12 +98,25 @@ export function baseUnitsToHuman(
 
     let raw = amount.toString().trim();
 
-    // Strip trailing decimal zeros from PostgreSQL NUMERIC columns (e.g. "1230000.00" → "1230000")
+    // Clamp negative values to "0" — negative base units are not valid in this domain
+    if (raw.startsWith("-")) {
+        return "0";
+    }
+
+    // Handle fractional NUMERIC values from PostgreSQL (e.g. "9999999.91").
+    // Absorb non-zero fractional digits into effectiveDecimals to preserve full precision.
+    let effectiveDecimals = decimals;
     const dotIndex = raw.indexOf(".");
     if (dotIndex !== -1) {
         const fractional = raw.slice(dotIndex + 1);
-        if (/^0*$/.test(fractional)) {
+        const trimmedFractional = fractional.replace(/0+$/, "");
+        if (trimmedFractional.length === 0) {
+            // All-zero fractional (e.g. "1230000.00") — just strip it
             raw = raw.slice(0, dotIndex);
+        } else {
+            // Non-zero fractional (e.g. "9999999.91") — absorb into effective decimals
+            raw = raw.slice(0, dotIndex) + trimmedFractional;
+            effectiveDecimals += trimmedFractional.length;
         }
     }
 
@@ -111,7 +124,7 @@ export function baseUnitsToHuman(
         throw new Error("Base units amount must be a non-negative integer");
     }
 
-    if (decimals === 0) {
+    if (effectiveDecimals === 0) {
         return raw.replace(/^0+(?=\d)/, "") || "0";
     }
 
@@ -119,9 +132,9 @@ export function baseUnitsToHuman(
         return "0";
     }
 
-    const padded = raw.padStart(decimals + 1, "0");
-    const integerPartRaw = padded.slice(0, padded.length - decimals);
-    const fractionalPartRaw = padded.slice(-decimals);
+    const padded = raw.padStart(effectiveDecimals + 1, "0");
+    const integerPartRaw = padded.slice(0, padded.length - effectiveDecimals);
+    const fractionalPartRaw = padded.slice(-effectiveDecimals);
 
     const integerPart = integerPartRaw.replace(/^0+(?=\d)/, "") || "0";
     const fractionalPartTrimmed = fractionalPartRaw.replace(/0+$/, "");
@@ -197,4 +210,17 @@ export function calculateTradeFee(
 
     const fee = amountHuman * (feeBps / 10000);
     return Number(fee.toFixed(8));
+}
+
+/**
+ * Safely convert a string (possibly fractional from PostgreSQL NUMERIC) to BigInt.
+ *
+ * Truncates any fractional part since BigInt only supports integers.
+ * Clamps negative values to 0n.
+ */
+export function safeBigInt(value: string | number | null | undefined): bigint {
+    const raw = (value ?? "0").toString().trim();
+    if (raw.startsWith("-")) return 0n;
+    const intPart = raw.split(".")[0];
+    return BigInt(intPart || "0");
 }

@@ -70,7 +70,7 @@ describe("MarketService", () => {
         service = module.get<MarketService>(MarketService);
     });
 
-    it("should correctly map highest borrow rate to lend_rate and lowest lend rate to borrow_rate", async () => {
+    it("should correctly map lowest borrow rate to lend_rate and lowest lend rate to borrow_rate", async () => {
         // rates are stored as basis points (e.g. 500 = 5%, 800 = 8%)
         const mockRateMap = new Map<string, { borrow: number; lend: number }>();
         mockRateMap.set("asset1", { lend: 500, borrow: 800 });
@@ -85,12 +85,13 @@ describe("MarketService", () => {
 
         expect(btcMarket).toBeDefined();
         // API exposes human-readable percentages
-        expect(btcMarket?.lend_rate).toBe(5);
-        expect(btcMarket?.borrow_rate).toBe(8);
+        // lend_rate = toPercentage(rates.borrow), borrow_rate = toPercentage(rates.lend)
+        expect(btcMarket?.lend_rate).toBe(8);
+        expect(btcMarket?.borrow_rate).toBe(5);
 
         expect(ethMarket).toBeDefined();
-        expect(ethMarket?.lend_rate).toBe(4);
-        expect(ethMarket?.borrow_rate).toBe(0);
+        expect(ethMarket?.lend_rate).toBe(0);
+        expect(ethMarket?.borrow_rate).toBe(4);
     });
 
     it("should correctly calculate total_deposit and active_loans in USD", async () => {

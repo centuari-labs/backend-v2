@@ -87,8 +87,22 @@ describe("baseUnitsToHuman", () => {
         expect(baseUnitsToHuman("100.000", 6)).toBe("0.0001");
     });
 
-    it("throws on invalid base units format", () => {
-        expect(() => baseUnitsToHuman("1.23", 6)).toThrow(
+    it("handles PostgreSQL NUMERIC non-zero fractional parts", () => {
+        // "9999999.91" with 8 decimals → absorb ".91" → "999999991" with 10 effective decimals
+        expect(baseUnitsToHuman("9999999.91", 8)).toBe("0.0999999991");
+        // "1000000.50" with 6 decimals → absorb ".5" → "10000005" with 7 effective decimals
+        expect(baseUnitsToHuman("1000000.50", 6)).toBe("1.0000005");
+        // "1.23" with 6 decimals → absorb ".23" → "123" with 8 effective decimals
+        expect(baseUnitsToHuman("1.23", 6)).toBe("0.00000123");
+    });
+
+    it("clamps negative values to zero", () => {
+        expect(baseUnitsToHuman("-100", 6)).toBe("0");
+        expect(baseUnitsToHuman("-0", 6)).toBe("0");
+    });
+
+    it("throws on truly invalid base units format", () => {
+        expect(() => baseUnitsToHuman("abc", 6)).toThrow(
             "Base units amount must be a non-negative integer",
         );
     });

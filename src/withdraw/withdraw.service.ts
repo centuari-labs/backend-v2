@@ -70,6 +70,8 @@ export class WithdrawService {
         }
 
         const decimals = token.decimals ?? 18;
+        const amountInBaseStr = humanToBaseUnits(amount, decimals);
+        const amountBaseNum = Number(amountInBaseStr);
 
         // Lock all portfolio rows for this account + asset (both collateral and non-collateral)
         const queryRunner =
@@ -107,7 +109,7 @@ export class WithdrawService {
                 : 0;
             const totalAvailable = nonCollateralAmount + collateralAmount;
 
-            if (amountNum > totalAvailable) {
+            if (amountBaseNum > totalAvailable) {
                 throw new BadRequestException(
                     `Insufficient balance. Available: ${totalAvailable}, Requested: ${amountNum}`,
                 );
@@ -115,22 +117,18 @@ export class WithdrawService {
 
             // Deduct from non-collateral first, then collateral
             const nonCollateralDeduction = Math.min(
-                amountNum,
+                amountBaseNum,
                 nonCollateralAmount,
             );
-            const collateralDeduction = amountNum - nonCollateralDeduction;
+            const collateralDeduction = amountBaseNum - nonCollateralDeduction;
 
             // Health factor check when touching collateral
             if (collateralDeduction > 0) {
-                const collateralReductionBaseUnits = humanToBaseUnits(
-                    collateralDeduction.toString(),
-                    decimals,
-                );
                 const simulated =
                     await this.portfolioService.simulateHealthFactorAfterWithdrawal(
                         account.id,
                         assetId,
-                        collateralReductionBaseUnits,
+                        collateralDeduction.toString(),
                     );
 
                 if (

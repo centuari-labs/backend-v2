@@ -255,7 +255,7 @@ export class EventsGateway
         tracked.status = msg.status as OrderStatus;
         tracked.remainingAmount = msg.remainingAmount;
 
-        this.aggregateAndBroadcastOrderbook(tracked.assetId);
+        await this.aggregateAndBroadcastOrderbook(tracked.assetId);
         this.emitUserPosition(tracked, "orders.status");
     }
 
@@ -367,20 +367,6 @@ export class EventsGateway
                 [assetId],
             );
 
-            // Remove stale in-memory orders for this asset that no longer
-            // exist as active LIMIT orders in the DB.
-            const dbOrderIds = new Set(rows.map((r) => r.id));
-            for (const [orderId, tracked] of this.orderState) {
-                if (
-                    tracked.assetId === assetId &&
-                    tracked.type === OrderType.Limit &&
-                    !dbOrderIds.has(orderId)
-                ) {
-                    this.orderState.delete(orderId);
-                }
-            }
-
-            // Upsert DB orders into in-memory state
             for (const row of rows) {
                 const remaining =
                     BigInt(row.quantity) - BigInt(row.filled_quantity || "0");
@@ -473,7 +459,7 @@ export class EventsGateway
     // ─── Orderbook ──────────────────────────────────────────────────
 
     private async aggregateAndBroadcastOrderbook(assetId: string) {
-        await this.loadOrdersFromDb(assetId);
+        // Fast path: build from in-memory state
         const activeOrders = Array.from(this.orderState.values()).filter(
             (o) =>
                 o.assetId === assetId &&
@@ -482,12 +468,25 @@ export class EventsGateway
                     o.status === OrderStatus.PartiallyFilled),
         );
 
+        // DB validation: fetch valid order IDs and discard phantoms
+        const validIds = await this.fetchActiveOrderIds(assetId);
+        const validOrders = activeOrders.filter((o) =>
+            validIds.has(o.orderId),
+        );
+
+        // Clean up phantoms from orderState so they don't accumulate
+        for (const order of activeOrders) {
+            if (!validIds.has(order.orderId)) {
+                this.orderState.delete(order.orderId);
+            }
+        }
+
         const lendLevels = this.aggregateLevels(
-            activeOrders.filter((o) => o.side === OrderSide.Lend),
+            validOrders.filter((o) => o.side === OrderSide.Lend),
             true,
         );
         const borrowLevels = this.aggregateLevels(
-            activeOrders.filter((o) => o.side === OrderSide.Borrow),
+            validOrders.filter((o) => o.side === OrderSide.Borrow),
             false,
         );
 
@@ -501,6 +500,26 @@ export class EventsGateway
         const room = `orderbook:${assetId}`;
         this.orderbookCache.set(room, update);
         this.server.to(room).emit("orderbook-update", update);
+    }
+
+    private async fetchActiveOrderIds(
+        assetId: string,
+    ): Promise<Set<string>> {
+        try {
+            const rows: Array<{ id: string }> = await this.dataSource.query(
+                `SELECT id FROM orders
+                 WHERE asset_id = $1
+                   AND type = 'LIMIT'
+                   AND status IN ('OPEN', 'PARTIALLY_FILLED')`,
+                [assetId],
+            );
+            return new Set(rows.map((r) => r.id));
+        } catch (err) {
+            this.logger.error(
+                `Failed to fetch active order IDs for asset ${assetId}: ${(err as Error).message}`,
+            );
+            return new Set();
+        }
     }
 
     private aggregateLevels(
@@ -559,6 +578,7 @@ export class EventsGateway
         client.join(room);
         this.logger.log(`Client ${client.id} joined ${room}`);
 
+        await this.loadOrdersFromDb(body.assetId);
         await this.aggregateAndBroadcastOrderbook(body.assetId);
         const cached = this.orderbookCache.get(room);
         if (cached) {

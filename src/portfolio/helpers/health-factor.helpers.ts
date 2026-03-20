@@ -63,7 +63,7 @@ export function computeHealthFactor(
     for (const pos of collateralPositions) {
         const decimals = decimalsSafe(pos.decimals);
         const amountHuman = Number.parseFloat(
-            baseUnitsToHuman(pos.amountBaseUnits, decimals),
+            baseUnitsToHuman(pos.amountBaseUnits ?? "0", decimals),
         );
         const valueUsd =
             amountHuman * (Number.isFinite(pos.priceUsd) ? pos.priceUsd : 0);
@@ -76,7 +76,7 @@ export function computeHealthFactor(
     for (const pos of debtPositions) {
         const decimals = decimalsSafe(pos.decimals);
         const amountHuman = Number.parseFloat(
-            baseUnitsToHuman(pos.amountBaseUnits, decimals),
+            baseUnitsToHuman(pos.amountBaseUnits ?? "0", decimals),
         );
         existingDebtUsd +=
             amountHuman * (Number.isFinite(pos.priceUsd) ? pos.priceUsd : 0);
@@ -87,7 +87,7 @@ export function computeHealthFactor(
     for (const pos of additional) {
         const decimals = decimalsSafe(pos.decimals);
         const amountHuman = Number.parseFloat(
-            baseUnitsToHuman(pos.amountBaseUnits, decimals),
+            baseUnitsToHuman(pos.amountBaseUnits ?? "0", decimals),
         );
         additionalDebtUsdSum +=
             amountHuman * (Number.isFinite(pos.priceUsd) ? pos.priceUsd : 0);

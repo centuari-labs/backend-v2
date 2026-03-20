@@ -1,0 +1,63 @@
+name: Improvement / Enhancement
+description: Suggest an improvement to existing backend functionality
+title: "[Improvement]: "
+labels: ["improvement", "backend"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Suggest an improvement to an existing feature or workflow.
+
+  - type: textarea
+    id: current
+    attributes:
+      label: Current Behavior
+      description: Describe how the feature currently works.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposed
+    attributes:
+      label: Proposed Improvement
+      description: How should it work instead? What would be better?
+    validations:
+      required: true
+
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Motivation / Benefit
+      description: Why is this improvement valuable? (performance, DX, reliability, etc.)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: type
+    attributes:
+      label: Improvement Type
+      description: What kind of improvement is this?
+      options:
+        - Performance
+        - Code Quality / Refactor
+        - Developer Experience
+        - Reliability / Error Handling
+        - Security
+        - Testing
+        - Observability / Logging
+        - Other
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: breaking
+    attributes:
+      label: Breaking Changes
+      options:
+        - label: This improvement may introduce breaking changes
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional Context
+      description: Any benchmarks, references, or related issues.

@@ -34,6 +34,9 @@ export interface HealthFactorOptions {
 /** When debt is zero, we return this sentinel so callers can format as needed. */
 export const HEALTH_FACTOR_NO_DEBT = Number.POSITIVE_INFINITY;
 
+/** Minimum health factor required to unset collateral. */
+export const MIN_HEALTH_FACTOR = 1.0;
+
 /**
  * Compute decimal-aware, weighted-LTV-based health factor.
  *

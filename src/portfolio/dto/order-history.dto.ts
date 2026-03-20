@@ -2,7 +2,7 @@ import { IsOptional, IsUUID } from "class-validator";
 import { Transform } from "class-transformer";
 import type { AssetDto } from "../../common/dto/asset.dto";
 
-export class TransactionHistoryQueryDto {
+export class OrderHistoryQueryDto {
     @IsOptional()
     @IsUUID()
     assetId?: string;
@@ -16,13 +16,15 @@ export class TransactionHistoryQueryDto {
     limit?: number = 10;
 }
 
-export interface TransactionHistoryItem {
+export interface OrderHistoryItem {
     id: string;
     side: string;
+    orderType: string | null;
     rate: number;
     amount: string;
-    fee: string | null;
+    filledQuantity: string | null;
+    status: string;
     asset: AssetDto;
-    maturity: string;
+    fee: string | null;
     createdAt: string;
 }

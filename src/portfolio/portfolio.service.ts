@@ -18,6 +18,8 @@ import {
     WithdrawLendPositionDto,
     WithdrawLendPositionResponseDto,
 } from "./dto/withdraw-lend-position.dto";
+import type { OrderHistoryItem } from "./dto/order-history.dto";
+import { OrderHistoryQueryDto } from "./dto/order-history.dto";
 import type { TransactionHistoryItem } from "./dto/transaction-history.dto";
 import { TransactionHistoryQueryDto } from "./dto/transaction-history.dto";
 import type { OpenOrderItem } from "./dto/open-orders.dto";
@@ -41,11 +43,12 @@ import {
     calculateUsdAmount,
     createPaginatedResponse,
 } from "./helpers/position.helpers";
-import { baseUnitsToHuman, safeBigInt } from "../common/utils/number.utils";
+import { baseUnitsToHuman, safeBigInt, toPercentage } from "../common/utils/number.utils";
 import { getFirstEventFromReceipt } from "../common/utils/event.utils";
 import {
     computeHealthFactor,
     formatHealthFactorResponse,
+    MIN_HEALTH_FACTOR,
     type CollateralPositionInput,
     type DebtPositionInput,
     type HealthFactorResult,
@@ -767,6 +770,29 @@ export class PortfolioService {
             throw new NotFoundException("Account not found");
         }
 
+        if (!body.isCollateral) {
+            const { collateralPositions, debtPositions } =
+                await this.buildHealthFactorInputs(account.id);
+
+            if (debtPositions.length > 0) {
+                const assetIdSet = new Set(body.assetIds);
+                const remaining = collateralPositions.filter(
+                    (pos) => !assetIdSet.has(pos.assetId),
+                );
+
+                const simulated = computeHealthFactor(
+                    remaining,
+                    debtPositions,
+                );
+
+                if (simulated.healthFactor < MIN_HEALTH_FACTOR) {
+                    throw new BadRequestException(
+                        `Cannot disable collateral: health factor would drop to ${simulated.healthFactor.toFixed(4)} (minimum ${MIN_HEALTH_FACTOR})`,
+                    );
+                }
+            }
+        }
+
         await this.portfolioRepository.setAssetAsCollateral(
             account.id,
             body.assetIds,
@@ -774,9 +800,9 @@ export class PortfolioService {
         );
     }
 
-    async getTransactionHistory(
+    async getOrderHistory(
         wallet: string,
-        query: TransactionHistoryQueryDto,
+        query: OrderHistoryQueryDto,
     ) {
         const account = await this.orderRepository.findAccountByWallet(wallet);
         if (!account) {
@@ -789,18 +815,18 @@ export class PortfolioService {
         }
 
         const { data: rows, total } =
-            await this.portfolioRepository.getTransactionHistory(
+            await this.portfolioRepository.getOrderHistory(
                 account.id,
                 query.page ?? 1,
                 query.limit ?? 10,
                 { assetId: query.assetId },
             );
 
-        const items: TransactionHistoryItem[] = rows.map((row) => ({
+        const items: OrderHistoryItem[] = rows.map((row) => ({
             id: row.id,
             side: row.side,
             orderType: row.order_type,
-            rate: Number(row.rate) || 0,
+            rate: toPercentage(Number(row.rate)),
             amount: baseUnitsToHuman(row.amount, Number(row.decimals) || 0),
             filledQuantity: row.filled_quantity
                 ? baseUnitsToHuman(
@@ -861,7 +887,7 @@ export class PortfolioService {
             id: row.id,
             side: row.side,
             orderType: row.order_type,
-            rate: Number(row.rate) || 0,
+            rate: toPercentage(Number(row.rate)),
             amount: baseUnitsToHuman(row.amount, Number(row.decimals) || 0),
             filledQuantity: row.filled_quantity
                 ? baseUnitsToHuman(
@@ -1231,5 +1257,73 @@ export class PortfolioService {
             collateralUsd: formattedHf.collateralUsd,
             weightedLtv: formattedHf.weightedLtv,
         };
+    }
+
+    async getTransactionHistory(
+        wallet: string,
+        query: TransactionHistoryQueryDto,
+    ) {
+        const account = await this.orderRepository.findAccountByWallet(wallet);
+        if (!account) {
+            return createPaginatedResponse(
+                [],
+                0,
+                query.page ?? 1,
+                query.limit ?? 10,
+            );
+        }
+
+        const { data: rows, total } =
+            await this.portfolioRepository.getTransactionHistory(
+                account.id,
+                query.page ?? 1,
+                query.limit ?? 10,
+                { assetId: query.assetId },
+            );
+
+        const items: TransactionHistoryItem[] = rows.map((row) => {
+            const isLender = row.lender_account_id === account.id;
+            const decimals = Number(row.decimals) || 0;
+
+            const totalFee = isLender
+                ? (
+                      BigInt(row.maker_fee || "0") +
+                      BigInt(row.taker_fee || "0") +
+                      BigInt(row.lender_settlement_fee || "0")
+                  ).toString()
+                : (
+                      BigInt(row.maker_fee || "0") +
+                      BigInt(row.taker_fee || "0") +
+                      BigInt(row.borrower_settlement_fee || "0")
+                  ).toString();
+
+            return {
+                id: row.id,
+                side: isLender ? "LEND" : "BORROW",
+                rate: toPercentage(Number(row.rate)) || 0,
+                amount: baseUnitsToHuman(row.match_amount, decimals),
+                fee:
+                    totalFee !== "0"
+                        ? baseUnitsToHuman(totalFee, decimals)
+                        : null,
+                asset: {
+                    id: row.asset_id,
+                    name: row.name,
+                    symbol: row.symbol,
+                    decimals,
+                    imageUrl: row.image_url,
+                    tokenAddress: row.token_address,
+                },
+                maturity: new Date(row.maturity).toISOString(),
+                createdAt: new Date(row.created_at).toISOString(),
+            };
+        });
+
+        return createPaginatedResponse(
+            items,
+            total,
+            query.page ?? 1,
+            query.limit ?? 10,
+        );
     }
 }

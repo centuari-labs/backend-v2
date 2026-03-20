@@ -21,7 +21,7 @@ export interface RawPosition {
     created_at: Date;
 }
 
-export interface RawTransactionRow {
+export interface RawOrderHistoryRow {
     id: string;
     side: string;
     order_type: string | null;
@@ -37,6 +37,26 @@ export interface RawTransactionRow {
     token_address: string;
     total_fee: string;
     created_at: string;
+}
+
+export interface RawTransactionHistoryRow {
+    id: string;
+    match_amount: string;
+    rate: string;
+    maturity: string;
+    created_at: string;
+    lender_account_id: string;
+    borrower_account_id: string;
+    maker_fee: string;
+    taker_fee: string;
+    lender_settlement_fee: string;
+    borrower_settlement_fee: string;
+    asset_id: string;
+    name: string;
+    symbol: string;
+    image_url: string | null;
+    decimals: string;
+    token_address: string;
 }
 
 export interface LendPositionForApr {
@@ -382,12 +402,12 @@ export class PortfolioRepository extends Repository<Portfolio> {
      * Replaces amount on conflict (SET) rather than adding (upsertPortfolio).
      * Used by OrdersWorker to ensure DB reflects on-chain state regardless of event parsing.
      */
-    async getTransactionHistory(
+    async getOrderHistory(
         accountId: string,
         page: number,
         limit: number,
         filters?: { assetId?: string },
-    ): Promise<{ data: RawTransactionRow[]; total: number }> {
+    ): Promise<{ data: RawOrderHistoryRow[]; total: number }> {
         const offset = (page - 1) * limit;
         const params: any[] = [accountId];
         let paramIndex = 2;
@@ -601,5 +621,59 @@ export class PortfolioRepository extends Repository<Portfolio> {
             .set({ shares })
             .where("id = :id", { id: positionId })
             .execute();
+    }
+
+    async getTransactionHistory(
+        accountId: string,
+        page: number,
+        limit: number,
+        filters?: { assetId?: string },
+    ): Promise<{ data: RawTransactionHistoryRow[]; total: number }> {
+        const offset = (page - 1) * limit;
+        const params: any[] = [accountId];
+        let paramIndex = 2;
+
+        let whereClause =
+            "WHERE (m.lender_account_id = $1 OR m.borrower_account_id = $1)";
+
+        if (filters?.assetId) {
+            whereClause += ` AND m.asset_id = $${paramIndex}`;
+            params.push(filters.assetId);
+            paramIndex++;
+        }
+
+        const dataQuery = `
+            SELECT m.id, m.match_amount, m.rate, m.maturity, m.created_at,
+                   m.lender_account_id, m.borrower_account_id,
+                   m.maker_fee, m.taker_fee,
+                   m.lender_settlement_fee, m.borrower_settlement_fee,
+                   a.id as asset_id, a.name, a.symbol, a.image_url,
+                   COALESCE(a.decimals, 0) as decimals, a.token_address
+            FROM matches m
+            JOIN assets a ON m.asset_id = a.id
+            ${whereClause}
+            ORDER BY m.created_at DESC
+            LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
+        `;
+        params.push(limit, offset);
+
+        const countQuery = `
+            SELECT COUNT(*) as count
+            FROM matches m
+            ${whereClause}
+        `;
+
+        const [rows, countResult] = await Promise.all([
+            this.dataSource.query(dataQuery, params),
+            this.dataSource.query(
+                countQuery,
+                params.slice(0, paramIndex - 1),
+            ),
+        ]);
+
+        return {
+            data: rows,
+            total: Number.parseInt(countResult[0]?.count || "0", 10),
+        };
     }
 }

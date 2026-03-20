@@ -9,6 +9,7 @@ import {
 } from "@nestjs/common";
 import { PortfolioService } from "./portfolio.service";
 import { RepayService } from "./repay.service";
+import { OrderHistoryQueryDto } from "./dto/order-history.dto";
 import { TransactionHistoryQueryDto } from "./dto/transaction-history.dto";
 import { OpenOrdersQueryDto } from "./dto/open-orders.dto";
 import {
@@ -119,6 +120,14 @@ export class PortfolioController {
         @CurrentUser() user: { userId: string },
     ): Promise<RepayResponseDto> {
         return this.repayService.repay(dto, walletAddress, user.userId);
+    }
+
+    @Get("order-history")
+    async getOrderHistory(
+        @Wallet() wallet: string,
+        @Query() query: OrderHistoryQueryDto,
+    ) {
+        return this.portfolioService.getOrderHistory(wallet, query);
     }
 
     @Get("transaction-history")

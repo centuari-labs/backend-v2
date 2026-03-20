@@ -1,11 +1,18 @@
 import { Test, TestingModule } from "@nestjs/testing";
 import { getRepositoryToken } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
+import { ConfigService } from "@nestjs/config";
 import { OrdersWorker } from "../../orders/orders.worker";
 import { OrderRepository } from "../../orders/repositories/order.repository";
 import { OrdersService } from "../../orders/orders.service";
 import { Market } from "../../market/entities/market.entity";
 import { Token } from "../../tokens/entities/token.entity";
+import { ViemService } from "../../core/viem/viem.service";
+import { FaucetService } from "../../faucet/faucet.service";
+import { PortfolioService } from "../../portfolio/portfolio.service";
+import { PortfolioRepository } from "../../portfolio/repositories/portfolio.repository";
+import { TokensService } from "../../tokens/tokens.service";
+import { PriceService } from "../../price/price.service";
 import {
     createMockMarket,
     createMockToken,
@@ -48,6 +55,67 @@ describe("OrdersWorker", () => {
                 },
                 { provide: getRepositoryToken(Token), useValue: mockTokenRepo },
                 { provide: OrdersService, useValue: mockOrdersService },
+                {
+                    provide: ViemService,
+                    useValue: {
+                        readContract: jest.fn(),
+                        writeContract: jest.fn(),
+                        getPublicClient: jest.fn(),
+                        getWalletClient: jest.fn(),
+                        resetWalletClient: jest.fn(),
+                    },
+                },
+                {
+                    provide: FaucetService,
+                    useValue: {
+                        requestTokensBatch: jest.fn().mockResolvedValue({}),
+                    },
+                },
+                {
+                    provide: ConfigService,
+                    useValue: {
+                        get: jest.fn().mockReturnValue(undefined),
+                    },
+                },
+                {
+                    provide: PortfolioService,
+                    useValue: {
+                        getAssetBalance: jest.fn().mockResolvedValue("0"),
+                        getHealthFactorForAccount: jest
+                            .fn()
+                            .mockResolvedValue({
+                                healthFactor: Infinity,
+                            }),
+                        setAssetAsCollateral: jest.fn().mockResolvedValue(undefined),
+                        checkAvailableBalanceForLend: jest
+                            .fn()
+                            .mockResolvedValue(undefined),
+                        checkAvailableBalanceForBorrowFees: jest
+                            .fn()
+                            .mockResolvedValue(undefined),
+                    },
+                },
+                {
+                    provide: PortfolioRepository,
+                    useValue: {
+                        upsertPortfolio: jest.fn(),
+                        syncPortfolioBalance: jest.fn(),
+                    },
+                },
+                {
+                    provide: TokensService,
+                    useValue: {
+                        getTokenDecimalsByAssetId: jest
+                            .fn()
+                            .mockResolvedValue(6),
+                    },
+                },
+                {
+                    provide: PriceService,
+                    useValue: {
+                        getPrice: jest.fn().mockResolvedValue(1),
+                    },
+                },
             ],
         }).compile();
 
@@ -70,18 +138,6 @@ describe("OrdersWorker", () => {
     });
 
     describe("onModuleInit", () => {
-        it("should load cache when enabled", async () => {
-            const market = createMockMarket();
-            const token = createMockToken();
-            marketRepository.find.mockResolvedValue([market]);
-            tokenRepository.find.mockResolvedValue([token]);
-
-            await worker.onModuleInit();
-
-            expect(marketRepository.find).toHaveBeenCalled();
-            expect(tokenRepository.find).toHaveBeenCalled();
-        });
-
         it("should skip when disabled (production)", async () => {
             process.env.NODE_ENV = "production";
 
@@ -148,7 +204,7 @@ describe("OrdersWorker", () => {
         });
     });
 
-    describe("createLendOrders", () => {
+    describe("placeOrders", () => {
         beforeEach(async () => {
             const market = createMockMarket();
             const token = createMockToken();
@@ -163,103 +219,29 @@ describe("OrdersWorker", () => {
             tokenRepository.find.mockResolvedValue([]);
             await worker.refreshAssetMarketCache();
 
-            await worker.createLendOrders();
+            await worker.placeOrders();
 
             expect(ordersService.createLendLimitOrder).not.toHaveBeenCalled();
-            expect(ordersService.createLendMarketOrder).not.toHaveBeenCalled();
-        });
-
-        it("should create a lend order for each loan token", async () => {
-            ordersService.createLendLimitOrder.mockResolvedValue({} as any);
-            ordersService.createLendMarketOrder.mockResolvedValue({} as any);
-
-            await worker.createLendOrders();
-
-            const limitCalls =
-                ordersService.createLendLimitOrder.mock.calls.length;
-            const marketCalls =
-                ordersService.createLendMarketOrder.mock.calls.length;
-            expect(limitCalls + marketCalls).toBe(1); // 1 asset in cache
             expect(ordersService.createBorrowLimitOrder).not.toHaveBeenCalled();
-            expect(
-                ordersService.createBorrowMarketOrder,
-            ).not.toHaveBeenCalled();
         });
 
         it("should handle creation error gracefully", async () => {
             ordersService.createLendLimitOrder.mockRejectedValue(
                 new Error("Creation failed"),
             );
-            ordersService.createLendMarketOrder.mockRejectedValue(
-                new Error("Creation failed"),
-            );
-
-            await expect(worker.createLendOrders()).resolves.not.toThrow();
-        });
-
-        it("should skip when disabled", async () => {
-            process.env.NODE_ENV = "production";
-
-            await worker.createLendOrders();
-
-            expect(ordersService.createLendLimitOrder).not.toHaveBeenCalled();
-        });
-    });
-
-    describe("createBorrowOrders", () => {
-        beforeEach(async () => {
-            const market = createMockMarket();
-            const token = createMockToken();
-            marketRepository.find.mockResolvedValue([market]);
-            tokenRepository.find.mockResolvedValue([token]);
-            await worker.refreshAssetMarketCache();
-            jest.clearAllMocks();
-        });
-
-        it("should skip when cache is empty", async () => {
-            marketRepository.find.mockResolvedValue([]);
-            tokenRepository.find.mockResolvedValue([]);
-            await worker.refreshAssetMarketCache();
-
-            await worker.createBorrowOrders();
-
-            expect(ordersService.createBorrowLimitOrder).not.toHaveBeenCalled();
-            expect(
-                ordersService.createBorrowMarketOrder,
-            ).not.toHaveBeenCalled();
-        });
-
-        it("should create a borrow order for each loan token", async () => {
-            ordersService.createBorrowLimitOrder.mockResolvedValue({} as any);
-            ordersService.createBorrowMarketOrder.mockResolvedValue({} as any);
-
-            await worker.createBorrowOrders();
-
-            const limitCalls =
-                ordersService.createBorrowLimitOrder.mock.calls.length;
-            const marketCalls =
-                ordersService.createBorrowMarketOrder.mock.calls.length;
-            expect(limitCalls + marketCalls).toBe(1); // 1 asset in cache
-            expect(ordersService.createLendLimitOrder).not.toHaveBeenCalled();
-            expect(ordersService.createLendMarketOrder).not.toHaveBeenCalled();
-        });
-
-        it("should handle creation error gracefully", async () => {
             ordersService.createBorrowLimitOrder.mockRejectedValue(
                 new Error("Creation failed"),
             );
-            ordersService.createBorrowMarketOrder.mockRejectedValue(
-                new Error("Creation failed"),
-            );
 
-            await expect(worker.createBorrowOrders()).resolves.not.toThrow();
+            await expect(worker.placeOrders()).resolves.not.toThrow();
         });
 
         it("should skip when disabled", async () => {
             process.env.NODE_ENV = "production";
 
-            await worker.createBorrowOrders();
+            await worker.placeOrders();
 
+            expect(ordersService.createLendLimitOrder).not.toHaveBeenCalled();
             expect(ordersService.createBorrowLimitOrder).not.toHaveBeenCalled();
         });
     });

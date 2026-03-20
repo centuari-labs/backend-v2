@@ -420,46 +420,6 @@ export class OrdersService {
         );
     }
 
-    async getOpenLendAmounts(
-        walletAddress: string,
-    ): Promise<{ assetId: string; lockedAmount: string }[]> {
-        const account =
-            await this.orderRepository.findAccountByWallet(walletAddress);
-        if (!account) return [];
-
-        const rows = await this.orderRepository.getOpenLendAmountsByAccount(
-            account.id,
-        );
-
-        // Convert base units → human-readable using each token's decimals
-        const result: { assetId: string; lockedAmount: string }[] = [];
-        for (const row of rows) {
-            const decimals = await this.tokensService.getTokenDecimalsByAssetId(
-                row.assetId,
-            );
-            if (decimals == null) continue;
-
-            // lockedAmount from DB is in base units (e.g. "30000000000" for 30000 USDC)
-            const lockedBigInt = BigInt(
-                row.lockedAmount.split(".")[0], // strip any decimal from SUM
-            );
-            const divisor = 10n ** BigInt(decimals);
-            const whole = lockedBigInt / divisor;
-            const frac = lockedBigInt % divisor;
-            const fracStr = frac
-                .toString()
-                .padStart(decimals, "0")
-                .replace(/0+$/, "");
-            const humanAmount = fracStr
-                ? `${whole}.${fracStr}`
-                : whole.toString();
-
-            result.push({ assetId: row.assetId, lockedAmount: humanAmount });
-        }
-
-        return result;
-    }
-
     async cancelOrder(orderId: string, walletAddress: string): Promise<Order> {
         const order = await this.orderRepository.getOrderById(orderId);
 

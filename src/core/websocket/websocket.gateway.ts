@@ -111,9 +111,6 @@ export class EventsGateway
     /** Cached latest prices keyed by assetId */
     private pricesCache: PricesDto["prices"] = {};
 
-    /** Tracks which assetIds have already been loaded from DB */
-    private dbLoadedAssets = new Set<string>();
-
     constructor(
         private readonly natsService: NatsService,
         private readonly dataSource: DataSource,
@@ -198,16 +195,28 @@ export class EventsGateway
                 ),
             );
         } else if (subject === "orders.cancel") {
-            this.handleCancelMessage(data as OrderCancelMessage);
+            this.handleCancelMessage(data as OrderCancelMessage).catch(
+                (err) =>
+                    this.logger.error(
+                        `Error in handleCancelMessage: ${(err as Error).message}`,
+                    ),
+            );
         } else if (
             subject.startsWith("orders.lend.") ||
             subject.startsWith("orders.borrow.")
         ) {
-            this.handleOrderCreation(data as OrderCreationMessage, subject);
+            this.handleOrderCreation(
+                data as OrderCreationMessage,
+                subject,
+            ).catch((err) =>
+                this.logger.error(
+                    `Error in handleOrderCreation: ${(err as Error).message}`,
+                ),
+            );
         }
     }
 
-    private handleOrderCreation(msg: OrderCreationMessage, subject: string) {
+    private async handleOrderCreation(msg: OrderCreationMessage, subject: string) {
         const assetId = msg.assetId ?? msg.loanToken;
 
         const tracked: TrackedOrder = {
@@ -226,7 +235,7 @@ export class EventsGateway
         };
 
         this.orderState.set(msg.orderId, tracked);
-        this.aggregateAndBroadcastOrderbook(assetId);
+        await this.aggregateAndBroadcastOrderbook(assetId);
         this.emitUserPosition(tracked, subject);
     }
 
@@ -250,7 +259,7 @@ export class EventsGateway
         this.emitUserPosition(tracked, "orders.status");
     }
 
-    private handleCancelMessage(msg: OrderCancelMessage) {
+    private async handleCancelMessage(msg: OrderCancelMessage) {
         const { orderId } = msg;
         const tracked = this.orderState.get(orderId);
         if (!tracked) {
@@ -260,7 +269,7 @@ export class EventsGateway
 
         tracked.status = OrderStatus.Cancelled;
 
-        this.aggregateAndBroadcastOrderbook(tracked.assetId);
+        await this.aggregateAndBroadcastOrderbook(tracked.assetId);
         this.emitUserPosition(tracked, "orders.cancel");
     }
 
@@ -324,8 +333,6 @@ export class EventsGateway
     // ─── DB Hydration ─────────────────────────────────────────────────
 
     private async loadOrdersFromDb(assetId: string): Promise<void> {
-        if (this.dbLoadedAssets.has(assetId)) return;
-
         try {
             const rows: Array<{
                 id: string;
@@ -360,8 +367,21 @@ export class EventsGateway
                 [assetId],
             );
 
+            // Remove stale in-memory orders for this asset that no longer
+            // exist as active LIMIT orders in the DB.
+            const dbOrderIds = new Set(rows.map((r) => r.id));
+            for (const [orderId, tracked] of this.orderState) {
+                if (
+                    tracked.assetId === assetId &&
+                    tracked.type === OrderType.Limit &&
+                    !dbOrderIds.has(orderId)
+                ) {
+                    this.orderState.delete(orderId);
+                }
+            }
+
+            // Upsert DB orders into in-memory state
             for (const row of rows) {
-                if (this.orderState.has(row.id)) continue;
                 const remaining =
                     BigInt(row.quantity) - BigInt(row.filled_quantity || "0");
                 this.orderState.set(row.id, {
@@ -381,7 +401,6 @@ export class EventsGateway
                 });
             }
 
-            this.dbLoadedAssets.add(assetId);
             this.logger.log(
                 `Loaded ${rows.length} active limit orders from DB for asset ${assetId}`,
             );
@@ -453,7 +472,8 @@ export class EventsGateway
 
     // ─── Orderbook ──────────────────────────────────────────────────
 
-    private aggregateAndBroadcastOrderbook(assetId: string) {
+    private async aggregateAndBroadcastOrderbook(assetId: string) {
+        await this.loadOrdersFromDb(assetId);
         const activeOrders = Array.from(this.orderState.values()).filter(
             (o) =>
                 o.assetId === assetId &&
@@ -539,12 +559,8 @@ export class EventsGateway
         client.join(room);
         this.logger.log(`Client ${client.id} joined ${room}`);
 
-        let cached = this.orderbookCache.get(room);
-        if (!cached) {
-            await this.loadOrdersFromDb(body.assetId);
-            this.aggregateAndBroadcastOrderbook(body.assetId);
-            cached = this.orderbookCache.get(room);
-        }
+        await this.aggregateAndBroadcastOrderbook(body.assetId);
+        const cached = this.orderbookCache.get(room);
         if (cached) {
             client.emit("orderbook-update", cached);
         }

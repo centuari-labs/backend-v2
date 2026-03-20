@@ -377,6 +377,28 @@ export class PortfolioService {
         );
     }
 
+    async simulateHealthFactorAfterWithdrawal(
+        accountId: string,
+        assetId: string,
+        collateralReductionBaseUnits: string,
+    ): Promise<HealthFactorResult> {
+        const { collateralPositions, debtPositions } =
+            await this.buildHealthFactorInputs(accountId);
+
+        const adjusted = collateralPositions.map((pos) => {
+            if (pos.assetId !== assetId) return pos;
+            const reduced =
+                BigInt(pos.amountBaseUnits) -
+                BigInt(collateralReductionBaseUnits);
+            return {
+                ...pos,
+                amountBaseUnits: (reduced > 0n ? reduced : 0n).toString(),
+            };
+        });
+
+        return computeHealthFactor(adjusted, debtPositions);
+    }
+
     async getMyHealthFactor(
         wallet: string,
     ): Promise<MyHealthFactorResponseDto> {

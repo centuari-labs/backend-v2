@@ -1,7 +1,6 @@
 import {
     Body,
     Controller,
-    Get,
     HttpCode,
     HttpStatus,
     Param,
@@ -22,13 +21,6 @@ import { OrderResponse } from "./dto/order-response.dto";
 @UseGuards(AuthGuard)
 export class OrdersController {
     constructor(private readonly ordersService: OrdersService) {}
-
-    @Get("open-amounts")
-    async getOpenLendAmounts(
-        @Wallet() walletAddress: string,
-    ): Promise<{ assetId: string; lockedAmount: string }[]> {
-        return this.ordersService.getOpenLendAmounts(walletAddress);
-    }
 
     @Post("lend/market")
     @HttpCode(HttpStatus.CREATED)

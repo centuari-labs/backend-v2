@@ -31,8 +31,9 @@ const CACHE_REFRESH_INTERVAL_MS = 600_000;
 
 const RATE_MIN = 500;
 const RATE_MAX = 1500;
-const MAX_SPREAD_BPS = 100;
-const HALF_SPREAD = MAX_SPREAD_BPS / 2; // 50 bp
+const MAX_SPREAD_BPS = 50;
+const HALF_SPREAD = MAX_SPREAD_BPS / 2; // 25 bp
+const MATCH_PROBABILITY = 0.25;
 const MID_RATE_DRIFT = 20; // max drift per cycle
 const LEND_QUANTITY_USD_MIN = 10;
 const LEND_QUANTITY_USD_MAX = 500;
@@ -691,8 +692,18 @@ export class OrdersWorker implements OnModuleInit {
                 this.refreshRatesForAsset(entry.assetId);
 
                 for (const bot of this.botAccounts) {
-                    await this.placeLendOrderWithRetry(bot, entry);
-                    await this.placeBorrowOrderWithRetry(bot, entry);
+                    if (Math.random() < MATCH_PROBABILITY) {
+                        // ~25%: place both sides — may match
+                        await this.placeLendOrderWithRetry(bot, entry);
+                        await this.placeBorrowOrderWithRetry(bot, entry);
+                    } else {
+                        // ~75%: place only one side — won't self-match
+                        if (Math.random() < 0.5) {
+                            await this.placeLendOrderWithRetry(bot, entry);
+                        } else {
+                            await this.placeBorrowOrderWithRetry(bot, entry);
+                        }
+                    }
                 }
             }
         } finally {

@@ -108,6 +108,7 @@ export class MyPositionItemDto {
     symbol: string;
     name: string;
     shares: number;
+    baseAmount: number;
     amountInUsd: number;
     isCollateral: boolean;
     imageUrl?: string | null;

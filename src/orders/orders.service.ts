@@ -107,6 +107,7 @@ export class OrdersService {
                 dto.assetId,
                 OrderSide.Lend,
                 dto.marketIds ?? [],
+                accountId,
             );
         if (!hasCounterparty) {
             throw new BadRequestException(
@@ -262,6 +263,7 @@ export class OrdersService {
                 dto.assetId,
                 OrderSide.Borrow,
                 dto.marketIds ?? [],
+                accountId,
             );
         if (!hasCounterparty) {
             throw new BadRequestException(

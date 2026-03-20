@@ -152,13 +152,14 @@ export class OrderRepository extends Repository<Order> {
         assetId: string,
         side: OrderSide,
         marketIds: string[],
+        excludeAccountId?: string,
     ): Promise<boolean> {
         if (!marketIds.length) return false;
 
         const counterpartySide =
             side === OrderSide.Lend ? OrderSide.Borrow : OrderSide.Lend;
 
-        const result = await this.createQueryBuilder("order")
+        const qb = this.createQueryBuilder("order")
             .innerJoin("order_markets", "om", "om.order_id = order.id")
             .where("order.assetId = :assetId", { assetId })
             .andWhere("order.side = :side", { side: counterpartySide })
@@ -166,9 +167,16 @@ export class OrderRepository extends Repository<Order> {
             .andWhere("order.status IN (:...statuses)", {
                 statuses: [OrderStatus.Open, OrderStatus.PartiallyFilled],
             })
-            .andWhere("om.market_id IN (:...marketIds)", { marketIds })
-            .limit(1)
-            .getCount();
+            .andWhere("om.market_id IN (:...marketIds)", { marketIds });
+
+        // Exclude own orders — matching engine won't match self anyway
+        if (excludeAccountId) {
+            qb.andWhere("order.accountId != :excludeAccountId", {
+                excludeAccountId,
+            });
+        }
+
+        const result = await qb.limit(1).getCount();
 
         return result > 0;
     }

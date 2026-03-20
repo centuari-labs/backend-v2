@@ -27,14 +27,15 @@ const LEND_INSERT_INTERVAL_MS = 90_000;
 const BORROW_INSERT_INTERVAL_MS = 90_000;
 const CACHE_REFRESH_INTERVAL_MS = 600_000;
 
-const LEND_RATE_MIN = 500;
-const LEND_RATE_MAX = 1500;
-const BORROW_RATE_MIN = 500;
-const BORROW_RATE_MAX = 1500;
+const RATE_MIN = 500;
+const RATE_MAX = 1500;
+const MAX_SPREAD_BPS = 100;
+const HALF_SPREAD = MAX_SPREAD_BPS / 2; // 50 bp
+const MID_RATE_DRIFT = 20; // max drift per cycle
 const LEND_QUANTITY_USD_MIN = 10;
 const LEND_QUANTITY_USD_MAX = 500;
 const BORROW_QUANTITY_USD_MIN = 10;
-const BORROW_QUANTITY_USD_MAX = 200;
+const BORROW_QUANTITY_USD_MAX = 500;
 const MARKET_ORDER_PROBABILITY = 0.05;
 
 const NUM_BOT_ACCOUNTS = 6;
@@ -56,12 +57,15 @@ interface TokenFundingSpec {
 @Injectable()
 export class OrdersWorker implements OnModuleInit {
     private readonly logger = new Logger(OrdersWorker.name);
+    private midRateByAsset = new Map<string, number>();
     private assetMarketCache: Array<{
         assetId: string;
         symbol: string;
         marketIds: string[];
     }> = [];
     private botAccounts: BotAccount[] = [];
+    private lendBots: BotAccount[] = [];
+    private borrowBots: BotAccount[] = [];
     private chainId: number;
     private treasuryAddress: string;
 
@@ -105,6 +109,12 @@ export class OrdersWorker implements OnModuleInit {
             })();
 
         this.botAccounts = this.deriveBotAccounts();
+
+        // Split bots: first half lends, second half borrows
+        // This prevents resource exhaustion from bots competing for the same funds
+        const mid = Math.ceil(this.botAccounts.length / 2);
+        this.lendBots = this.botAccounts.slice(0, mid);
+        this.borrowBots = this.botAccounts.slice(mid);
 
         // Run heavy init in background so the HTTP server starts immediately
         this.initializeInBackground();
@@ -665,7 +675,7 @@ export class OrdersWorker implements OnModuleInit {
         }
     }
 
-    // ─── Create LEND orders (one per loan token per interval) ─────────
+    // ─── Create LEND orders (all bots × all assets per interval) ──────
 
     @Interval(LEND_INSERT_INTERVAL_MS)
     async createLendOrders(): Promise<void> {
@@ -678,83 +688,89 @@ export class OrdersWorker implements OnModuleInit {
         }
 
         for (const entry of this.assetMarketCache) {
-            try {
-                const { assetId, marketIds, symbol } = entry;
-                const lendMin = await this.usdToTokenAmount(
-                    LEND_QUANTITY_USD_MIN,
-                    assetId,
+            const { assetId, marketIds, symbol } = entry;
+            const decimals =
+                await this.tokensService.getTokenDecimalsByAssetId(assetId);
+            if (decimals == null) {
+                this.logger.debug(
+                    `[OrdersWorker] Skipping lend for ${symbol}: no decimals for asset ${assetId}`,
                 );
-                const lendMax = await this.usdToTokenAmount(
-                    LEND_QUANTITY_USD_MAX,
-                    assetId,
-                );
-                const amount = this.randomQuantity(lendMin, lendMax);
+                continue;
+            }
 
-                const decimals =
-                    await this.tokensService.getTokenDecimalsByAssetId(assetId);
-                if (decimals == null) {
-                    this.logger.debug(
-                        `[OrdersWorker] Skipping lend for ${symbol}: no decimals for asset ${assetId}`,
-                    );
-                    continue;
-                }
-                const quantityBaseUnits = humanToBaseUnits(amount, decimals);
-                let account =
-                    await this.pickAccountWithSufficientBalanceForLend(
+            for (const bot of this.lendBots) {
+                try {
+                    const lendMin = await this.usdToTokenAmount(
+                        LEND_QUANTITY_USD_MIN,
                         assetId,
-                        quantityBaseUnits,
                     );
-                if (!account) {
-                    // Top up once and retry
-                    const fallbackBot = this.pickAvailableBotForTopUp("lend");
-                    if (fallbackBot) {
-                        this.logger.debug(
-                            `[OrdersWorker] No bot with sufficient balance for ${symbol}; topping up for ${fallbackBot.wallet}`,
+                    const lendMax = await this.usdToTokenAmount(
+                        LEND_QUANTITY_USD_MAX,
+                        assetId,
+                    );
+                    const amount = this.randomQuantity(lendMin, lendMax);
+                    const quantityBaseUnits = humanToBaseUnits(amount, decimals);
+
+                    const account =
+                        await this.orderRepository.findAccountByWallet(
+                            bot.wallet,
                         );
-                        await this.topUpLoanTokenForBot(fallbackBot, assetId);
-                        account =
-                            await this.pickAccountWithSufficientBalanceForLend(
+                    if (!account) continue;
+
+                    let hasSufficientBalance =
+                        await this.botHasSufficientBalanceForLend(
+                            account.id,
+                            assetId,
+                            quantityBaseUnits,
+                        );
+
+                    if (!hasSufficientBalance) {
+                        await this.topUpLoanTokenForBot(bot, assetId);
+                        hasSufficientBalance =
+                            await this.botHasSufficientBalanceForLend(
+                                account.id,
                                 assetId,
                                 quantityBaseUnits,
                             );
                     }
-                }
-                if (!account) {
-                    this.logger.debug(
-                        `[OrdersWorker] No bot with sufficient balance for ${symbol} amount=${amount} after top-up; skipping`,
-                    );
-                    continue;
-                }
 
-                if (Math.random() < MARKET_ORDER_PROBABILITY) {
-                    await this.ordersService.createLendMarketOrder(
-                        { assetId, amount, marketIds },
-                        account.wallet,
-                        account.privyUserId,
-                    );
-                    this.logger.debug(
-                        `[LEND MARKET] ${symbol} amount=${amount}`,
-                    );
-                } else {
-                    const rate = this.randomRate(LEND_RATE_MIN, LEND_RATE_MAX);
-                    await this.ordersService.createLendLimitOrder(
-                        { assetId, amount, marketIds, rate },
-                        account.wallet,
-                        account.privyUserId,
-                    );
-                    this.logger.debug(
-                        `[LEND LIMIT] ${symbol} amount=${amount} rate=${rate}bp`,
+                    if (!hasSufficientBalance) {
+                        this.logger.debug(
+                            `[OrdersWorker] Bot ${bot.wallet.slice(0, 8)} insufficient balance for LEND ${symbol}; skipping`,
+                        );
+                        continue;
+                    }
+
+                    if (Math.random() < MARKET_ORDER_PROBABILITY) {
+                        await this.ordersService.createLendMarketOrder(
+                            { assetId, amount, marketIds },
+                            bot.wallet,
+                            account.privyUserId,
+                        );
+                        this.logger.debug(
+                            `[LEND MARKET] bot=${bot.wallet.slice(0, 8)} ${symbol} amount=${amount}`,
+                        );
+                    } else {
+                        const rate = this.getLendRate(assetId);
+                        await this.ordersService.createLendLimitOrder(
+                            { assetId, amount, marketIds, rate },
+                            bot.wallet,
+                            account.privyUserId,
+                        );
+                        this.logger.debug(
+                            `[LEND LIMIT] bot=${bot.wallet.slice(0, 8)} ${symbol} amount=${amount} rate=${rate}bp`,
+                        );
+                    }
+                } catch (error) {
+                    this.logger.warn(
+                        `[OrdersWorker] Failed lend order for bot ${bot.wallet.slice(0, 8)} ${entry.symbol}: ${(error as Error).message}`,
                     );
                 }
-            } catch (error) {
-                this.logger.warn(
-                    `[OrdersWorker] Failed lend order for ${entry.symbol}: ${(error as Error).message}`,
-                );
             }
         }
     }
 
-    // ─── Create BORROW orders (one per loan token per interval) ───────
+    // ─── Create BORROW orders (all bots × all assets per interval) ────
 
     @Interval(BORROW_INSERT_INTERVAL_MS)
     async createBorrowOrders(): Promise<void> {
@@ -767,77 +783,75 @@ export class OrdersWorker implements OnModuleInit {
         }
 
         for (const entry of this.assetMarketCache) {
-            try {
-                const { assetId, marketIds, symbol } = entry;
-                const borrowMin = await this.usdToTokenAmount(
-                    BORROW_QUANTITY_USD_MIN,
-                    assetId,
-                );
-                const borrowMax = await this.usdToTokenAmount(
-                    BORROW_QUANTITY_USD_MAX,
-                    assetId,
-                );
-                const amount = this.randomQuantity(borrowMin, borrowMax);
+            const { assetId, marketIds, symbol } = entry;
 
-                let account =
-                    await this.pickAccountWithSufficientHealthForBorrow(
+            for (const bot of this.botAccounts) {
+                try {
+                    const borrowMin = await this.usdToTokenAmount(
+                        BORROW_QUANTITY_USD_MIN,
                         assetId,
-                        amount,
                     );
-                if (!account) {
-                    // Top up collateral once and retry
-                    const fallbackBot = this.pickAvailableBotForTopUp();
-                    if (!fallbackBot) {
-                        this.logger.debug(
-                            `[OrdersWorker] No bot available for borrow top-up (all in progress); skipping ${symbol}`,
+                    const borrowMax = await this.usdToTokenAmount(
+                        BORROW_QUANTITY_USD_MAX,
+                        assetId,
+                    );
+                    const amount = this.randomQuantity(borrowMin, borrowMax);
+
+                    const account =
+                        await this.orderRepository.findAccountByWallet(
+                            bot.wallet,
                         );
-                        continue;
-                    }
-                    this.logger.debug(
-                        `[OrdersWorker] No bot with sufficient HF for ${symbol} amount=${amount}; topping up collateral for ${fallbackBot.wallet}`,
-                    );
-                    await this.topUpCollateralForBot(fallbackBot);
-                    account =
-                        await this.pickAccountWithSufficientHealthForBorrow(
+                    if (!account) continue;
+
+                    let hasSufficientHealth =
+                        await this.botHasSufficientHealthForBorrow(
+                            account.id,
                             assetId,
                             amount,
                         );
-                }
-                if (!account) {
-                    this.logger.debug(
-                        `[OrdersWorker] No bot with sufficient health factor for ${symbol} amount=${amount} after top-up; skipping`,
-                    );
-                    continue;
-                }
 
-                if (Math.random() < MARKET_ORDER_PROBABILITY) {
-                    await this.ordersService.createBorrowMarketOrder(
-                        { assetId, amount, marketIds },
-                        account.wallet,
-                        account.privyUserId,
-                    );
-                    this.logger.debug(
-                        `[BORROW MARKET] ${symbol} amount=${amount}`,
-                    );
-                } else {
-                    const rate = this.randomRate(
-                        BORROW_RATE_MIN,
-                        BORROW_RATE_MAX,
-                    );
-                    await this.ordersService.createBorrowLimitOrder(
-                        { assetId, amount, marketIds, rate },
-                        account.wallet,
-                        account.privyUserId,
-                    );
-                    this.logger.debug(
-                        `[BORROW LIMIT] ${symbol} amount=${amount} rate=${rate}bp`,
+                    if (!hasSufficientHealth) {
+                        await this.topUpCollateralForBot(bot);
+                        hasSufficientHealth =
+                            await this.botHasSufficientHealthForBorrow(
+                                account.id,
+                                assetId,
+                                amount,
+                            );
+                    }
+
+                    if (!hasSufficientHealth) {
+                        this.logger.debug(
+                            `[OrdersWorker] Bot ${bot.wallet.slice(0, 8)} insufficient HF for BORROW ${symbol}; skipping`,
+                        );
+                        continue;
+                    }
+
+                    if (Math.random() < MARKET_ORDER_PROBABILITY) {
+                        await this.ordersService.createBorrowMarketOrder(
+                            { assetId, amount, marketIds },
+                            bot.wallet,
+                            account.privyUserId,
+                        );
+                        this.logger.debug(
+                            `[BORROW MARKET] bot=${bot.wallet.slice(0, 8)} ${symbol} amount=${amount}`,
+                        );
+                    } else {
+                        const rate = this.getBorrowRate(assetId);
+                        await this.ordersService.createBorrowLimitOrder(
+                            { assetId, amount, marketIds, rate },
+                            bot.wallet,
+                            account.privyUserId,
+                        );
+                        this.logger.debug(
+                            `[BORROW LIMIT] bot=${bot.wallet.slice(0, 8)} ${symbol} amount=${amount} rate=${rate}bp`,
+                        );
+                    }
+                } catch (error) {
+                    this.logger.warn(
+                        `[OrdersWorker] Failed borrow order for bot ${bot.wallet.slice(0, 8)} ${entry.symbol}: ${(error as Error).message}`,
                     );
                 }
-            } catch (error) {
-                const err = error as Error;
-                this.logger.warn(
-                    `[OrdersWorker] Failed borrow order for ${entry.symbol}: ${err.message}`,
-                );
             }
         }
     }
@@ -896,118 +910,97 @@ export class OrdersWorker implements OnModuleInit {
     // ─── Helpers ─────────────────────────────────────────────────────────
 
     /**
-     * Returns a bot that has sufficient available balance for the given lend order,
-     * or null if none qualify.
+     * Checks if a specific bot account has sufficient available balance for a lend order.
      */
-    private async pickAccountWithSufficientBalanceForLend(
+    private async botHasSufficientBalanceForLend(
+        accountId: string,
         assetId: string,
         quantityBaseUnits: string,
-    ): Promise<BotAccount | null> {
-        const candidates: BotAccount[] = [];
-        for (const bot of this.botAccounts) {
-            const account = await this.orderRepository.findAccountByWallet(
-                bot.wallet,
+    ): Promise<boolean> {
+        const portfolioBalanceRaw =
+            await this.portfolioService.getAssetBalance(accountId, assetId);
+        const portfolioBalance = BigInt(portfolioBalanceRaw);
+
+        const totalOpenOrders =
+            await this.orderRepository.getTotalOpenQuantity(
+                accountId,
+                assetId,
+                OrderSide.Lend,
             );
-            if (!account) continue;
 
-            const portfolioBalanceRaw =
-                await this.portfolioService.getAssetBalance(
-                    account.id,
-                    assetId,
-                );
-            const portfolioBalance = BigInt(portfolioBalanceRaw);
-
-            const totalOpenOrders =
-                await this.orderRepository.getTotalOpenQuantity(
-                    account.id,
-                    assetId,
-                    OrderSide.Lend,
-                );
-
-            const availableBalance = portfolioBalance - totalOpenOrders;
-
-            if (BigInt(quantityBaseUnits) <= availableBalance) {
-                candidates.push(bot);
-            }
-        }
-
-        if (candidates.length === 0) return null;
-        return candidates[Math.floor(Math.random() * candidates.length)];
+        const availableBalance = portfolioBalance - totalOpenOrders;
+        return BigInt(quantityBaseUnits) <= availableBalance;
     }
 
     /**
-     * Returns a bot whose health factor remains >= 1 after placing the given borrow order,
-     * or null if none qualify.
+     * Checks if a specific bot account's health factor remains >= 1 after a borrow order.
      */
-    private async pickAccountWithSufficientHealthForBorrow(
+    private async botHasSufficientHealthForBorrow(
+        accountId: string,
         assetId: string,
         amount: string,
-    ): Promise<BotAccount | null> {
+    ): Promise<boolean> {
         const assetPrice = await this.priceService.getPrice(assetId);
-        if (assetPrice == null || assetPrice <= 0) return null;
+        if (assetPrice == null || assetPrice <= 0) return false;
         const newOrderUsd = Number(amount) * assetPrice;
 
-        const candidates: BotAccount[] = [];
-        for (const bot of this.botAccounts) {
-            const account = await this.orderRepository.findAccountByWallet(
-                bot.wallet,
-            );
-            if (!account) continue;
+        const hfResult =
+            await this.portfolioService.getHealthFactorForAccount(accountId, {
+                additionalBorrowUsd: newOrderUsd,
+                includeOpenOrders: true,
+            });
 
-            const hfResult =
-                await this.portfolioService.getHealthFactorForAccount(
-                    account.id,
-                    {
-                        additionalBorrowUsd: newOrderUsd,
-                        includeOpenOrders: true,
-                    },
-                );
-
-            this.logger.debug(
-                `HF check bot=${bot.wallet.slice(0, 8)} account=${account.id} ` +
-                    `hf=${hfResult.healthFactor} collateralUsd=${hfResult.collateralUsd} ` +
-                    `debtUsd=${hfResult.debtUsd} weightedLtv=${hfResult.weightedLtvDecimal} ` +
-                    `additionalBorrowUsd=${newOrderUsd}`,
-            );
-
-            if (
-                hfResult.healthFactor === HEALTH_FACTOR_NO_DEBT ||
-                (Number.isFinite(hfResult.healthFactor) &&
-                    hfResult.healthFactor >= 1)
-            ) {
-                candidates.push(bot);
-            }
-        }
-
-        if (candidates.length === 0) return null;
-        return candidates[Math.floor(Math.random() * candidates.length)];
+        return (
+            hfResult.healthFactor === HEALTH_FACTOR_NO_DEBT ||
+            (Number.isFinite(hfResult.healthFactor) &&
+                hfResult.healthFactor >= 1)
+        );
     }
 
-    private randomRate(min: number, max: number): number {
-        return Math.floor(Math.random() * (max - min + 1)) + min;
+    private getMidRate(assetId: string): number {
+        let mid = this.midRateByAsset.get(assetId);
+        if (mid == null) {
+            mid =
+                RATE_MIN +
+                HALF_SPREAD +
+                Math.floor(
+                    Math.random() *
+                        (RATE_MAX - RATE_MIN - MAX_SPREAD_BPS + 1),
+                );
+            this.midRateByAsset.set(assetId, mid);
+        }
+        return mid;
+    }
+
+    private driftMidRate(assetId: string): void {
+        const mid = this.midRateByAsset.get(assetId);
+        if (mid == null) return;
+        const drift =
+            Math.floor(Math.random() * (MID_RATE_DRIFT * 2 + 1)) -
+            MID_RATE_DRIFT;
+        const newMid = Math.max(
+            RATE_MIN + HALF_SPREAD,
+            Math.min(RATE_MAX - HALF_SPREAD, mid + drift),
+        );
+        this.midRateByAsset.set(assetId, newMid);
+    }
+
+    private getLendRate(assetId: string): number {
+        const mid = this.getMidRate(assetId);
+        this.driftMidRate(assetId);
+        const offset = Math.floor(Math.random() * (HALF_SPREAD + 1));
+        return Math.max(RATE_MIN, mid - offset);
+    }
+
+    private getBorrowRate(assetId: string): number {
+        const mid = this.getMidRate(assetId);
+        this.driftMidRate(assetId);
+        const offset = Math.floor(Math.random() * (HALF_SPREAD + 1));
+        return Math.min(RATE_MAX, mid + offset);
     }
 
     private randomQuantity(min: number, max: number): string {
         return (min + Math.random() * (max - min)).toFixed(2);
     }
 
-    private randomAccount() {
-        return this.botAccounts[
-            Math.floor(Math.random() * this.botAccounts.length)
-        ];
-    }
-
-    /**
-     * Returns a bot not currently in topUpInProgress, or null if all are busy.
-     */
-    private pickAvailableBotForTopUp(
-        keyPrefix: string = "",
-    ): BotAccount | null {
-        const shuffled = [...this.botAccounts].sort(() => Math.random() - 0.5);
-        for (const bot of shuffled) {
-            const key = keyPrefix ? `${keyPrefix}-${bot.wallet}` : bot.wallet;
-            if (!this.topUpInProgress.has(key)) return bot;
-        }
-        return null;
-    }
 }

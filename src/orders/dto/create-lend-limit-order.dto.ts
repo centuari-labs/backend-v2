@@ -25,7 +25,7 @@ export class CreateLendLimitOrderDto {
         message: "amount must be a valid positive number",
     })
 
-    @IsMinAmount(1, { message: "amount must be at least 1 USD" })
+    @IsMinAmount(10, { message: "amount must be at least 10 USD" })
     amount: string;
 
     /**

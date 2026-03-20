@@ -24,3 +24,7 @@ export const order_group_status = {
 // Settlement fee configuration
 export const SETTLEMENT_FEE_RATE_BPS = 1; // 0.01%
 export const SETTLEMENT_FEE_MAX_CAP_USD = 0.05;
+
+// Trade fee configuration (must mirror matching engine defaults)
+export const MAKER_FEE_RATE_BPS = 10; // 0.1%
+export const TAKER_FEE_RATE_BPS = 20; // 0.2%

@@ -532,6 +532,8 @@ export class PortfolioService {
         accountId: string,
         assetId: string,
         quantityBaseUnits: string,
+        settlementFeeBaseUnits = "0",
+        estimatedTradeFeeBaseUnits = "0",
     ): Promise<void> {
         const portfolioBalanceRaw = await this.getAssetBalance(
             accountId,
@@ -553,9 +555,39 @@ export class PortfolioService {
         const availableBalance =
             portfolioBalance - lockedAmount - totalOpenOrders;
 
-        if (BigInt(quantityBaseUnits) > availableBalance) {
+        const totalRequired =
+            BigInt(quantityBaseUnits) +
+            BigInt(settlementFeeBaseUnits) +
+            BigInt(estimatedTradeFeeBaseUnits);
+
+        if (totalRequired > availableBalance) {
             throw new BadRequestException(
-                "Insufficient portfolio balance for this order",
+                "Insufficient portfolio balance for this order (amount + fees exceed available balance)",
+            );
+        }
+    }
+
+    async checkAvailableBalanceForBorrowFees(
+        accountId: string,
+        assetId: string,
+        settlementFeeBaseUnits = "0",
+        estimatedTradeFeeBaseUnits = "0",
+    ): Promise<void> {
+        const totalFees =
+            BigInt(settlementFeeBaseUnits) +
+            BigInt(estimatedTradeFeeBaseUnits);
+
+        if (totalFees <= 0n) return;
+
+        const portfolioBalanceRaw = await this.getAssetBalance(
+            accountId,
+            assetId,
+        );
+        const portfolioBalance = BigInt(portfolioBalanceRaw);
+
+        if (totalFees > portfolioBalance) {
+            throw new BadRequestException(
+                "Insufficient balance to cover borrow fees (settlement + trade fee)",
             );
         }
     }

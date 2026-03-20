@@ -46,6 +46,7 @@ describe("OrdersController", () => {
             status: OrderStatus.Open,
             originalAmount: "1000",
             settlementFeeAmount: "50000",
+            estimatedTradeFeeAmount: "100000",
             autoRollover: false,
             rate: 5,
             createdAt: new Date(),

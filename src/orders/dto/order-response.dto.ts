@@ -29,6 +29,7 @@ export interface OrderResponseData {
     status: OrderStatus;
     originalAmount: string;
     settlementFeeAmount: string;
+    estimatedTradeFeeAmount: string;
     autoRollover: boolean;
     /**
      * Interest rate expressed as a percentage (e.g. 5 = 5%).

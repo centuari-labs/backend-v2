@@ -176,3 +176,25 @@ export function calculateSettlementFee(
     // Limit to a sensible precision to avoid floating point noise
     return Number(feeInToken.toFixed(8));
 }
+
+/**
+ * Calculate trade fee (maker/taker) — simple BPS calculation, no USD cap.
+ *
+ * @param amountHuman - Order amount in human-readable token units
+ * @param feeBps - Fee rate in basis points (e.g. 10 = 0.1%)
+ */
+export function calculateTradeFee(
+    amountHuman: number,
+    feeBps: number,
+): number {
+    if (
+        !Number.isFinite(amountHuman) ||
+        amountHuman <= 0 ||
+        feeBps <= 0
+    ) {
+        return 0;
+    }
+
+    const fee = amountHuman * (feeBps / 10000);
+    return Number(fee.toFixed(8));
+}

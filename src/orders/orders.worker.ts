@@ -36,8 +36,6 @@ const LEND_QUANTITY_USD_MIN = 10;
 const LEND_QUANTITY_USD_MAX = 500;
 const BORROW_QUANTITY_USD_MIN = 10;
 const BORROW_QUANTITY_USD_MAX = 500;
-const MARKET_ORDER_PROBABILITY = 0.05;
-
 const NUM_BOT_ACCOUNTS = 6;
 const MIN_GAS_BALANCE_WEI = BigInt(1e15); // ~0.001 ETH
 
@@ -57,15 +55,16 @@ interface TokenFundingSpec {
 @Injectable()
 export class OrdersWorker implements OnModuleInit {
     private readonly logger = new Logger(OrdersWorker.name);
-    private midRateByAsset = new Map<string, number>();
+    private ratesByAsset = new Map<
+        string,
+        { lend: number; borrow: number; mid: number }
+    >();
     private assetMarketCache: Array<{
         assetId: string;
         symbol: string;
         marketIds: string[];
     }> = [];
     private botAccounts: BotAccount[] = [];
-    private lendBots: BotAccount[] = [];
-    private borrowBots: BotAccount[] = [];
     private chainId: number;
     private treasuryAddress: string;
 
@@ -109,12 +108,6 @@ export class OrdersWorker implements OnModuleInit {
             })();
 
         this.botAccounts = this.deriveBotAccounts();
-
-        // Split bots: first half lends, second half borrows
-        // This prevents resource exhaustion from bots competing for the same funds
-        const mid = Math.ceil(this.botAccounts.length / 2);
-        this.lendBots = this.botAccounts.slice(0, mid);
-        this.borrowBots = this.botAccounts.slice(mid);
 
         // Run heavy init in background so the HTTP server starts immediately
         this.initializeInBackground();
@@ -698,7 +691,10 @@ export class OrdersWorker implements OnModuleInit {
                 continue;
             }
 
-            for (const bot of this.lendBots) {
+            // Refresh paired rates once per asset per cycle
+            this.refreshRatesForAsset(assetId);
+
+            for (const bot of this.botAccounts) {
                 try {
                     const lendMin = await this.usdToTokenAmount(
                         LEND_QUANTITY_USD_MIN,
@@ -741,26 +737,15 @@ export class OrdersWorker implements OnModuleInit {
                         continue;
                     }
 
-                    if (Math.random() < MARKET_ORDER_PROBABILITY) {
-                        await this.ordersService.createLendMarketOrder(
-                            { assetId, amount, marketIds },
-                            bot.wallet,
-                            account.privyUserId,
-                        );
-                        this.logger.debug(
-                            `[LEND MARKET] bot=${bot.wallet.slice(0, 8)} ${symbol} amount=${amount}`,
-                        );
-                    } else {
-                        const rate = this.getLendRate(assetId);
-                        await this.ordersService.createLendLimitOrder(
-                            { assetId, amount, marketIds, rate },
-                            bot.wallet,
-                            account.privyUserId,
-                        );
-                        this.logger.debug(
-                            `[LEND LIMIT] bot=${bot.wallet.slice(0, 8)} ${symbol} amount=${amount} rate=${rate}bp`,
-                        );
-                    }
+                    const rate = this.getLendRate(assetId);
+                    await this.ordersService.createLendLimitOrder(
+                        { assetId, amount, marketIds, rate },
+                        bot.wallet,
+                        account.privyUserId,
+                    );
+                    this.logger.debug(
+                        `[LEND LIMIT] bot=${bot.wallet.slice(0, 8)} ${symbol} amount=${amount} rate=${rate}bp`,
+                    );
                 } catch (error) {
                     this.logger.warn(
                         `[OrdersWorker] Failed lend order for bot ${bot.wallet.slice(0, 8)} ${entry.symbol}: ${(error as Error).message}`,
@@ -784,6 +769,9 @@ export class OrdersWorker implements OnModuleInit {
 
         for (const entry of this.assetMarketCache) {
             const { assetId, marketIds, symbol } = entry;
+
+            // Refresh paired rates once per asset per cycle
+            this.refreshRatesForAsset(assetId);
 
             for (const bot of this.botAccounts) {
                 try {
@@ -827,26 +815,15 @@ export class OrdersWorker implements OnModuleInit {
                         continue;
                     }
 
-                    if (Math.random() < MARKET_ORDER_PROBABILITY) {
-                        await this.ordersService.createBorrowMarketOrder(
-                            { assetId, amount, marketIds },
-                            bot.wallet,
-                            account.privyUserId,
-                        );
-                        this.logger.debug(
-                            `[BORROW MARKET] bot=${bot.wallet.slice(0, 8)} ${symbol} amount=${amount}`,
-                        );
-                    } else {
-                        const rate = this.getBorrowRate(assetId);
-                        await this.ordersService.createBorrowLimitOrder(
-                            { assetId, amount, marketIds, rate },
-                            bot.wallet,
-                            account.privyUserId,
-                        );
-                        this.logger.debug(
-                            `[BORROW LIMIT] bot=${bot.wallet.slice(0, 8)} ${symbol} amount=${amount} rate=${rate}bp`,
-                        );
-                    }
+                    const rate = this.getBorrowRate(assetId);
+                    await this.ordersService.createBorrowLimitOrder(
+                        { assetId, amount, marketIds, rate },
+                        bot.wallet,
+                        account.privyUserId,
+                    );
+                    this.logger.debug(
+                        `[BORROW LIMIT] bot=${bot.wallet.slice(0, 8)} ${symbol} amount=${amount} rate=${rate}bp`,
+                    );
                 } catch (error) {
                     this.logger.warn(
                         `[OrdersWorker] Failed borrow order for bot ${bot.wallet.slice(0, 8)} ${entry.symbol}: ${(error as Error).message}`,
@@ -957,9 +934,18 @@ export class OrdersWorker implements OnModuleInit {
         );
     }
 
-    private getMidRate(assetId: string): number {
-        let mid = this.midRateByAsset.get(assetId);
-        if (mid == null) {
+    /**
+     * Generates a paired lend/borrow rate from a shared mid-rate per asset.
+     * Both rates are produced together so the spread is always ≤ MAX_SPREAD_BPS.
+     * The mid-rate drifts once per call to simulate market movement.
+     */
+    private refreshRatesForAsset(assetId: string): {
+        lend: number;
+        borrow: number;
+    } {
+        const existing = this.ratesByAsset.get(assetId);
+        let mid: number;
+        if (existing == null) {
             mid =
                 RATE_MIN +
                 HALF_SPREAD +
@@ -967,36 +953,34 @@ export class OrdersWorker implements OnModuleInit {
                     Math.random() *
                         (RATE_MAX - RATE_MIN - MAX_SPREAD_BPS + 1),
                 );
-            this.midRateByAsset.set(assetId, mid);
+        } else {
+            // Drift mid-rate slightly
+            const drift =
+                Math.floor(Math.random() * (MID_RATE_DRIFT * 2 + 1)) -
+                MID_RATE_DRIFT;
+            mid = Math.max(
+                RATE_MIN + HALF_SPREAD,
+                Math.min(RATE_MAX - HALF_SPREAD, existing.mid + drift),
+            );
         }
-        return mid;
-    }
 
-    private driftMidRate(assetId: string): void {
-        const mid = this.midRateByAsset.get(assetId);
-        if (mid == null) return;
-        const drift =
-            Math.floor(Math.random() * (MID_RATE_DRIFT * 2 + 1)) -
-            MID_RATE_DRIFT;
-        const newMid = Math.max(
-            RATE_MIN + HALF_SPREAD,
-            Math.min(RATE_MAX - HALF_SPREAD, mid + drift),
-        );
-        this.midRateByAsset.set(assetId, newMid);
+        const lendOffset = Math.floor(Math.random() * (HALF_SPREAD + 1));
+        const borrowOffset = Math.floor(Math.random() * (HALF_SPREAD + 1));
+        const lend = Math.max(RATE_MIN, mid - lendOffset);
+        const borrow = Math.min(RATE_MAX, mid + borrowOffset);
+
+        this.ratesByAsset.set(assetId, { lend, borrow, mid });
+        return { lend, borrow };
     }
 
     private getLendRate(assetId: string): number {
-        const mid = this.getMidRate(assetId);
-        this.driftMidRate(assetId);
-        const offset = Math.floor(Math.random() * (HALF_SPREAD + 1));
-        return Math.max(RATE_MIN, mid - offset);
+        const rates = this.ratesByAsset.get(assetId);
+        return rates?.lend ?? this.refreshRatesForAsset(assetId).lend;
     }
 
     private getBorrowRate(assetId: string): number {
-        const mid = this.getMidRate(assetId);
-        this.driftMidRate(assetId);
-        const offset = Math.floor(Math.random() * (HALF_SPREAD + 1));
-        return Math.min(RATE_MAX, mid + offset);
+        const rates = this.ratesByAsset.get(assetId);
+        return rates?.borrow ?? this.refreshRatesForAsset(assetId).borrow;
     }
 
     private randomQuantity(min: number, max: number): string {

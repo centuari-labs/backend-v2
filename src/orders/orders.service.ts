@@ -17,6 +17,8 @@ import {
     OrderType,
     SETTLEMENT_FEE_MAX_CAP_USD,
     SETTLEMENT_FEE_RATE_BPS,
+    MAKER_FEE_RATE_BPS,
+    TAKER_FEE_RATE_BPS,
 } from "./constants/order.constants";
 import type { CreateBorrowLimitOrderDto } from "./dto/create-borrow-limit-order.dto";
 import type { CreateBorrowMarketOrderDto } from "./dto/create-borrow-market-order.dto";
@@ -29,6 +31,7 @@ import {
     humanToBaseUnits,
     baseUnitsToHuman,
     calculateSettlementFee,
+    calculateTradeFee,
 } from "../common/utils/number.utils";
 import { OrderRepository } from "./repositories/order.repository";
 import { PortfolioService } from "../portfolio/portfolio.service";
@@ -80,10 +83,23 @@ export class OrdersService {
         );
         const quantityBaseUnits = humanToBaseUnits(dto.amount, decimals!);
 
+        const settlementFee = await this.computeSettlementFee(
+            dto.assetId,
+            dto.amount,
+            decimals!,
+        );
+        const estimatedTradeFee = this.computeEstimatedTradeFee(
+            dto.amount,
+            decimals!,
+            OrderType.Market,
+        );
+
         await this.portfolioService.checkAvailableBalanceForLend(
             accountId,
             dto.assetId,
             quantityBaseUnits,
+            settlementFee,
+            estimatedTradeFee,
         );
 
         const hasCounterparty =
@@ -97,12 +113,6 @@ export class OrdersService {
                 "No available liquidity for this market order",
             );
         }
-
-        const settlementFee = await this.computeSettlementFee(
-            dto.assetId,
-            dto.amount,
-            decimals!,
-        );
 
         const order = this.orderRepository.create({
             accountId,
@@ -132,7 +142,12 @@ export class OrdersService {
             accountId,
         );
 
-        return this.mapToResponse(savedOrder, dto, walletAddress);
+        return this.mapToResponse(
+            savedOrder,
+            dto,
+            walletAddress,
+            estimatedTradeFee,
+        );
     }
 
     async createLendLimitOrder(
@@ -151,17 +166,25 @@ export class OrdersService {
         );
         const quantityBaseUnits = humanToBaseUnits(dto.amount, decimals!);
 
-        await this.portfolioService.checkAvailableBalanceForLend(
-            accountId,
-            dto.assetId,
-            quantityBaseUnits,
-        );
-
         const settlementFee = await this.computeSettlementFee(
             dto.assetId,
             dto.amount,
             decimals!,
         );
+        const estimatedTradeFee = this.computeEstimatedTradeFee(
+            dto.amount,
+            decimals!,
+            OrderType.Limit,
+        );
+
+        await this.portfolioService.checkAvailableBalanceForLend(
+            accountId,
+            dto.assetId,
+            quantityBaseUnits,
+            settlementFee,
+            estimatedTradeFee,
+        );
+
         const order = this.orderRepository.create({
             accountId,
             assetId: dto.assetId,
@@ -190,7 +213,12 @@ export class OrdersService {
             accountId,
         );
 
-        return this.mapToResponse(savedOrder, dto, walletAddress);
+        return this.mapToResponse(
+            savedOrder,
+            dto,
+            walletAddress,
+            estimatedTradeFee,
+        );
     }
 
     async createBorrowMarketOrder(
@@ -215,6 +243,18 @@ export class OrdersService {
             dto.assetId,
             dto.amount,
             decimals,
+        );
+        const estimatedTradeFee = this.computeEstimatedTradeFee(
+            dto.amount,
+            decimals,
+            OrderType.Market,
+        );
+
+        await this.portfolioService.checkAvailableBalanceForBorrowFees(
+            accountId,
+            dto.assetId,
+            settlementFee,
+            estimatedTradeFee,
         );
 
         const hasCounterparty =
@@ -280,7 +320,12 @@ export class OrdersService {
             accountId,
         );
 
-        return this.mapToResponse(savedOrder, dto, walletAddress);
+        return this.mapToResponse(
+            savedOrder,
+            dto,
+            walletAddress,
+            estimatedTradeFee,
+        );
     }
 
     async createBorrowLimitOrder(
@@ -302,6 +347,18 @@ export class OrdersService {
             dto.assetId,
             dto.amount,
             decimals!,
+        );
+        const estimatedTradeFee = this.computeEstimatedTradeFee(
+            dto.amount,
+            decimals!,
+            OrderType.Limit,
+        );
+
+        await this.portfolioService.checkAvailableBalanceForBorrowFees(
+            accountId,
+            dto.assetId,
+            settlementFee,
+            estimatedTradeFee,
         );
 
         const assetPrice = await this.priceService.getPrice(dto.assetId);
@@ -355,7 +412,12 @@ export class OrdersService {
             accountId,
         );
 
-        return this.mapToResponse(savedOrder, dto, walletAddress);
+        return this.mapToResponse(
+            savedOrder,
+            dto,
+            walletAddress,
+            estimatedTradeFee,
+        );
     }
 
     async getOpenLendAmounts(
@@ -464,6 +526,31 @@ export class OrdersService {
         return humanToBaseUnits(feeTruncated.toString(), decimals);
     }
 
+    private computeEstimatedTradeFee(
+        amountHuman: string,
+        decimals: number,
+        orderType: OrderType,
+    ): string {
+        const amountNum = Number.parseFloat(amountHuman);
+        if (!Number.isFinite(amountNum) || amountNum <= 0) {
+            return "0";
+        }
+
+        const feeBps =
+            orderType === OrderType.Limit
+                ? MAKER_FEE_RATE_BPS
+                : TAKER_FEE_RATE_BPS;
+        const feeHuman = calculateTradeFee(amountNum, feeBps);
+        if (feeHuman === 0) return "0";
+
+        const feeTruncated =
+            decimals > 0
+                ? Number(feeHuman.toFixed(decimals))
+                : Math.floor(feeHuman);
+        if (feeTruncated === 0) return "0";
+        return humanToBaseUnits(feeTruncated.toString(), decimals);
+    }
+
     private async mapToResponse(
         order: Order,
         dto:
@@ -472,6 +559,7 @@ export class OrdersService {
             | CreateBorrowMarketOrderDto
             | CreateBorrowLimitOrderDto,
         walletAddress: string,
+        estimatedTradeFeeBaseUnits = "0",
     ): Promise<OrderResponse> {
         const marketEntities = await this.marketRepository.getMarketsByIds(
             dto.marketIds ?? [],
@@ -506,6 +594,10 @@ export class OrdersService {
                 originalAmount: dto.amount,
                 settlementFeeAmount: baseUnitsToHuman(
                     order.settlementFee,
+                    decimals!,
+                ),
+                estimatedTradeFeeAmount: baseUnitsToHuman(
+                    estimatedTradeFeeBaseUnits,
                     decimals!,
                 ),
                 // order.rate is stored as basis points in the DB; expose percentage in responses

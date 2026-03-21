@@ -11,6 +11,7 @@ export interface RawPosition {
     side: OrderSide;
     rate: string;
     quantity: string;
+    base_amount: string;
     status: OrderStatus;
     symbol: string;
     name: string;
@@ -222,6 +223,7 @@ export class PortfolioRepository extends Repository<Portfolio> {
                 .addSelect("t.token_address", "token_address")
                 .addSelect("t.image_url", "image_url")
                 .addSelect("COALESCE(t.decimals, 0)", "decimals")
+                .addSelect("lp.amount", "base_amount")
                 .addSelect("m.maturity", "maturity")
                 .addSelect("lp.created_at", "created_at")
                 .from("lend_positions", "lp")
@@ -267,6 +269,7 @@ export class PortfolioRepository extends Repository<Portfolio> {
                 .addSelect("t.token_address", "token_address")
                 .addSelect("t.image_url", "image_url")
                 .addSelect("COALESCE(t.decimals, 0)", "decimals")
+                .addSelect("bp.amount", "base_amount")
                 .addSelect("m.maturity", "maturity")
                 .addSelect("bp.created_at", "created_at")
                 .from("borrow_positions", "bp")

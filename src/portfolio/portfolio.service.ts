@@ -823,7 +823,13 @@ export class PortfolioService {
                 account.id,
                 query.page ?? 1,
                 query.limit ?? 10,
-                { assetId: query.assetId },
+                {
+                    assetId: query.assetId,
+                    side: query.side,
+                    status: query.status,
+                    startDate: query.startDate,
+                    endDate: query.endDate,
+                },
             );
 
         const items: OrderHistoryItem[] = rows.map((row) => ({
@@ -1282,7 +1288,12 @@ export class PortfolioService {
                 account.id,
                 query.page ?? 1,
                 query.limit ?? 10,
-                { assetId: query.assetId },
+                {
+                    assetId: query.assetId,
+                    side: query.side,
+                    startDate: query.startDate,
+                    endDate: query.endDate,
+                },
             );
 
         const items: TransactionHistoryItem[] = rows.map((row) => {

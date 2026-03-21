@@ -1,6 +1,7 @@
-import { IsOptional, IsUUID } from "class-validator";
+import { IsOptional, IsUUID, IsEnum, IsDateString } from "class-validator";
 import { Transform } from "class-transformer";
 import type { AssetDto } from "../../common/dto/asset.dto";
+import { OrderSide, OrderStatus } from "../../orders/constants/order.constants";
 
 export class OrderHistoryQueryDto {
     @IsOptional()
@@ -14,6 +15,22 @@ export class OrderHistoryQueryDto {
     @IsOptional()
     @Transform(({ value }) => Number(value) || 10)
     limit?: number = 10;
+
+    @IsOptional()
+    @IsEnum(OrderSide)
+    side?: OrderSide;
+
+    @IsOptional()
+    @IsEnum(OrderStatus)
+    status?: OrderStatus;
+
+    @IsOptional()
+    @IsDateString()
+    startDate?: string;
+
+    @IsOptional()
+    @IsDateString()
+    endDate?: string;
 }
 
 export interface OrderHistoryItem {

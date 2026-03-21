@@ -329,26 +329,28 @@ export class PortfolioService {
             dailyUsdMap.set(dateKey, entry);
         }
 
-        // Fill all days in the range so the chart has a continuous series
+        // Fill all days in the range with cumulative totals
         const chartData: {
             date: string;
             lendAmount: string;
             borrowAmount: string;
         }[] = [];
+        let cumulativeLend = 0;
+        let cumulativeBorrow = 0;
         const today = new Date();
         for (let i = days; i >= 0; i--) {
             const d = new Date(today);
             d.setDate(d.getDate() - i);
             const dateKey = d.toISOString().split("T")[0];
             const entry = dailyUsdMap.get(dateKey);
+            if (entry) {
+                cumulativeLend += entry.lendUsd;
+                cumulativeBorrow += entry.borrowUsd;
+            }
             chartData.push({
                 date: dateKey,
-                lendAmount: entry
-                    ? String(Number(entry.lendUsd.toFixed(2)))
-                    : "0",
-                borrowAmount: entry
-                    ? String(Number(entry.borrowUsd.toFixed(2)))
-                    : "0",
+                lendAmount: String(Number(cumulativeLend.toFixed(2))),
+                borrowAmount: String(Number(cumulativeBorrow.toFixed(2))),
             });
         }
 

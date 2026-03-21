@@ -734,12 +734,16 @@ export class PortfolioService {
             const quantityHuman = Number(
                 baseUnitsToHuman(position.quantity, decimals),
             );
+            const baseAmountHuman = Number(
+                baseUnitsToHuman(position.base_amount ?? "0", decimals),
+            );
 
             return {
                 id: position.position_id,
                 symbol: position.symbol,
                 name: position.name,
                 shares: quantityHuman,
+                baseAmount: baseAmountHuman,
                 amountInUsd: calculateUsdAmount(quantityHuman, price ?? 0),
                 isCollateral: false,
                 imageUrl: position.image_url ?? null,
@@ -821,7 +825,13 @@ export class PortfolioService {
                 account.id,
                 query.page ?? 1,
                 query.limit ?? 10,
-                { assetId: query.assetId },
+                {
+                    assetId: query.assetId,
+                    side: query.side,
+                    status: query.status,
+                    startDate: query.startDate,
+                    endDate: query.endDate,
+                },
             );
 
         const items: OrderHistoryItem[] = rows.map((row) => ({
@@ -1280,7 +1290,12 @@ export class PortfolioService {
                 account.id,
                 query.page ?? 1,
                 query.limit ?? 10,
-                { assetId: query.assetId },
+                {
+                    assetId: query.assetId,
+                    side: query.side,
+                    startDate: query.startDate,
+                    endDate: query.endDate,
+                },
             );
 
         const items: TransactionHistoryItem[] = rows.map((row) => {

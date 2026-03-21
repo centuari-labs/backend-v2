@@ -11,6 +11,7 @@ export interface RawPosition {
     side: OrderSide;
     rate: string;
     quantity: string;
+    base_amount: string;
     status: OrderStatus;
     symbol: string;
     name: string;
@@ -222,6 +223,7 @@ export class PortfolioRepository extends Repository<Portfolio> {
                 .addSelect("t.token_address", "token_address")
                 .addSelect("t.image_url", "image_url")
                 .addSelect("COALESCE(t.decimals, 0)", "decimals")
+                .addSelect("lp.amount", "base_amount")
                 .addSelect("m.maturity", "maturity")
                 .addSelect("lp.created_at", "created_at")
                 .from("lend_positions", "lp")
@@ -267,6 +269,7 @@ export class PortfolioRepository extends Repository<Portfolio> {
                 .addSelect("t.token_address", "token_address")
                 .addSelect("t.image_url", "image_url")
                 .addSelect("COALESCE(t.decimals, 0)", "decimals")
+                .addSelect("bp.amount", "base_amount")
                 .addSelect("m.maturity", "maturity")
                 .addSelect("bp.created_at", "created_at")
                 .from("borrow_positions", "bp")
@@ -406,7 +409,13 @@ export class PortfolioRepository extends Repository<Portfolio> {
         accountId: string,
         page: number,
         limit: number,
-        filters?: { assetId?: string },
+        filters?: {
+            assetId?: string;
+            side?: string;
+            status?: string;
+            startDate?: string;
+            endDate?: string;
+        },
     ): Promise<{ data: RawOrderHistoryRow[]; total: number }> {
         const offset = (page - 1) * limit;
         const params: any[] = [accountId];
@@ -417,6 +426,30 @@ export class PortfolioRepository extends Repository<Portfolio> {
         if (filters?.assetId) {
             whereClause += ` AND o.asset_id = $${paramIndex}`;
             params.push(filters.assetId);
+            paramIndex++;
+        }
+
+        if (filters?.side) {
+            whereClause += ` AND o.side = $${paramIndex}`;
+            params.push(filters.side);
+            paramIndex++;
+        }
+
+        if (filters?.status) {
+            whereClause += ` AND o.status = $${paramIndex}`;
+            params.push(filters.status);
+            paramIndex++;
+        }
+
+        if (filters?.startDate) {
+            whereClause += ` AND o.created_at >= $${paramIndex}`;
+            params.push(filters.startDate);
+            paramIndex++;
+        }
+
+        if (filters?.endDate) {
+            whereClause += ` AND o.created_at <= $${paramIndex}`;
+            params.push(filters.endDate);
             paramIndex++;
         }
 
@@ -627,7 +660,12 @@ export class PortfolioRepository extends Repository<Portfolio> {
         accountId: string,
         page: number,
         limit: number,
-        filters?: { assetId?: string },
+        filters?: {
+            assetId?: string;
+            side?: string;
+            startDate?: string;
+            endDate?: string;
+        },
     ): Promise<{ data: RawTransactionHistoryRow[]; total: number }> {
         const offset = (page - 1) * limit;
         const params: any[] = [accountId];
@@ -636,9 +674,27 @@ export class PortfolioRepository extends Repository<Portfolio> {
         let whereClause =
             "WHERE (m.lender_account_id = $1 OR m.borrower_account_id = $1)";
 
+        if (filters?.side === "LEND") {
+            whereClause = "WHERE m.lender_account_id = $1";
+        } else if (filters?.side === "BORROW") {
+            whereClause = "WHERE m.borrower_account_id = $1";
+        }
+
         if (filters?.assetId) {
             whereClause += ` AND m.asset_id = $${paramIndex}`;
             params.push(filters.assetId);
+            paramIndex++;
+        }
+
+        if (filters?.startDate) {
+            whereClause += ` AND m.created_at >= $${paramIndex}`;
+            params.push(filters.startDate);
+            paramIndex++;
+        }
+
+        if (filters?.endDate) {
+            whereClause += ` AND m.created_at <= $${paramIndex}`;
+            params.push(filters.endDate);
             paramIndex++;
         }
 

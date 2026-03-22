@@ -36,6 +36,7 @@ export interface RawOrderHistoryRow {
     image_url: string | null;
     decimals: string;
     token_address: string;
+    maturity: string | null;
     total_fee: string;
     created_at: string;
 }
@@ -415,6 +416,7 @@ export class PortfolioRepository extends Repository<Portfolio> {
             status?: string;
             startDate?: string;
             endDate?: string;
+            maturity?: string;
         },
     ): Promise<{ data: RawOrderHistoryRow[]; total: number }> {
         const offset = (page - 1) * limit;
@@ -453,24 +455,42 @@ export class PortfolioRepository extends Repository<Portfolio> {
             paramIndex++;
         }
 
+        if (filters?.maturity) {
+            whereClause += ` AND EXISTS (
+                SELECT 1 FROM order_markets om_filter 
+                JOIN markets m_filter ON om_filter.market_id = m_filter.id 
+                WHERE om_filter.order_id = o.id AND m_filter.maturity = $${paramIndex}
+            )`;
+            params.push(filters.maturity);
+            paramIndex++;
+        }
+
         const dataQuery = `
             SELECT o.id, o.side::text, o.type::text as order_type, o.rate,
                    o.quantity as amount, o.filled_quantity, o.status::text,
                    a.id as asset_id, a.name, a.symbol, a.image_url,
                    COALESCE(a.decimals, 0) as decimals, a.token_address,
+                   (
+                       SELECT m.maturity
+                       FROM order_markets om
+                       JOIN markets m ON om.market_id = m.id
+                       WHERE om.order_id = o.id
+                       ORDER BY m.maturity DESC
+                       LIMIT 1
+                   ) as maturity,
                    mf.total_fee,
                    o.created_at
             FROM orders o
             JOIN assets a ON o.asset_id = a.id
             LEFT JOIN LATERAL (
                 SELECT COALESCE(SUM(
-                    CASE WHEN m.lend_order_market_id = o.id
-                         THEN COALESCE(m.maker_fee, 0) + COALESCE(m.taker_fee, 0) + COALESCE(m.lender_settlement_fee, 0)
-                         ELSE COALESCE(m.maker_fee, 0) + COALESCE(m.taker_fee, 0) + COALESCE(m.borrower_settlement_fee, 0)
+                    CASE WHEN mt.lend_order_market_id = o.id
+                         THEN COALESCE(mt.maker_fee, 0) + COALESCE(mt.taker_fee, 0) + COALESCE(mt.lender_settlement_fee, 0)
+                         ELSE COALESCE(mt.maker_fee, 0) + COALESCE(mt.taker_fee, 0) + COALESCE(mt.borrower_settlement_fee, 0)
                     END
                 ), 0) as total_fee
-                FROM matches m
-                WHERE m.lend_order_market_id = o.id OR m.borrow_order_market_id = o.id
+                FROM matches mt
+                WHERE mt.lend_order_market_id = o.id OR mt.borrow_order_market_id = o.id
             ) mf ON true
             ${whereClause}
             ORDER BY o.created_at DESC

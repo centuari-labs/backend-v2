@@ -354,6 +354,17 @@ export class PortfolioService {
             });
         }
 
+        // Override the last chart point to match current position USD values
+        // (cumulative matches may differ from current shares/debt due to accrued interest)
+        if (chartData.length > 0) {
+            chartData[chartData.length - 1].lendAmount = String(
+                Number(suppliedAssetsUsd.toFixed(3)),
+            );
+            chartData[chartData.length - 1].borrowAmount = String(
+                Number(borrowedAssetsUsd.toFixed(3)),
+            );
+        }
+
         return {
             suppliedAssets: Number(suppliedAssetsUsd.toFixed(2)),
             borrowedAssets: Number(borrowedAssetsUsd.toFixed(2)),

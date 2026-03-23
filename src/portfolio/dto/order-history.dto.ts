@@ -44,4 +44,5 @@ export interface OrderHistoryItem {
     asset: AssetDto;
     fee: string | null;
     createdAt: string;
+    maturity: string | null;
 }

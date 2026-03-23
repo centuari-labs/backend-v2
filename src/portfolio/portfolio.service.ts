@@ -445,8 +445,8 @@ export class PortfolioService {
         const riskParams =
             collateralAssetIds.length > 0
                 ? await this.portfolioRepository.getRiskParamsByCollateralTokenIds(
-                      collateralAssetIds,
-                  )
+                    collateralAssetIds,
+                )
                 : [];
         const riskLtvMap = new Map(
             riskParams.map((r) => [r.asset_id, Number(r.avg_ltv)]),
@@ -842,9 +842,9 @@ export class PortfolioService {
             amount: baseUnitsToHuman(row.amount, Number(row.decimals) || 0),
             filledQuantity: row.filled_quantity
                 ? baseUnitsToHuman(
-                      row.filled_quantity,
-                      Number(row.decimals) || 0,
-                  )
+                    row.filled_quantity,
+                    Number(row.decimals) || 0,
+                )
                 : null,
             status: row.status,
             asset: {
@@ -855,6 +855,7 @@ export class PortfolioService {
                 imageUrl: row.image_url,
                 tokenAddress: row.token_address,
             },
+            maturity: row.maturity ? new Date(row.maturity).toISOString() : null,
             fee:
                 row.total_fee && row.total_fee !== "0"
                     ? baseUnitsToHuman(row.total_fee, Number(row.decimals) || 0)
@@ -903,9 +904,9 @@ export class PortfolioService {
             amount: baseUnitsToHuman(row.amount, Number(row.decimals) || 0),
             filledQuantity: row.filled_quantity
                 ? baseUnitsToHuman(
-                      row.filled_quantity,
-                      Number(row.decimals) || 0,
-                  )
+                    row.filled_quantity,
+                    Number(row.decimals) || 0,
+                )
                 : null,
             status: row.status,
             maturity: row.maturity
@@ -1168,8 +1169,8 @@ export class PortfolioService {
         const riskParams =
             assetIds.length > 0
                 ? await this.portfolioRepository.getRiskParamsByCollateralTokenIds(
-                      assetIds,
-                  )
+                    assetIds,
+                )
                 : [];
         const riskMap = new Map(riskParams.map((r) => [r.asset_id, r]));
 
@@ -1304,15 +1305,15 @@ export class PortfolioService {
 
             const totalFee = isLender
                 ? (
-                      BigInt(row.maker_fee || "0") +
-                      BigInt(row.taker_fee || "0") +
-                      BigInt(row.lender_settlement_fee || "0")
-                  ).toString()
+                    BigInt(row.maker_fee || "0") +
+                    BigInt(row.taker_fee || "0") +
+                    BigInt(row.lender_settlement_fee || "0")
+                ).toString()
                 : (
-                      BigInt(row.maker_fee || "0") +
-                      BigInt(row.taker_fee || "0") +
-                      BigInt(row.borrower_settlement_fee || "0")
-                  ).toString();
+                    BigInt(row.maker_fee || "0") +
+                    BigInt(row.taker_fee || "0") +
+                    BigInt(row.borrower_settlement_fee || "0")
+                ).toString();
 
             return {
                 id: row.id,

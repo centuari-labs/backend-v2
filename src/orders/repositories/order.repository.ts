@@ -181,6 +181,39 @@ export class OrderRepository extends Repository<Order> {
         return result > 0;
     }
 
+    async getBestRatesForAsset(
+        assetId: string,
+    ): Promise<{ bestLendRate: number | null; bestBorrowRate: number | null }> {
+        const result = await this.createQueryBuilder("order")
+            .select(
+                "MIN(CASE WHEN order.side = :lendSide THEN order.rate ELSE NULL END)",
+                "bestLendRate",
+            )
+            .addSelect(
+                "MAX(CASE WHEN order.side = :borrowSide THEN order.rate ELSE NULL END)",
+                "bestBorrowRate",
+            )
+            .where("order.assetId = :assetId", { assetId })
+            .andWhere("order.status IN (:...statuses)", {
+                statuses: [OrderStatus.Open, OrderStatus.PartiallyFilled],
+            })
+            .andWhere("order.type = :type", { type: "LIMIT" })
+            .setParameters({
+                lendSide: OrderSide.Lend,
+                borrowSide: OrderSide.Borrow,
+            })
+            .getRawOne();
+
+        return {
+            bestLendRate: result?.bestLendRate
+                ? Number(result.bestLendRate)
+                : null,
+            bestBorrowRate: result?.bestBorrowRate
+                ? Number(result.bestBorrowRate)
+                : null,
+        };
+    }
+
     async getOpenBorrowOrders(accountId: string): Promise<Order[]> {
         return this.find({
             where: {

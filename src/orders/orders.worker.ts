@@ -31,8 +31,8 @@ const CACHE_REFRESH_INTERVAL_MS = 600_000;
 
 const RATE_MIN = 500;
 const RATE_MAX = 1500;
-const MAX_SPREAD_BPS = 50;
-const HALF_SPREAD = MAX_SPREAD_BPS / 2; // 25 bp
+const MAX_SPREAD_BPS = 100; // 1% maximum spread in the order book
+const HALF_SPREAD = MAX_SPREAD_BPS / 2; // 50 bp
 const MATCH_PROBABILITY = 0.25;
 const MID_RATE_DRIFT = 20; // max drift per cycle
 const LEND_QUANTITY_USD_MIN = 10;
@@ -740,7 +740,12 @@ export class OrdersWorker implements OnModuleInit {
             assetId,
         );
         const amount = this.randomQuantity(lendMin, lendMax);
-        const rate = this.getLendRate(assetId);
+        const rawRate = this.getLendRate(assetId);
+        const rate = await this.clampRateToSpread(
+            assetId,
+            OrderSide.Lend,
+            rawRate,
+        );
 
         // Attempt 1: try directly
         try {
@@ -833,7 +838,12 @@ export class OrdersWorker implements OnModuleInit {
             assetId,
         );
         const amount = this.randomQuantity(borrowMin, borrowMax);
-        const rate = this.getBorrowRate(assetId);
+        const rawRate = this.getBorrowRate(assetId);
+        const rate = await this.clampRateToSpread(
+            assetId,
+            OrderSide.Borrow,
+            rawRate,
+        );
 
         // Attempt 1: try directly
         try {
@@ -1091,8 +1101,42 @@ export class OrdersWorker implements OnModuleInit {
         return rates?.borrow ?? this.refreshRatesForAsset(assetId).borrow;
     }
 
+    /**
+     * Clamps a rate so the resulting order book spread stays ≤ MAX_SPREAD_BPS.
+     *
+     * For LEND: ensures rate ≤ bestBorrowRate + MAX_SPREAD_BPS
+     * For BORROW: ensures rate ≥ bestLendRate - MAX_SPREAD_BPS
+     */
+    private async clampRateToSpread(
+        assetId: string,
+        side: OrderSide,
+        rate: number,
+    ): Promise<number> {
+        const { bestLendRate, bestBorrowRate } =
+            await this.orderRepository.getBestRatesForAsset(assetId);
+
+        let clamped = rate;
+
+        if (side === OrderSide.Lend && bestBorrowRate != null) {
+            const maxLendRate = bestBorrowRate + MAX_SPREAD_BPS;
+            clamped = Math.min(rate, maxLendRate);
+        } else if (side === OrderSide.Borrow && bestLendRate != null) {
+            const minBorrowRate = bestLendRate - MAX_SPREAD_BPS;
+            clamped = Math.max(rate, minBorrowRate);
+        }
+
+        clamped = Math.max(RATE_MIN, Math.min(RATE_MAX, clamped));
+
+        if (clamped !== rate) {
+            this.logger.debug(
+                `[clampRateToSpread] ${side} rate adjusted from ${rate}bp to ${clamped}bp for asset ${assetId} (bestLend=${bestLendRate}, bestBorrow=${bestBorrowRate})`,
+            );
+        }
+
+        return clamped;
+    }
+
     private randomQuantity(min: number, max: number): string {
         return (min + Math.random() * (max - min)).toFixed(2);
     }
-
 }

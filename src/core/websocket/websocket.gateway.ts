@@ -483,11 +483,11 @@ export class EventsGateway
 
         const lendLevels = this.aggregateLevels(
             validOrders.filter((o) => o.side === OrderSide.Lend),
-            true,
+            false, // ascending: best lend (lowest rate) first
         );
         const borrowLevels = this.aggregateLevels(
             validOrders.filter((o) => o.side === OrderSide.Borrow),
-            false,
+            true, // descending: best borrow (highest rate) first
         );
 
         const update: OrderbookUpdateDto = {

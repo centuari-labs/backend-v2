@@ -27,7 +27,7 @@ export class AuthGuard implements CanActivate {
         }
 
         try {
-            const strategy = this.strategyFactory.getStrategy();
+            const strategy = this.strategyFactory.getStrategy(token);
             request.user = await strategy.validate(token);
             return true;
         } catch (error) {

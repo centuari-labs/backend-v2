@@ -216,8 +216,8 @@ describe("OrderRepository", () => {
                 getRawMany: jest.fn().mockResolvedValue([
                     {
                         assetId: MOCK_IDS.assetId,
-                        highestBid: "750",
-                        lowestAsk: "500",
+                        highestBorrow: "750",
+                        lowestLend: "500",
                     },
                 ]),
             };
@@ -231,8 +231,8 @@ describe("OrderRepository", () => {
 
             expect(result).toBeInstanceOf(Map);
             expect(result.get(MOCK_IDS.assetId)).toEqual({
-                lend: 750,
-                borrow: 500,
+                borrow: 750,
+                lend: 500,
             });
         });
 
@@ -266,8 +266,8 @@ describe("OrderRepository", () => {
                 getRawMany: jest.fn().mockResolvedValue([
                     {
                         assetId: MOCK_IDS.assetId,
-                        highestBid: null,
-                        lowestAsk: null,
+                        highestBorrow: null,
+                        lowestLend: null,
                     },
                 ]),
             };

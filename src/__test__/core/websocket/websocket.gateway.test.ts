@@ -330,8 +330,8 @@ describe("EventsGateway", () => {
                 );
                 const lastOrderbook = orderbookCalls[orderbookCalls.length - 1];
                 expect(lastOrderbook[1].lend).toEqual([
-                    { rate: 8, amount: "1000000", orders: 1 },
                     { rate: 5, amount: "2000000", orders: 1 },
+                    { rate: 8, amount: "1000000", orders: 1 },
                 ]);
             });
 

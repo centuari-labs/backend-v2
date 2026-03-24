@@ -16,7 +16,8 @@ import { RepayRequestDto, RepayResponseDto } from "./dto/repay.dto";
 import { parseUnits } from "viem";
 import type { TransactionReceipt } from "viem";
 import { centuariAbi } from "../../abis/centuari";
-import { uuidToBytes32 } from "../common/utils/uuid.utils";
+import { uuidToBytes32, portfolioUuidFor } from "../common/utils/uuid.utils";
+import { PortfolioRepository } from "./repositories/portfolio.repository";
 
 @Injectable()
 export class RepayService {
@@ -29,6 +30,7 @@ export class RepayService {
         private readonly viemService: ViemService,
         private readonly orderRepository: OrderRepository,
         private readonly repayRepository: RepayRepository,
+        private readonly portfolioRepository: PortfolioRepository,
         private readonly configService: ConfigService,
         private readonly dataSource: DataSource,
     ) {
@@ -107,6 +109,9 @@ export class RepayService {
                     positionDebt,
                     "sync-from-chain",
                     accountId,
+                    walletAddress,
+                    market.assetId,
+                    market.tokenAddress,
                 );
             }
             throw new BadRequestException(
@@ -126,6 +131,9 @@ export class RepayService {
             repayAmountBaseUnits,
             txHash,
             accountId,
+            walletAddress,
+            market.assetId,
+            market.tokenAddress,
         );
 
         return { txHash, status: "success" };
@@ -211,6 +219,9 @@ export class RepayService {
         repayAmount: bigint,
         txHash: string,
         accountId: string,
+        walletAddress: string,
+        assetId: string,
+        tokenAddress: string,
     ): Promise<void> {
         try {
             await this.dataSource.transaction(async (manager) => {
@@ -233,7 +244,22 @@ export class RepayService {
                     newDebt.toString(),
                 );
             });
-            this.logger.log(`Repay DB state updated for tx: ${txHash}`);
+
+            // Deduct repay amount from portfolio balance (mirrors on-chain Treasury.repay)
+            const portfolioId = portfolioUuidFor(
+                walletAddress.toLowerCase(),
+                tokenAddress.toLowerCase(),
+            );
+            await this.portfolioRepository.upsertPortfolio(
+                portfolioId,
+                accountId,
+                assetId,
+                (-repayAmount).toString(),
+            );
+
+            this.logger.log(
+                `Repay DB state updated for tx: ${txHash}, portfolio deducted: ${repayAmount}`,
+            );
         } catch (error: any) {
             this.logger.error(
                 `CRITICAL: Blockchain tx succeeded (${txHash}) but DB update failed: ${error.message}`,

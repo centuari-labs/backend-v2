@@ -32,6 +32,7 @@ export function createMockOrder(overrides: Partial<Order> = {}): Order {
         settlementFee: "50000",
         filledSettlementFee: null,
         status: OrderStatus.Open,
+        cancelReason: null,
         autoRollover: false,
         createdAt: new Date("2025-01-01T00:00:00.000Z"),
         updatedAt: new Date("2025-01-01T00:00:00.000Z"),

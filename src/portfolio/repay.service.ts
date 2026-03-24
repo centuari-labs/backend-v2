@@ -96,9 +96,21 @@ export class RepayService {
             `On-chain debt check: onChainDebt=${onChainDebt}, dbDebt=${positionDebt}`,
         );
         if (onChainDebt === 0n) {
+            // On-chain debt is 0 but DB has debt — a previous repay succeeded
+            // on-chain but the DB wasn't updated. Sync the DB now.
+            if (positionDebt > 0n) {
+                this.logger.warn(
+                    `On-chain debt is 0 but DB debt is ${positionDebt}. Syncing DB to match on-chain state.`,
+                );
+                await this.updateDatabaseState(
+                    positionId,
+                    positionDebt,
+                    "sync-from-chain",
+                    accountId,
+                );
+            }
             throw new BadRequestException(
-                `No on-chain debt found. marketId=${position.marketId}, ` +
-                    `token=${market.tokenAddress}, borrower=${walletAddress}`,
+                "This position has already been fully repaid.",
             );
         }
 

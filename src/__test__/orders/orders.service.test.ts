@@ -53,6 +53,7 @@ describe("OrdersService", () => {
         side: OrderSide.Lend,
         type: OrderType.Limit,
         status: OrderStatus.Open,
+        cancelReason: null,
         rate: 500,
         autoRollover: false,
         createdAt: new Date(),

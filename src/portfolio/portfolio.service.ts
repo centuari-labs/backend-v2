@@ -858,6 +858,7 @@ export class PortfolioService {
                 )
                 : null,
             status: row.status,
+            cancelReason: row.cancel_reason ?? null,
             asset: {
                 id: row.asset_id,
                 name: row.name,
@@ -920,6 +921,7 @@ export class PortfolioService {
                 )
                 : null,
             status: row.status,
+            cancelReason: row.cancel_reason ?? null,
             maturity: row.maturity
                 ? new Date(row.maturity).toISOString()
                 : null,

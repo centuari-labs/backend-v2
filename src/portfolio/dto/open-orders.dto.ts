@@ -41,6 +41,7 @@ export interface OpenOrderItem {
     amount: string;
     filledQuantity: string | null;
     status: string;
+    cancelReason: string | null;
     maturity: string | null;
     asset: AssetDto;
     createdAt: string;
@@ -54,6 +55,7 @@ export interface RawOpenOrderRow {
     amount: string;
     filled_quantity: string | null;
     status: string;
+    cancel_reason: string | null;
     asset_id: string;
     name: string;
     symbol: string;

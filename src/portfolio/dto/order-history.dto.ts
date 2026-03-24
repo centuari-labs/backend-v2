@@ -41,6 +41,7 @@ export interface OrderHistoryItem {
     amount: string;
     filledQuantity: string | null;
     status: string;
+    cancelReason: string | null;
     asset: AssetDto;
     fee: string | null;
     createdAt: string;

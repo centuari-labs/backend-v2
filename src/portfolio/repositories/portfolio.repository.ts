@@ -30,6 +30,7 @@ export interface RawOrderHistoryRow {
     amount: string;
     filled_quantity: string | null;
     status: string;
+    cancel_reason: string | null;
     asset_id: string;
     name: string;
     symbol: string;
@@ -468,6 +469,7 @@ export class PortfolioRepository extends Repository<Portfolio> {
         const dataQuery = `
             SELECT o.id, o.side::text, o.type::text as order_type, o.rate,
                    o.quantity as amount, o.filled_quantity, o.status::text,
+                   o.cancel_reason::text,
                    a.id as asset_id, a.name, a.symbol, a.image_url,
                    COALESCE(a.decimals, 0) as decimals, a.token_address,
                    (
@@ -568,6 +570,7 @@ export class PortfolioRepository extends Repository<Portfolio> {
         const dataQuery = `
             SELECT o.id, o.side::text, o.type::text as order_type, o.rate,
                    o.quantity as amount, o.filled_quantity, o.status::text,
+                   o.cancel_reason::text,
                    a.id as asset_id, a.name, a.symbol, a.image_url,
                    COALESCE(a.decimals, 0) as decimals, a.token_address,
                    m.maturity,

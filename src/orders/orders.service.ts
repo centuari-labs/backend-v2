@@ -12,6 +12,7 @@ import { PriceService } from "../price/price.service";
 import { TokensService } from "../tokens/tokens.service";
 import { NATS_SUBJECTS } from "./constants/nats-subjects.constants";
 import {
+    CancelReason,
     OrderSide,
     OrderStatus,
     OrderType,
@@ -448,6 +449,7 @@ export class OrdersService {
         }
 
         order.status = OrderStatus.Cancelled;
+        order.cancelReason = CancelReason.UserCancelled;
 
         const updatedOrder = await this.orderRepository.save(order);
 

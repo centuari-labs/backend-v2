@@ -7,6 +7,7 @@ import {
     UpdateDateColumn,
 } from "typeorm";
 import {
+    CancelReason,
     OrderSide,
     OrderType,
     OrderStatus,
@@ -63,6 +64,14 @@ export class Order {
     })
     @Index()
     status: OrderStatus;
+
+    @Column({
+        name: "cancel_reason",
+        type: "enum",
+        enum: CancelReason,
+        nullable: true,
+    })
+    cancelReason: CancelReason | null;
 
     @Column({ name: "auto_rollover", type: "boolean", default: false })
     autoRollover: boolean;

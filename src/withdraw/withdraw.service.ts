@@ -1,6 +1,7 @@
 import {
     BadRequestException,
     Injectable,
+    InternalServerErrorException,
     Logger,
     NotFoundException,
 } from "@nestjs/common";
@@ -15,6 +16,7 @@ import { OrderRepository } from "../orders/repositories/order.repository";
 import { HEALTH_FACTOR_NO_DEBT } from "../portfolio/helpers/health-factor.helpers";
 import { treasuryAbi } from "../../abis/treasury";
 import { humanToBaseUnits } from "../common/utils/number.utils";
+import { parseContractError } from "../common/utils/contract-errors.utils";
 import type {
     WithdrawRequestDto,
     WithdrawResponseDto,
@@ -199,9 +201,23 @@ export class WithdrawService {
                 txHash: receipt.transactionHash,
                 status: "success",
             };
-        } catch (error) {
+        } catch (error: any) {
             await queryRunner.rollbackTransaction();
-            throw error;
+            if (
+                error instanceof BadRequestException ||
+                error instanceof NotFoundException
+            ) {
+                throw error;
+            }
+            this.logger.error(`Withdraw contract call failed: ${error.message}`);
+            const parsed = parseContractError(error.message, {
+                InsufficientFunds:
+                    "Insufficient balance in Treasury to withdraw this amount.",
+            });
+            if (parsed.isKnown) {
+                throw new BadRequestException(parsed.message);
+            }
+            throw new InternalServerErrorException(parsed.message);
         } finally {
             await queryRunner.release();
         }

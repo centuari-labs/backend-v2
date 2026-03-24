@@ -17,6 +17,7 @@ import { parseUnits } from "viem";
 import type { TransactionReceipt } from "viem";
 import { centuariAbi } from "../../abis/centuari";
 import { uuidToBytes32, portfolioUuidFor } from "../common/utils/uuid.utils";
+import { parseContractError } from "../common/utils/contract-errors.utils";
 import { PortfolioRepository } from "./repositories/portfolio.repository";
 
 @Injectable()
@@ -178,14 +179,14 @@ export class RepayService {
             return receipt.transactionHash;
         } catch (error: any) {
             this.logger.error(`Contract call failed: ${error.message}`);
-            if (error.message.includes("InvalidAmount")) {
-                throw new BadRequestException(
-                    "Contract reverted: InvalidAmount. Check maturity and amount.",
-                );
+            const parsed = parseContractError(error.message, {
+                InsufficientFunds:
+                    "Insufficient balance in Treasury. Please deposit tokens before repaying.",
+            });
+            if (parsed.isKnown) {
+                throw new BadRequestException(parsed.message);
             }
-            throw new InternalServerErrorException(
-                `Blockchain transaction failed: ${error.message}`,
-            );
+            throw new InternalServerErrorException(parsed.message);
         }
     }
 

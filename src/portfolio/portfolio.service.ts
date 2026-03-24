@@ -39,6 +39,7 @@ import { PortfolioRepository } from "./repositories/portfolio.repository";
 import { OrderRepository } from "../orders/repositories/order.repository";
 import { MarketRepositories } from "../market/repository/market.repository";
 import { portfolioUuidFor, uuidToBytes32 } from "../common/utils/uuid.utils";
+import { parseContractError } from "../common/utils/contract-errors.utils";
 import {
     calculateUsdAmount,
     createPaginatedResponse,
@@ -1064,19 +1065,11 @@ export class PortfolioService {
             return receipt;
         } catch (error: any) {
             this.logger.error(`Contract call failed: ${error.message}`);
-            if (error.message.includes("NotMatured")) {
-                throw new BadRequestException(
-                    "Contract reverted: position has not matured yet.",
-                );
+            const parsed = parseContractError(error.message);
+            if (parsed.isKnown) {
+                throw new BadRequestException(parsed.message);
             }
-            if (error.message.includes("InsufficientBalance")) {
-                throw new BadRequestException(
-                    "Contract reverted: insufficient CBT balance.",
-                );
-            }
-            throw new InternalServerErrorException(
-                `Blockchain transaction failed: ${error.message}`,
-            );
+            throw new InternalServerErrorException(parsed.message);
         }
     }
 

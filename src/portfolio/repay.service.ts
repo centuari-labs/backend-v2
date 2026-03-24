@@ -48,45 +48,37 @@ export class RepayService {
         walletAddress: string,
         privyUserId: string,
     ): Promise<RepayResponseDto> {
-        const { positionId, amount } = dto;
+        const { marketId, amount } = dto;
 
         const accountId = await this.orderRepository
             .getOrCreateAccount(walletAddress, privyUserId)
             .then((a) => a.id);
 
-        const position =
-            await this.repayRepository.getBorrowPositionById(
-                positionId,
-                accountId,
-            );
-        if (!position) {
-            throw new NotFoundException("Borrow position not found");
-        }
-
-        const market = await this.repayRepository.getMarketWithAsset(
-            position.marketId,
-        );
+        const market =
+            await this.repayRepository.getMarketWithAsset(marketId);
         if (!market) throw new NotFoundException("Market not found");
 
-        const positionDebt = BigInt(position.debt);
+        // Sum total debt across all positions for this (account, market)
+        const totalDebtStr =
+            await this.repayRepository.getUserTotalDebt(accountId, marketId);
+        const totalDebt = BigInt(totalDebtStr);
+        if (totalDebt <= 0n) {
+            throw new NotFoundException("No active borrow positions found");
+        }
+
         const repayAmountBaseUnits = this.parseRepayAmount(
             amount,
             market.decimals ?? 18,
-            positionDebt,
+            totalDebt,
         );
 
-        const maturityDate = market.maturity ? new Date(market.maturity) : null;
-        const maturityUnix = maturityDate
-            ? Math.floor(maturityDate.getTime() / 1000)
-            : 0;
-
         // Convert DB market UUID to on-chain bytes32 (matches settlement engine encoding)
-        const marketIdBytes32 = uuidToBytes32(position.marketId);
+        const marketIdBytes32 = uuidToBytes32(marketId);
 
         this.logger.log(
-            `Repay diagnostics: marketId=${position.marketId}, marketIdBytes32=${marketIdBytes32}, ` +
+            `Repay diagnostics: marketId=${marketId}, marketIdBytes32=${marketIdBytes32}, ` +
                 `token=${market.tokenAddress}, borrower=${walletAddress}, ` +
-                `amount=${repayAmountBaseUnits}, positionDebt=${positionDebt}, decimals=${market.decimals}`,
+                `amount=${repayAmountBaseUnits}, totalDebt=${totalDebt}, decimals=${market.decimals}`,
         );
 
         // Pre-check: verify on-chain debt exists before attempting repay
@@ -95,20 +87,17 @@ export class RepayService {
             walletAddress,
         );
         this.logger.log(
-            `On-chain debt check: onChainDebt=${onChainDebt}, dbDebt=${positionDebt}`,
+            `On-chain debt check: onChainDebt=${onChainDebt}, dbDebt=${totalDebt}`,
         );
         if (onChainDebt === 0n) {
-            // On-chain debt is 0 but DB has debt — a previous repay succeeded
-            // on-chain but the DB wasn't updated. Sync the DB now.
-            if (positionDebt > 0n) {
+            // On-chain debt is 0 but DB has debt — sync the DB now.
+            if (totalDebt > 0n) {
                 this.logger.warn(
-                    `On-chain debt is 0 but DB debt is ${positionDebt}. Syncing DB to match on-chain state.`,
+                    `On-chain debt is 0 but DB debt is ${totalDebt}. Syncing DB to match on-chain state.`,
                 );
-                await this.updateDatabaseState(
-                    positionId,
-                    positionDebt,
-                    "sync-from-chain",
+                await this.syncAllPositionsToZero(
                     accountId,
+                    marketId,
                     walletAddress,
                     market.assetId,
                     market.tokenAddress,
@@ -127,10 +116,10 @@ export class RepayService {
         );
 
         await this.updateDatabaseState(
-            positionId,
             repayAmountBaseUnits,
             txHash,
             accountId,
+            marketId,
             walletAddress,
             market.assetId,
             market.tokenAddress,
@@ -214,35 +203,41 @@ export class RepayService {
         return debt;
     }
 
+    /**
+     * FIFO deduction: deduct repay amount from oldest positions first.
+     */
     private async updateDatabaseState(
-        positionId: string,
         repayAmount: bigint,
         txHash: string,
         accountId: string,
+        marketId: string,
         walletAddress: string,
         assetId: string,
         tokenAddress: string,
     ): Promise<void> {
         try {
             await this.dataSource.transaction(async (manager) => {
-                const position =
-                    await this.repayRepository.getBorrowPositionById(
-                        positionId,
+                const positions =
+                    await this.repayRepository.getBorrowPositions(
                         accountId,
+                        marketId,
                         manager,
                     );
-                if (!position) {
-                    throw new NotFoundException("Borrow position not found");
+
+                let remaining = repayAmount;
+                for (const pos of positions) {
+                    if (remaining <= 0n) break;
+                    const posDebt = BigInt(pos.debt);
+                    const deduction =
+                        remaining >= posDebt ? posDebt : remaining;
+                    const newDebt = posDebt - deduction;
+                    await this.repayRepository.updateBorrowPositionDebt(
+                        manager,
+                        pos.id,
+                        newDebt.toString(),
+                    );
+                    remaining -= deduction;
                 }
-
-                const debt = BigInt(position.debt);
-                const newDebt = debt - repayAmount;
-
-                await this.repayRepository.updateBorrowPositionDebt(
-                    manager,
-                    positionId,
-                    newDebt.toString(),
-                );
             });
 
             // Deduct repay amount from portfolio balance (mirrors on-chain Treasury.repay)
@@ -268,5 +263,50 @@ export class RepayService {
                 "Repay finalized on-chain but failed local state update.",
             );
         }
+    }
+
+    /**
+     * Sync all borrow positions for a market to zero debt when on-chain debt is 0.
+     */
+    private async syncAllPositionsToZero(
+        accountId: string,
+        marketId: string,
+        walletAddress: string,
+        assetId: string,
+        tokenAddress: string,
+    ): Promise<void> {
+        await this.dataSource.transaction(async (manager) => {
+            const positions =
+                await this.repayRepository.getBorrowPositions(
+                    accountId,
+                    marketId,
+                    manager,
+                );
+            let totalSynced = 0n;
+            for (const pos of positions) {
+                const posDebt = BigInt(pos.debt);
+                if (posDebt > 0n) {
+                    totalSynced += posDebt;
+                    await this.repayRepository.updateBorrowPositionDebt(
+                        manager,
+                        pos.id,
+                        "0",
+                    );
+                }
+            }
+
+            if (totalSynced > 0n) {
+                const portfolioId = portfolioUuidFor(
+                    walletAddress.toLowerCase(),
+                    tokenAddress.toLowerCase(),
+                );
+                await this.portfolioRepository.upsertPortfolio(
+                    portfolioId,
+                    accountId,
+                    assetId,
+                    (-totalSynced).toString(),
+                );
+            }
+        });
     }
 }

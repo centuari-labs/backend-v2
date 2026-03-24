@@ -751,6 +751,7 @@ export class PortfolioService {
 
             return {
                 id: position.position_id,
+                marketId: position.market_id,
                 symbol: position.symbol,
                 name: position.name,
                 shares: quantityHuman,
@@ -967,23 +968,24 @@ export class PortfolioService {
         walletAddress: string,
         privyUserId: string,
     ): Promise<WithdrawLendPositionResponseDto> {
-        const { positionId } = dto;
+        const { marketId } = dto;
 
         const accountId = await this.orderRepository
             .getOrCreateAccount(walletAddress, privyUserId)
             .then((a) => a.id);
 
-        const position =
-            await this.portfolioRepository.getLendPositionById(
-                positionId,
+        // Fetch all lend positions for this (account, market)
+        const positions =
+            await this.portfolioRepository.getLendPositions(
                 accountId,
+                marketId,
             );
-        if (!position) {
-            throw new NotFoundException("Lend position not found");
+        if (!positions || positions.length === 0) {
+            throw new NotFoundException("No active lend positions found");
         }
 
         const market = await this.marketRepository.getMarketWithAsset(
-            position.lp_market_id,
+            marketId,
         );
         if (!market) {
             throw new NotFoundException("Market not found");
@@ -1000,33 +1002,37 @@ export class PortfolioService {
             throw new BadRequestException("Position has not matured yet");
         }
 
-        const sharesStr = position.lp_shares.toString().split(".")[0];
-        const shares = BigInt(sharesStr);
+        // Sum total shares across all positions for the on-chain call
+        let totalShares = 0n;
+        for (const pos of positions) {
+            const sharesStr = pos.lp_shares.toString().split(".")[0];
+            totalShares += BigInt(sharesStr);
+        }
 
-        if (shares <= 0n) {
+        if (totalShares <= 0n) {
             throw new BadRequestException("No shares available for withdrawal");
         }
 
         // Convert DB market UUID to on-chain bytes32 (matches settlement engine encoding)
-        const marketIdBytes32 = uuidToBytes32(position.lp_market_id);
+        const marketIdBytes32 = uuidToBytes32(marketId);
 
         this.logger.log(
-            `Executing withdrawLendPosition: marketId=${position.lp_market_id}, marketIdBytes32=${marketIdBytes32}, token=${market.tokenAddress}, maturity=${maturityUnix}, cbtAmount=${shares}`,
+            `Executing withdrawLendPosition: marketId=${marketId}, marketIdBytes32=${marketIdBytes32}, token=${market.tokenAddress}, maturity=${maturityUnix}, cbtAmount=${totalShares}`,
         );
 
         const receipt = await this.executeBlockchainWithdraw(
             marketIdBytes32,
             market.tokenAddress,
             BigInt(maturityUnix),
-            shares,
+            totalShares,
         );
 
         const { amountWithdrawn } = this.parseWithdrawEvent(receipt);
 
-        await this.updateDatabaseState(
-            positionId,
+        await this.updateWithdrawDatabaseState(
             receipt,
             accountId,
+            marketId,
             market.assetId,
             walletAddress,
             market.tokenAddress,
@@ -1091,10 +1097,13 @@ export class PortfolioService {
         }
     }
 
-    private async updateDatabaseState(
-        positionId: string,
+    /**
+     * Zero out all lend positions for the (account, market) after successful on-chain withdraw.
+     */
+    private async updateWithdrawDatabaseState(
         receipt: TransactionReceipt,
         accountId: string,
+        marketId: string,
         assetId: string,
         walletAddress: string,
         tokenAddress: string,
@@ -1103,17 +1112,17 @@ export class PortfolioService {
         const txHash = receipt.transactionHash;
         try {
             await this.dataSource.transaction(async (manager) => {
-                const lockedPosition =
-                    await this.portfolioRepository.getLendPositionById(
-                        positionId,
+                const positions =
+                    await this.portfolioRepository.getLendPositions(
                         accountId,
+                        marketId,
                         manager,
                     );
 
-                if (lockedPosition) {
+                for (const pos of positions) {
                     await this.portfolioRepository.updateLendPositionShares(
                         manager,
-                        lockedPosition.lp_id,
+                        pos.lp_id,
                         "0",
                     );
                 }

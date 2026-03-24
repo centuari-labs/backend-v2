@@ -16,6 +16,7 @@ import { RepayRequestDto, RepayResponseDto } from "./dto/repay.dto";
 import { parseUnits } from "viem";
 import type { TransactionReceipt } from "viem";
 import { centuariAbi } from "../../abis/centuari";
+import { uuidToBytes32 } from "../common/utils/uuid.utils";
 
 @Injectable()
 export class RepayService {
@@ -77,14 +78,34 @@ export class RepayService {
             ? Math.floor(maturityDate.getTime() / 1000)
             : 0;
 
+        // Convert DB market UUID to on-chain bytes32 (matches settlement engine encoding)
+        const marketIdBytes32 = uuidToBytes32(position.marketId);
+
         this.logger.log(
-            `Executing repay: token=${market.tokenAddress}, user=${walletAddress}, amount=${repayAmountBaseUnits}, maturity=${maturityUnix}`,
+            `Repay diagnostics: marketId=${position.marketId}, marketIdBytes32=${marketIdBytes32}, ` +
+                `token=${market.tokenAddress}, borrower=${walletAddress}, ` +
+                `amount=${repayAmountBaseUnits}, positionDebt=${positionDebt}, decimals=${market.decimals}`,
         );
 
+        // Pre-check: verify on-chain debt exists before attempting repay
+        const onChainDebt = await this.getOnChainDebt(
+            marketIdBytes32,
+            walletAddress,
+        );
+        this.logger.log(
+            `On-chain debt check: onChainDebt=${onChainDebt}, dbDebt=${positionDebt}`,
+        );
+        if (onChainDebt === 0n) {
+            throw new BadRequestException(
+                `No on-chain debt found. marketId=${position.marketId}, ` +
+                    `token=${market.tokenAddress}, borrower=${walletAddress}`,
+            );
+        }
+
         const txHash = await this.executeBlockchainRepay(
+            marketIdBytes32,
             walletAddress,
             market.tokenAddress,
-            BigInt(maturityUnix),
             repayAmountBaseUnits,
         );
 
@@ -130,9 +151,9 @@ export class RepayService {
     }
 
     private async executeBlockchainRepay(
+        marketId: `0x${string}`,
         borrower: string,
         token: string,
-        maturity: bigint,
         amount: bigint,
     ): Promise<string> {
         try {
@@ -142,7 +163,7 @@ export class RepayService {
                 this.centuariAddress,
                 centuariAbi,
                 "repay",
-                [borrower, token, maturity, amount],
+                [marketId, borrower, token, amount],
                 { waitForReceipt: true },
             )) as TransactionReceipt;
             return receipt.transactionHash;
@@ -157,6 +178,20 @@ export class RepayService {
                 `Blockchain transaction failed: ${error.message}`,
             );
         }
+    }
+
+    private async getOnChainDebt(
+        marketId: `0x${string}`,
+        borrower: string,
+    ): Promise<bigint> {
+        const debt = await this.viemService.readContract<bigint>(
+            this.chainId,
+            this.centuariAddress,
+            centuariAbi,
+            "getBorrowPosition",
+            [marketId, borrower],
+        );
+        return debt;
     }
 
     private async updateDatabaseState(

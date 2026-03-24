@@ -38,7 +38,7 @@ import {
 import { PortfolioRepository } from "./repositories/portfolio.repository";
 import { OrderRepository } from "../orders/repositories/order.repository";
 import { MarketRepositories } from "../market/repository/market.repository";
-import { portfolioUuidFor } from "../common/utils/uuid.utils";
+import { portfolioUuidFor, uuidToBytes32 } from "../common/utils/uuid.utils";
 import {
     calculateUsdAmount,
     createPaginatedResponse,
@@ -1005,11 +1005,15 @@ export class PortfolioService {
             throw new BadRequestException("No shares available for withdrawal");
         }
 
+        // Convert DB market UUID to on-chain bytes32 (matches settlement engine encoding)
+        const marketIdBytes32 = uuidToBytes32(position.lp_market_id);
+
         this.logger.log(
-            `Executing withdrawLendPosition: token=${market.tokenAddress}, maturity=${maturityUnix}, cbtAmount=${shares}`,
+            `Executing withdrawLendPosition: marketId=${position.lp_market_id}, marketIdBytes32=${marketIdBytes32}, token=${market.tokenAddress}, maturity=${maturityUnix}, cbtAmount=${shares}`,
         );
 
         const receipt = await this.executeBlockchainWithdraw(
+            marketIdBytes32,
             market.tokenAddress,
             BigInt(maturityUnix),
             shares,
@@ -1034,6 +1038,7 @@ export class PortfolioService {
     }
 
     private async executeBlockchainWithdraw(
+        marketId: `0x${string}`,
         loanToken: string,
         maturity: bigint,
         cbtAmount: bigint,
@@ -1045,7 +1050,7 @@ export class PortfolioService {
                 this.centuariAddress,
                 centuariAbi,
                 "withdrawLendPosition",
-                [loanToken, maturity, cbtAmount],
+                [marketId, loanToken, maturity, cbtAmount],
                 { waitForReceipt: true },
             )) as TransactionReceipt;
             return receipt;

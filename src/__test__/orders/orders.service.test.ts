@@ -71,7 +71,9 @@ describe("OrdersService", () => {
             saveOrderWithMarkets: jest.fn(),
             getOrCreateAccount: jest.fn(),
             getOpenOrders: jest.fn(),
+            getOrderById: jest.fn(),
             findAccountByWallet: jest.fn(),
+            hasCounterpartyOrders: jest.fn().mockResolvedValue(true),
             getTotalOpenQuantity: jest.fn().mockResolvedValue(0n),
             getOpenBorrowOrders: jest.fn().mockResolvedValue([]),
         };
@@ -106,6 +108,9 @@ describe("OrdersService", () => {
                 .mockResolvedValue({ healthFactor: 2 }),
             getAssetBalance: jest.fn().mockResolvedValue("1000000000"),
             checkAvailableBalanceForLend: jest
+                .fn()
+                .mockResolvedValue(undefined),
+            checkAvailableBalanceForBorrowFees: jest
                 .fn()
                 .mockResolvedValue(undefined),
         };
@@ -836,7 +841,7 @@ describe("OrdersService", () => {
                 status: OrderStatus.Cancelled,
             };
 
-            orderRepository.getOpenOrders.mockResolvedValue([openOrder]);
+            orderRepository.getOrderById.mockResolvedValue(openOrder);
             orderRepository.findAccountByWallet.mockResolvedValue({
                 id: mockAccountId,
             } as any);
@@ -864,7 +869,7 @@ describe("OrdersService", () => {
                 status: OrderStatus.Cancelled,
             };
 
-            orderRepository.getOpenOrders.mockResolvedValue([partialOrder]);
+            orderRepository.getOrderById.mockResolvedValue(partialOrder);
             orderRepository.findAccountByWallet.mockResolvedValue({
                 id: mockAccountId,
             } as any);
@@ -880,7 +885,7 @@ describe("OrdersService", () => {
         });
 
         it("should throw NotFoundException for non-existent order", async () => {
-            orderRepository.getOpenOrders.mockResolvedValue([]);
+            orderRepository.getOrderById.mockResolvedValue(null);
 
             await expect(
                 service.cancelOrder("non-existent-uuid", mockWalletAddress),
@@ -894,7 +899,7 @@ describe("OrdersService", () => {
                 status: OrderStatus.Open,
             });
 
-            orderRepository.getOpenOrders.mockResolvedValue([otherWalletOrder]);
+            orderRepository.getOrderById.mockResolvedValue(otherWalletOrder);
             orderRepository.findAccountByWallet.mockResolvedValue({
                 id: mockAccountId,
             } as any);
@@ -910,7 +915,7 @@ describe("OrdersService", () => {
                 status: OrderStatus.Filled,
             });
 
-            orderRepository.getOpenOrders.mockResolvedValue([filledOrder]);
+            orderRepository.getOrderById.mockResolvedValue(filledOrder);
             orderRepository.findAccountByWallet.mockResolvedValue({
                 id: mockAccountId,
             } as any);
@@ -926,7 +931,7 @@ describe("OrdersService", () => {
                 status: OrderStatus.Cancelled,
             });
 
-            orderRepository.getOpenOrders.mockResolvedValue([cancelledOrder]);
+            orderRepository.getOrderById.mockResolvedValue(cancelledOrder);
             orderRepository.findAccountByWallet.mockResolvedValue({
                 id: mockAccountId,
             } as any);
@@ -942,7 +947,7 @@ describe("OrdersService", () => {
                 status: OrderStatus.Open,
             });
 
-            orderRepository.getOpenOrders.mockResolvedValue([openOrder]);
+            orderRepository.getOrderById.mockResolvedValue(openOrder);
             orderRepository.findAccountByWallet.mockResolvedValue({
                 id: mockAccountId,
             } as any);
@@ -1002,7 +1007,53 @@ describe("OrdersService", () => {
             expect(result.quantity).toBe("1500000000"); // 1500 * 10^6
             expect(result.rate).toBe(600);
             expect(result.status).toBe(OrderStatus.Open);
+            expect(result.settlementFee).toBe("50000"); // 1500 * 0.01% = 0.15, capped to 0.05
             expect(natsService.publish).toHaveBeenCalled();
+        });
+
+        it("should maintain PartiallyFilled status if order was already partially filled", async () => {
+            const existingOrder = createMockOrder({
+                status: OrderStatus.PartiallyFilled,
+                filledQuantity: "500000000", // 500
+            });
+
+            orderRepository.findAccountByWallet.mockResolvedValue({ id: mockAccountId } as any);
+            tokensService.getTokenDecimalsByAssetId.mockResolvedValue(6);
+            
+            const mockRepo = {
+                findOne: jest.fn().mockResolvedValue(existingOrder),
+                save: jest.fn().mockImplementation((v) => Promise.resolve(v)),
+                delete: jest.fn().mockResolvedValue({}),
+            };
+            (dataSource.transaction as jest.Mock).mockImplementationOnce(async (cb) => {
+                return cb({ getRepository: jest.fn().mockReturnValue(mockRepo) });
+            });
+
+            const result = await service.updateOrder(existingOrder.id, mockWalletAddress, updateDto);
+
+            expect(result.status).toBe(OrderStatus.PartiallyFilled);
+            expect(BigInt(result.quantity)).toBe(1500000000n);
+        });
+
+        it("should throw BadRequestException if new quantity is less than or equal to filled quantity", async () => {
+            const existingOrder = createMockOrder({
+                status: OrderStatus.PartiallyFilled,
+                filledQuantity: "2000000000", // 2000
+            });
+
+            orderRepository.findAccountByWallet.mockResolvedValue({ id: mockAccountId } as any);
+            tokensService.getTokenDecimalsByAssetId.mockResolvedValue(6);
+            
+            const mockRepo = {
+                findOne: jest.fn().mockResolvedValue(existingOrder),
+            };
+            (dataSource.transaction as jest.Mock).mockImplementationOnce(async (cb) => {
+                return cb({ getRepository: jest.fn().mockReturnValue(mockRepo) });
+            });
+
+            await expect(
+                service.updateOrder(existingOrder.id, mockWalletAddress, updateDto),
+            ).rejects.toThrow("New quantity must be greater than the already filled quantity");
         });
 
         it("should throw ForbiddenException if user does not own the order", async () => {

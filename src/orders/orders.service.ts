@@ -470,13 +470,12 @@ export class OrdersService {
             const orderRepo = manager.getRepository(Order);
             const orderMarketRepo = manager.getRepository(OrderMarket);
 
-            const order = await this.orderRepository.getOrderById(orderId);
+            const order = await orderRepo.findOne({ where: { id: orderId } });
             if (!order) {
                 throw new NotFoundException(`Order with ID ${orderId} not found`);
             }
 
-            const account =
-                await this.orderRepository.findAccountByWallet(walletAddress);
+            const account = await this.orderRepository.findAccountByWallet(walletAddress);
             if (!account || order.accountId !== account.id) {
                 throw new ForbiddenException("You do not own this order");
             }
@@ -490,35 +489,40 @@ export class OrdersService {
                 );
             }
 
-            const decimals =
-                await this.tokensService.getTokenDecimalsByAssetId(
-                    order.assetId,
-                );
+            const decimals = await this.tokensService.getTokenDecimalsByAssetId(order.assetId);
             if (decimals == null) {
                 throw new BadRequestException("Token decimals not configured");
             }
 
             const newQuantityBaseUnits = humanToBaseUnits(dto.amount, decimals);
+            const filledQty = BigInt(order.filledQuantity);
+
+            if (BigInt(newQuantityBaseUnits) <= filledQty) {
+                throw new BadRequestException(
+                    "New quantity must be greater than the already filled quantity",
+                );
+            }
+
+            const settlementFee = await this.computeSettlementFee(
+                order.assetId,
+                dto.amount,
+                decimals,
+            );
 
             if (order.side === OrderSide.Borrow) {
-                const assetPrice = await this.priceService.getPrice(
-                    order.assetId,
-                );
+                const assetPrice = await this.priceService.getPrice(order.assetId);
                 if (assetPrice == null || assetPrice <= 0) {
-                    throw new BadRequestException(
-                        "Price not available for this asset",
-                    );
+                    throw new BadRequestException("Price not available for this asset");
                 }
                 const newOrderUsd = Number(dto.amount) * assetPrice;
 
-                const hfResult =
-                    await this.portfolioService.getHealthFactorForAccount(
-                        order.accountId,
-                        {
-                            additionalBorrowUsd: newOrderUsd,
-                            includeOpenOrders: true,
-                        },
-                    );
+                const hfResult = await this.portfolioService.getHealthFactorForAccount(
+                    order.accountId,
+                    {
+                        additionalBorrowUsd: newOrderUsd,
+                        includeOpenOrders: true,
+                    },
+                );
 
                 if (
                     hfResult.healthFactor !== HEALTH_FACTOR_NO_DEBT &&
@@ -532,9 +536,10 @@ export class OrdersService {
             }
 
             order.quantity = newQuantityBaseUnits;
+            order.settlementFee = settlementFee;
             order.rate = dto.rate;
             order.autoRollover = dto.autoRollover ?? order.autoRollover;
-            order.status = OrderStatus.Open && OrderStatus.PartiallyFilled;
+            order.status = filledQty > 0n ? OrderStatus.PartiallyFilled : OrderStatus.Open;
 
             const updatedOrder = await orderRepo.save(order);
 

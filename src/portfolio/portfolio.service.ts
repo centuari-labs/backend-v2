@@ -752,6 +752,7 @@ export class PortfolioService {
 
             return {
                 id: position.position_id,
+                assetId: position.asset_id,
                 marketId: position.market_id,
                 symbol: position.symbol,
                 name: position.name,

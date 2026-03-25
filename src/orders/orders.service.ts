@@ -10,6 +10,7 @@ import { NatsService } from "../core/nats/nats.service";
 import { MarketRepositories } from "../market/repository/market.repository";
 import { PriceService } from "../price/price.service";
 import { TokensService } from "../tokens/tokens.service";
+import { DataSource } from "typeorm";
 import { NATS_SUBJECTS } from "./constants/nats-subjects.constants";
 import {
     OrderSide,
@@ -25,6 +26,8 @@ import type { CreateBorrowMarketOrderDto } from "./dto/create-borrow-market-orde
 import type { CreateLendLimitOrderDto } from "./dto/create-lend-limit-order.dto";
 import type { CreateLendMarketOrderDto } from "./dto/create-lend-market-order.dto";
 import { OrderResponse } from "./dto/order-response.dto";
+import { UpdateOrderDto } from "./dto/update-order.dto";
+import { OrderMarket } from "./entities/order-market.entity";
 import { Order } from "./entities/order.entity";
 import {
     toPercentage,
@@ -54,6 +57,7 @@ export class OrdersService {
         private readonly priceService: PriceService,
         private readonly marketRepository: MarketRepositories,
         private readonly portfolioService: PortfolioService,
+        private readonly dataSource: DataSource,
     ) { }
 
     async getOrCreateAccount(
@@ -457,6 +461,102 @@ export class OrdersService {
         return updatedOrder;
     }
 
+    async updateOrder(
+        orderId: string,
+        walletAddress: string,
+        dto: UpdateOrderDto,
+    ): Promise<Order> {
+        return this.dataSource.transaction(async (manager) => {
+            const orderRepo = manager.getRepository(Order);
+            const orderMarketRepo = manager.getRepository(OrderMarket);
+
+            const order = await this.orderRepository.getOrderById(orderId);
+            if (!order) {
+                throw new NotFoundException(`Order with ID ${orderId} not found`);
+            }
+
+            const account =
+                await this.orderRepository.findAccountByWallet(walletAddress);
+            if (!account || order.accountId !== account.id) {
+                throw new ForbiddenException("You do not own this order");
+            }
+
+            if (
+                order.status !== OrderStatus.Open &&
+                order.status !== OrderStatus.PartiallyFilled
+            ) {
+                throw new BadRequestException(
+                    "Order can only be updated when status is open or partially filled",
+                );
+            }
+
+            const decimals =
+                await this.tokensService.getTokenDecimalsByAssetId(
+                    order.assetId,
+                );
+            if (decimals == null) {
+                throw new BadRequestException("Token decimals not configured");
+            }
+
+            const newQuantityBaseUnits = humanToBaseUnits(dto.amount, decimals);
+
+            if (order.side === OrderSide.Borrow) {
+                const assetPrice = await this.priceService.getPrice(
+                    order.assetId,
+                );
+                if (assetPrice == null || assetPrice <= 0) {
+                    throw new BadRequestException(
+                        "Price not available for this asset",
+                    );
+                }
+                const newOrderUsd = Number(dto.amount) * assetPrice;
+
+                const hfResult =
+                    await this.portfolioService.getHealthFactorForAccount(
+                        order.accountId,
+                        {
+                            additionalBorrowUsd: newOrderUsd,
+                            includeOpenOrders: true,
+                        },
+                    );
+
+                if (
+                    hfResult.healthFactor !== HEALTH_FACTOR_NO_DEBT &&
+                    Number.isFinite(hfResult.healthFactor) &&
+                    hfResult.healthFactor < MIN_HEALTH_FACTOR
+                ) {
+                    throw new BadRequestException(
+                        "Update would reduce health factor below 1",
+                    );
+                }
+            }
+
+            order.quantity = newQuantityBaseUnits;
+            order.rate = dto.rate;
+            order.autoRollover = dto.autoRollover ?? order.autoRollover;
+            order.status = OrderStatus.Open && OrderStatus.PartiallyFilled;
+
+            const updatedOrder = await orderRepo.save(order);
+
+            await orderMarketRepo.delete({ orderId });
+            for (const marketId of dto.marketIds) {
+                await orderMarketRepo.save({
+                    orderId: updatedOrder.id,
+                    marketId,
+                });
+            }
+
+            const engineOrder = await this.buildMatchingEngineOrder(
+                updatedOrder,
+                dto,
+                walletAddress,
+            );
+            await this.natsService.publish(NATS_SUBJECTS.UPDATE, engineOrder);
+
+            return updatedOrder;
+        });
+    }
+
     private async computeSettlementFee(
         assetId: string,
         amountHuman: string,
@@ -577,7 +677,8 @@ export class OrdersService {
             | CreateLendMarketOrderDto
             | CreateLendLimitOrderDto
             | CreateBorrowMarketOrderDto
-            | CreateBorrowLimitOrderDto,
+            | CreateBorrowLimitOrderDto
+            | UpdateOrderDto,
         walletAddress: string,
     ): Promise<MatchingEngineOrder> {
         const token = await this.tokensService.getTokenByAssetId(order.assetId);

@@ -3,7 +3,26 @@ import { Injectable } from "@nestjs/common";
 import { DataSource, In, Repository } from "typeorm";
 import { Order } from "../entities/order.entity";
 import { OrderMarket } from "../entities/order-market.entity";
-import { OrderSide, OrderStatus } from "../constants/order.constants";
+import {
+    OrderSide,
+    OrderStatus,
+    OrderType,
+} from "../constants/order.constants";
+
+export interface OrderForTracking {
+    id: string;
+    assetId: string;
+    side: OrderSide;
+    type: OrderType;
+    rate: number;
+    quantity: string;
+    filledQuantity: string;
+    settlementFee: string;
+    accountId: string;
+    status: OrderStatus;
+    userWallet: string;
+    markets: Array<{ marketId: string; maturity: number }>;
+}
 import { Account } from "../entities/account.entity";
 
 @Injectable()
@@ -86,9 +105,7 @@ export class OrderRepository extends Repository<Order> {
                 borrow: rate.highestBorrow
                     ? Number.parseFloat(rate.highestBorrow)
                     : 0,
-                lend: rate.lowestLend
-                    ? Number.parseFloat(rate.lowestLend)
-                    : 0,
+                lend: rate.lowestLend ? Number.parseFloat(rate.lowestLend) : 0,
             });
         }
         return rateMap;
@@ -246,5 +263,105 @@ export class OrderRepository extends Repository<Order> {
             })
             .groupBy("o.assetId")
             .getRawMany();
+    }
+
+    /**
+     * Loads all active LIMIT orders for an asset with account wallet and market data.
+     * Used by the WebSocket gateway to hydrate the in-memory orderbook state.
+     */
+    async findActiveLimitOrdersForOrderbook(
+        assetId: string,
+    ): Promise<OrderForTracking[]> {
+        const rows = await this.createQueryBuilder("o")
+            .select("o.id", "id")
+            .addSelect("o.asset_id", "assetId")
+            .addSelect("o.side", "side")
+            .addSelect("o.type", "type")
+            .addSelect("o.rate", "rate")
+            .addSelect("o.quantity", "quantity")
+            .addSelect("o.filled_quantity", "filledQuantity")
+            .addSelect("o.settlement_fee", "settlementFee")
+            .addSelect("o.account_id", "accountId")
+            .addSelect("o.status", "status")
+            .addSelect("a.user_wallet", "userWallet")
+            .addSelect(
+                `json_agg(json_build_object('marketId', om.market_id, 'maturity', COALESCE(EXTRACT(EPOCH FROM m.maturity)::int, 0))) FILTER (WHERE om.market_id IS NOT NULL)`,
+                "markets",
+            )
+            .innerJoin("accounts", "a", "a.id = o.account_id")
+            .leftJoin("order_markets", "om", "om.order_id = o.id")
+            .leftJoin("markets", "m", "m.id = om.market_id")
+            .where("o.asset_id = :assetId", { assetId })
+            .andWhere("o.type = :type", { type: OrderType.Limit })
+            .andWhere("o.status IN (:...statuses)", {
+                statuses: [OrderStatus.Open, OrderStatus.PartiallyFilled],
+            })
+            .groupBy("o.id")
+            .addGroupBy("a.user_wallet")
+            .getRawMany();
+
+        return rows.map((r) => ({
+            ...r,
+            rate: Number(r.rate),
+            markets: r.markets ?? [],
+        }));
+    }
+
+    /**
+     * Loads a single order by ID with account wallet and market data.
+     * Used by the WebSocket gateway when a status update arrives for an order not yet in memory.
+     */
+    async findOrderForTracking(
+        orderId: string,
+    ): Promise<OrderForTracking | null> {
+        const rows = await this.createQueryBuilder("o")
+            .select("o.id", "id")
+            .addSelect("o.asset_id", "assetId")
+            .addSelect("o.side", "side")
+            .addSelect("o.type", "type")
+            .addSelect("o.rate", "rate")
+            .addSelect("o.quantity", "quantity")
+            .addSelect("o.filled_quantity", "filledQuantity")
+            .addSelect("o.settlement_fee", "settlementFee")
+            .addSelect("o.account_id", "accountId")
+            .addSelect("o.status", "status")
+            .addSelect("a.user_wallet", "userWallet")
+            .addSelect(
+                `json_agg(json_build_object('marketId', om.market_id, 'maturity', COALESCE(EXTRACT(EPOCH FROM m.maturity)::int, 0))) FILTER (WHERE om.market_id IS NOT NULL)`,
+                "markets",
+            )
+            .innerJoin("accounts", "a", "a.id = o.account_id")
+            .leftJoin("order_markets", "om", "om.order_id = o.id")
+            .leftJoin("markets", "m", "m.id = om.market_id")
+            .where("o.id = :orderId", { orderId })
+            .groupBy("o.id")
+            .addGroupBy("a.user_wallet")
+            .getRawMany();
+
+        if (rows.length === 0) return null;
+
+        const r = rows[0];
+        return {
+            ...r,
+            rate: Number(r.rate),
+            markets: r.markets ?? [],
+        };
+    }
+
+    /**
+     * Returns IDs of all active LIMIT orders for a given asset.
+     * Used by the WebSocket gateway for phantom order cleanup.
+     */
+    async findActiveOrderIdsByAsset(assetId: string): Promise<string[]> {
+        const rows = await this.createQueryBuilder("o")
+            .select("o.id", "id")
+            .where("o.asset_id = :assetId", { assetId })
+            .andWhere("o.type = :type", { type: OrderType.Limit })
+            .andWhere("o.status IN (:...statuses)", {
+                statuses: [OrderStatus.Open, OrderStatus.PartiallyFilled],
+            })
+            .getRawMany();
+
+        return rows.map((r) => r.id);
     }
 }

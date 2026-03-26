@@ -1,8 +1,8 @@
 import { Test, TestingModule } from "@nestjs/testing";
 import { Server, Socket } from "socket.io";
-import { DataSource } from "typeorm";
 import { EventsGateway } from "../../../core/websocket/websocket.gateway";
 import { NatsService } from "../../../core/nats/nats.service";
+import { OrderRepository } from "../../../orders/repositories/order.repository";
 import {
     OrderSide,
     OrderStatus,
@@ -18,7 +18,14 @@ describe("EventsGateway", () => {
     let natsService: jest.Mocked<NatsService>;
     let mockServer: jest.Mocked<Server>;
     let mockClient: jest.Mocked<Socket>;
-    let mockDataSource: jest.Mocked<DataSource>;
+    let mockOrderRepository: jest.Mocked<
+        Pick<
+            OrderRepository,
+            | "findActiveLimitOrdersForOrderbook"
+            | "findOrderForTracking"
+            | "findActiveOrderIdsByAsset"
+        >
+    >;
 
     // Mock callback storage for NATS subscriptions
     const natsCallbacks = new Map<
@@ -48,9 +55,20 @@ describe("EventsGateway", () => {
             getConnection: jest.fn().mockReturnValue({}),
         };
 
-        mockDataSource = {
-            query: jest.fn().mockResolvedValue([]),
-        } as any;
+        mockOrderRepository = {
+            findActiveLimitOrdersForOrderbook: jest.fn().mockResolvedValue([]),
+            findOrderForTracking: jest.fn().mockResolvedValue(null),
+            // Return all common test order IDs as valid by default.
+            // Individual tests can override this mock when needed.
+            findActiveOrderIdsByAsset: jest
+                .fn()
+                .mockResolvedValue([
+                    "order-001",
+                    "order-002",
+                    "order-003",
+                    "order-e2e-1",
+                ]),
+        };
 
         mockServer = {
             to: jest.fn().mockReturnThis(),
@@ -72,8 +90,8 @@ describe("EventsGateway", () => {
                     useValue: mockNatsService,
                 },
                 {
-                    provide: DataSource,
-                    useValue: mockDataSource,
+                    provide: OrderRepository,
+                    useValue: mockOrderRepository,
                 },
             ],
         }).compile();
@@ -81,6 +99,10 @@ describe("EventsGateway", () => {
         gateway = module.get<EventsGateway>(EventsGateway);
         natsService = module.get(NatsService) as jest.Mocked<NatsService>;
         gateway.server = mockServer;
+    });
+
+    afterEach(() => {
+        gateway.onModuleDestroy();
     });
 
     /** Helper to create a flat order creation message (matches actual NATS payload) */
@@ -167,6 +189,7 @@ describe("EventsGateway", () => {
         it("should send cached orderbook when client subscribes", async () => {
             const ordersCallback = natsCallbacks.get("orders.>");
             ordersCallback!(createOrderMessage(), "orders.lend.limit");
+            await new Promise((r) => setTimeout(r, 10));
 
             await gateway.handleSubscribeOrderbook(mockClient, {
                 assetId: TEST_ASSET_ID,
@@ -180,14 +203,18 @@ describe("EventsGateway", () => {
             });
         });
 
-        it("should load from DB and send snapshot when cache is empty", async () => {
-            mockDataSource.query.mockResolvedValue([]);
+        it("should call repository when loading orders from DB", async () => {
+            mockOrderRepository.findActiveLimitOrdersForOrderbook.mockResolvedValue(
+                [],
+            );
 
             await gateway.handleSubscribeOrderbook(mockClient, {
                 assetId: TEST_ASSET_ID,
             });
 
-            expect(mockDataSource.query).toHaveBeenCalled();
+            expect(
+                mockOrderRepository.findActiveLimitOrdersForOrderbook,
+            ).toHaveBeenCalledWith(TEST_ASSET_ID);
         });
     });
 
@@ -223,9 +250,10 @@ describe("EventsGateway", () => {
         });
 
         describe("Order Creation", () => {
-            it("should broadcast orderbook update when lend limit order created", () => {
+            it("should broadcast orderbook update when lend limit order created", async () => {
                 const ordersCallback = natsCallbacks.get("orders.>");
                 ordersCallback!(createOrderMessage(), "orders.lend.limit");
+                await new Promise((r) => setTimeout(r, 10));
 
                 expect(mockServer.to).toHaveBeenCalledWith(
                     `orderbook:${TEST_ASSET_ID}`,
@@ -241,7 +269,7 @@ describe("EventsGateway", () => {
                 );
             });
 
-            it("should broadcast orderbook update when borrow limit order created", () => {
+            it("should broadcast orderbook update when borrow limit order created", async () => {
                 const ordersCallback = natsCallbacks.get("orders.>");
                 ordersCallback!(
                     createOrderMessage({
@@ -254,6 +282,7 @@ describe("EventsGateway", () => {
                     }),
                     "orders.borrow.limit",
                 );
+                await new Promise((r) => setTimeout(r, 10));
 
                 expect(mockServer.emit).toHaveBeenCalledWith(
                     "orderbook-update",
@@ -266,7 +295,7 @@ describe("EventsGateway", () => {
                 );
             });
 
-            it("should aggregate multiple orders at the same rate", () => {
+            it("should aggregate multiple orders at the same rate", async () => {
                 const ordersCallback = natsCallbacks.get("orders.>");
 
                 ordersCallback!(
@@ -278,6 +307,7 @@ describe("EventsGateway", () => {
                     }),
                     "orders.lend.limit",
                 );
+                await new Promise((r) => setTimeout(r, 10));
 
                 ordersCallback!(
                     createOrderMessage({
@@ -290,6 +320,7 @@ describe("EventsGateway", () => {
                     }),
                     "orders.lend.limit",
                 );
+                await new Promise((r) => setTimeout(r, 10));
 
                 const emitCalls = (mockServer.emit as jest.Mock).mock.calls;
                 const orderbookCalls = emitCalls.filter(
@@ -301,7 +332,7 @@ describe("EventsGateway", () => {
                 ]);
             });
 
-            it("should show multiple lend rate levels sorted descending", () => {
+            it("should show multiple lend rate levels sorted descending", async () => {
                 const ordersCallback = natsCallbacks.get("orders.>");
 
                 ordersCallback!(
@@ -313,6 +344,7 @@ describe("EventsGateway", () => {
                     }),
                     "orders.lend.limit",
                 );
+                await new Promise((r) => setTimeout(r, 10));
 
                 ordersCallback!(
                     createOrderMessage({
@@ -323,6 +355,7 @@ describe("EventsGateway", () => {
                     }),
                     "orders.lend.limit",
                 );
+                await new Promise((r) => setTimeout(r, 10));
 
                 const emitCalls = (mockServer.emit as jest.Mock).mock.calls;
                 const orderbookCalls = emitCalls.filter(
@@ -335,9 +368,10 @@ describe("EventsGateway", () => {
                 ]);
             });
 
-            it("should emit open-positions to user room for limit orders", () => {
+            it("should emit open-positions to user room for limit orders", async () => {
                 const ordersCallback = natsCallbacks.get("orders.>");
                 ordersCallback!(createOrderMessage(), "orders.lend.limit");
+                await new Promise((r) => setTimeout(r, 10));
 
                 // accountId in the gateway is set from walletAddress
                 expect(mockServer.to).toHaveBeenCalledWith(
@@ -354,7 +388,7 @@ describe("EventsGateway", () => {
                 );
             });
 
-            it("should not emit open-positions for market orders", () => {
+            it("should not emit open-positions for market orders", async () => {
                 const ordersCallback = natsCallbacks.get("orders.>");
                 ordersCallback!(
                     createOrderMessage({
@@ -365,6 +399,7 @@ describe("EventsGateway", () => {
                     }),
                     "orders.lend.market",
                 );
+                await new Promise((r) => setTimeout(r, 10));
 
                 const emitCalls = (mockServer.emit as jest.Mock).mock.calls;
                 const openPositionCalls = emitCalls.filter(
@@ -373,7 +408,7 @@ describe("EventsGateway", () => {
                 expect(openPositionCalls).toHaveLength(0);
             });
 
-            it("should exclude market orders from orderbook", () => {
+            it("should exclude market orders from orderbook", async () => {
                 const ordersCallback = natsCallbacks.get("orders.>");
                 ordersCallback!(
                     createOrderMessage({
@@ -385,6 +420,7 @@ describe("EventsGateway", () => {
                     }),
                     "orders.lend.market",
                 );
+                await new Promise((r) => setTimeout(r, 10));
 
                 const emitCalls = (mockServer.emit as jest.Mock).mock.calls;
                 const orderbookCall = emitCalls.find(
@@ -450,6 +486,7 @@ describe("EventsGateway", () => {
                     }),
                     "orders.lend.limit",
                 );
+                await new Promise((r) => setTimeout(r, 10));
 
                 (mockServer.emit as jest.Mock).mockClear();
                 mockServer.to = jest.fn().mockReturnThis();
@@ -542,9 +579,11 @@ describe("EventsGateway", () => {
                 expect(openCall[1].order.status).toBe("PARTIALLY_FILLED");
             });
 
-            it("should try loading from DB for unknown orders", async () => {
+            it("should try loading from repository for unknown orders", async () => {
                 const ordersCallback = natsCallbacks.get("orders.>");
-                mockDataSource.query.mockResolvedValue([]);
+                mockOrderRepository.findOrderForTracking.mockResolvedValue(
+                    null,
+                );
 
                 ordersCallback!(
                     {
@@ -558,13 +597,13 @@ describe("EventsGateway", () => {
 
                 await new Promise((r) => setTimeout(r, 10));
 
-                expect(mockDataSource.query).toHaveBeenCalled();
+                expect(
+                    mockOrderRepository.findOrderForTracking,
+                ).toHaveBeenCalledWith("unknown-order");
                 expect(mockServer.to).not.toHaveBeenCalled();
             });
-        });
 
-        describe("Cancel Broadcasting", () => {
-            it("should remove order from orderbook when cancelled", () => {
+            it("should eagerly remove filled orders from orderState", async () => {
                 const ordersCallback = natsCallbacks.get("orders.>");
 
                 ordersCallback!(
@@ -576,6 +615,59 @@ describe("EventsGateway", () => {
                     }),
                     "orders.lend.limit",
                 );
+                await new Promise((r) => setTimeout(r, 10));
+
+                ordersCallback!(
+                    {
+                        orderId: "order-001",
+                        status: "FILLED",
+                        remainingAmount: "0",
+                        timestamp: Date.now(),
+                    },
+                    "orders.status",
+                );
+                await new Promise((r) => setTimeout(r, 10));
+
+                // Create another order for the same asset — filled order should not reappear
+                (mockServer.emit as jest.Mock).mockClear();
+                mockServer.to = jest.fn().mockReturnThis();
+
+                ordersCallback!(
+                    createOrderMessage({
+                        orderId: "order-002",
+                        rate: 600,
+                        remainingAmount: "500000",
+                        originalAmount: "500000",
+                    }),
+                    "orders.lend.limit",
+                );
+                await new Promise((r) => setTimeout(r, 10));
+
+                const emitCalls = (mockServer.emit as jest.Mock).mock.calls;
+                const orderbookCall = emitCalls.find(
+                    (c) => c[0] === "orderbook-update",
+                );
+                // Only order-002 should be in the orderbook, order-001 was removed
+                expect(orderbookCall[1].lend).toEqual([
+                    { rate: 6, amount: "500000", orders: 1 },
+                ]);
+            });
+        });
+
+        describe("Cancel Broadcasting", () => {
+            it("should remove order from orderbook when cancelled", async () => {
+                const ordersCallback = natsCallbacks.get("orders.>");
+
+                ordersCallback!(
+                    createOrderMessage({
+                        orderId: "order-001",
+                        rate: 500,
+                        remainingAmount: "1000000",
+                        originalAmount: "1000000",
+                    }),
+                    "orders.lend.limit",
+                );
+                await new Promise((r) => setTimeout(r, 10));
 
                 (mockServer.emit as jest.Mock).mockClear();
                 mockServer.to = jest.fn().mockReturnThis();
@@ -587,12 +679,60 @@ describe("EventsGateway", () => {
                     },
                     "orders.cancel",
                 );
+                await new Promise((r) => setTimeout(r, 10));
 
                 const emitCalls = (mockServer.emit as jest.Mock).mock.calls;
                 const orderbookCall = emitCalls.find(
                     (c) => c[0] === "orderbook-update",
                 );
                 expect(orderbookCall[1].lend).toEqual([]);
+            });
+
+            it("should eagerly remove cancelled orders from orderState", async () => {
+                const ordersCallback = natsCallbacks.get("orders.>");
+
+                ordersCallback!(
+                    createOrderMessage({
+                        orderId: "order-001",
+                        rate: 500,
+                        remainingAmount: "1000000",
+                        originalAmount: "1000000",
+                    }),
+                    "orders.lend.limit",
+                );
+                await new Promise((r) => setTimeout(r, 10));
+
+                ordersCallback!(
+                    {
+                        orderId: "order-001",
+                        walletAddress: TEST_WALLET,
+                    },
+                    "orders.cancel",
+                );
+                await new Promise((r) => setTimeout(r, 10));
+
+                // Create another order — cancelled order should not reappear
+                (mockServer.emit as jest.Mock).mockClear();
+                mockServer.to = jest.fn().mockReturnThis();
+
+                ordersCallback!(
+                    createOrderMessage({
+                        orderId: "order-002",
+                        rate: 600,
+                        remainingAmount: "500000",
+                        originalAmount: "500000",
+                    }),
+                    "orders.lend.limit",
+                );
+                await new Promise((r) => setTimeout(r, 10));
+
+                const emitCalls = (mockServer.emit as jest.Mock).mock.calls;
+                const orderbookCall = emitCalls.find(
+                    (c) => c[0] === "orderbook-update",
+                );
+                expect(orderbookCall[1].lend).toEqual([
+                    { rate: 6, amount: "500000", orders: 1 },
+                ]);
             });
 
             it("should ignore cancel for unknown orders", () => {
@@ -647,6 +787,7 @@ describe("EventsGateway", () => {
                 }),
                 "orders.lend.limit",
             );
+            await new Promise((r) => setTimeout(r, 10));
 
             ordersCallback!(
                 createOrderMessage({
@@ -658,6 +799,7 @@ describe("EventsGateway", () => {
                 }),
                 "orders.lend.limit",
             );
+            await new Promise((r) => setTimeout(r, 10));
 
             // Subscribe to first asset
             await gateway.handleSubscribeOrderbook(mockClient, {
@@ -685,7 +827,7 @@ describe("EventsGateway", () => {
             );
         });
 
-        it("should broadcast to correct rooms for different assets", () => {
+        it("should broadcast to correct rooms for different assets", async () => {
             const ordersCallback = natsCallbacks.get("orders.>");
 
             ordersCallback!(
@@ -695,6 +837,7 @@ describe("EventsGateway", () => {
                 }),
                 "orders.lend.limit",
             );
+            await new Promise((r) => setTimeout(r, 10));
             expect(mockServer.to).toHaveBeenCalledWith(
                 `orderbook:${TEST_ASSET_ID}`,
             );
@@ -706,6 +849,7 @@ describe("EventsGateway", () => {
                 }),
                 "orders.lend.limit",
             );
+            await new Promise((r) => setTimeout(r, 10));
             expect(mockServer.to).toHaveBeenCalledWith(
                 `orderbook:${TEST_ASSET_ID_2}`,
             );
@@ -729,8 +873,8 @@ describe("EventsGateway", () => {
                         useValue: errorNatsService,
                     },
                     {
-                        provide: DataSource,
-                        useValue: mockDataSource,
+                        provide: OrderRepository,
+                        useValue: mockOrderRepository,
                     },
                 ],
             }).compile();
@@ -742,6 +886,8 @@ describe("EventsGateway", () => {
             await expect(
                 errorGateway.afterInit(mockServer),
             ).resolves.not.toThrow();
+
+            errorGateway.onModuleDestroy();
         });
 
         it("should handle malformed NATS messages gracefully", async () => {
@@ -755,6 +901,38 @@ describe("EventsGateway", () => {
 
             // Empty object for status update — unknown order, no crash
             expect(() => ordersCallback!({}, "orders.status")).not.toThrow();
+        });
+    });
+
+    describe("Active IDs Cache", () => {
+        beforeEach(async () => {
+            await gateway.afterInit(mockServer);
+        });
+
+        it("should cache fetchActiveOrderIds results", async () => {
+            mockOrderRepository.findActiveOrderIdsByAsset.mockResolvedValue([
+                "order-001",
+            ]);
+
+            const ordersCallback = natsCallbacks.get("orders.>");
+
+            // Create two orders for the same asset — triggers two aggregateAndBroadcast calls
+            ordersCallback!(
+                createOrderMessage({ orderId: "order-001" }),
+                "orders.lend.limit",
+            );
+            await new Promise((r) => setTimeout(r, 10));
+
+            ordersCallback!(
+                createOrderMessage({ orderId: "order-002" }),
+                "orders.lend.limit",
+            );
+            await new Promise((r) => setTimeout(r, 10));
+
+            // Repository should only be called once due to caching
+            expect(
+                mockOrderRepository.findActiveOrderIdsByAsset,
+            ).toHaveBeenCalledTimes(1);
         });
     });
 });

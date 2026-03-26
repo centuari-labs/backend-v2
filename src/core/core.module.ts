@@ -1,4 +1,4 @@
-import { Module } from "@nestjs/common";
+import { Module, forwardRef } from "@nestjs/common";
 import { DatabaseService } from "./database/database.service";
 import { NatsService } from "./nats/nats.service";
 import { PrivyService } from "./privy/privy.service";
@@ -7,9 +7,10 @@ import { AuthGuard } from "../common/guards/auth.guard";
 import { AuthStrategyFactory } from "../common/guards/strategies/auth-strategy.factory";
 import { PrivyAuthStrategy } from "../common/guards/strategies/privy-auth.strategy";
 import { EventsGateway } from "./websocket/websocket.gateway";
+import { OrdersModule } from "../orders/orders.module";
 
 @Module({
-    imports: [],
+    imports: [forwardRef(() => OrdersModule)],
     exports: [
         ViemService,
         DatabaseService,

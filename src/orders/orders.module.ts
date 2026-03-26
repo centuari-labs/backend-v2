@@ -21,7 +21,7 @@ import { OrdersWorker } from "./orders.worker";
     imports: [
         TypeOrmModule.forFeature([Order, OrderMarket, Account, Token, Market]),
         ConfigModule,
-        CoreModule,
+        forwardRef(() => CoreModule),
         PriceModule,
         TokensModule,
         forwardRef(() => MarketModule),

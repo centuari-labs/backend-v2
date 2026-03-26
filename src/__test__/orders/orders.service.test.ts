@@ -17,10 +17,10 @@ import {
     OrderType,
     OrderStatus,
 } from "../../orders/constants/order.constants";
-import { CreateLendLimitOrderDto } from "../../orders/dto/create-lend-limit-order.dto";
-import { CreateLendMarketOrderDto } from "../../orders/dto/create-lend-market-order.dto";
-import { CreateBorrowLimitOrderDto } from "../../orders/dto/create-borrow-limit-order.dto";
-import { CreateBorrowMarketOrderDto } from "../../orders/dto/create-borrow-market-order.dto";
+import {
+    CreateLimitOrderDto,
+    CreateMarketOrderDto,
+} from "../../orders/dto/create-order.dto";
 import { OrderRepository } from "../../orders/repositories/order.repository";
 import { PortfolioService } from "../../portfolio/portfolio.service";
 
@@ -161,7 +161,7 @@ describe("OrdersService", () => {
     });
 
     describe("createLendLimitOrder", () => {
-        const lendLimitDto: CreateLendLimitOrderDto = {
+        const lendLimitDto: CreateLimitOrderDto = {
             assetId: mockAssetId,
             amount: "1000",
             marketIds: ["550e8400-e29b-41d4-a716-446655440000"],
@@ -403,7 +403,7 @@ describe("OrdersService", () => {
     });
 
     describe("createLendMarketOrder", () => {
-        const lendMarketDto: CreateLendMarketOrderDto = {
+        const lendMarketDto: CreateMarketOrderDto = {
             assetId: mockAssetId,
             amount: "1000",
             marketIds: ["550e8400-e29b-41d4-a716-446655440000"],
@@ -534,7 +534,7 @@ describe("OrdersService", () => {
     });
 
     describe("createBorrowLimitOrder", () => {
-        const borrowLimitDto: CreateBorrowLimitOrderDto = {
+        const borrowLimitDto: CreateLimitOrderDto = {
             assetId: mockAssetId,
             amount: "5000",
             marketIds: ["550e8400-e29b-41d4-a716-446655440000"],
@@ -669,7 +669,7 @@ describe("OrdersService", () => {
     });
 
     describe("createBorrowMarketOrder", () => {
-        const borrowMarketDto: CreateBorrowMarketOrderDto = {
+        const borrowMarketDto: CreateMarketOrderDto = {
             assetId: mockAssetId,
             amount: "5000",
             marketIds: ["550e8400-e29b-41d4-a716-446655440000"],

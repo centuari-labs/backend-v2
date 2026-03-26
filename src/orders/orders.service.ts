@@ -21,10 +21,11 @@ import {
     MAKER_FEE_RATE_BPS,
     TAKER_FEE_RATE_BPS,
 } from "./constants/order.constants";
-import type { CreateBorrowLimitOrderDto } from "./dto/create-borrow-limit-order.dto";
-import type { CreateBorrowMarketOrderDto } from "./dto/create-borrow-market-order.dto";
-import type { CreateLendLimitOrderDto } from "./dto/create-lend-limit-order.dto";
-import type { CreateLendMarketOrderDto } from "./dto/create-lend-market-order.dto";
+import type {
+    BaseCreateOrderDto,
+    CreateLimitOrderDto,
+    CreateMarketOrderDto,
+} from "./dto/create-order.dto";
 import { OrderResponse } from "./dto/order-response.dto";
 import { Order } from "./entities/order.entity";
 import {
@@ -77,7 +78,7 @@ export class OrdersService {
     }
 
     async createLendMarketOrder(
-        dto: CreateLendMarketOrderDto,
+        dto: CreateMarketOrderDto,
         walletAddress: string,
         privyUserId: string,
     ): Promise<OrderResponse> {
@@ -110,7 +111,7 @@ export class OrdersService {
     }
 
     async createLendLimitOrder(
-        dto: CreateLendLimitOrderDto,
+        dto: CreateLimitOrderDto,
         walletAddress: string,
         privyUserId: string,
     ): Promise<OrderResponse> {
@@ -141,7 +142,7 @@ export class OrdersService {
     }
 
     async createBorrowMarketOrder(
-        dto: CreateBorrowMarketOrderDto,
+        dto: CreateMarketOrderDto,
         walletAddress: string,
         privyUserId: string,
     ): Promise<OrderResponse> {
@@ -174,7 +175,7 @@ export class OrdersService {
     }
 
     async createBorrowLimitOrder(
-        dto: CreateBorrowLimitOrderDto,
+        dto: CreateLimitOrderDto,
         walletAddress: string,
         privyUserId: string,
     ): Promise<OrderResponse> {
@@ -326,11 +327,7 @@ export class OrdersService {
 
     private async finalizeOrder(
         ctx: PreparedOrderContext,
-        dto:
-            | CreateLendMarketOrderDto
-            | CreateLendLimitOrderDto
-            | CreateBorrowMarketOrderDto
-            | CreateBorrowLimitOrderDto,
+        dto: BaseCreateOrderDto,
         orderParams: {
             side: OrderSide;
             type: OrderType;
@@ -444,11 +441,7 @@ export class OrdersService {
 
     private async mapToResponse(
         order: Order,
-        dto:
-            | CreateLendMarketOrderDto
-            | CreateLendLimitOrderDto
-            | CreateBorrowMarketOrderDto
-            | CreateBorrowLimitOrderDto,
+        dto: BaseCreateOrderDto,
         walletAddress: string,
         estimatedTradeFeeBaseUnits = "0",
     ): Promise<OrderResponse> {
@@ -495,11 +488,7 @@ export class OrdersService {
 
     private async buildMatchingEngineOrder(
         order: Order,
-        dto:
-            | CreateLendMarketOrderDto
-            | CreateLendLimitOrderDto
-            | CreateBorrowMarketOrderDto
-            | CreateBorrowLimitOrderDto,
+        dto: BaseCreateOrderDto,
         walletAddress: string,
     ): Promise<MatchingEngineOrder> {
         const token = await this.tokensService.getTokenByAssetId(order.assetId);

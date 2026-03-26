@@ -35,15 +35,11 @@ const mockOrderRepository = {
     findAccountByWallet: jest.fn(),
 };
 
-const mockConfigService = {
-    get: jest.fn((key: string) => {
-        const config: Record<string, string> = {
-            DEPOSIT_CHAIN_ID: "421614",
-            OPERATOR_PRIVATE_KEY: "0xabc123",
-            TREASURY_ADDRESS: "0xTreasury",
-        };
-        return config[key];
-    }),
+const mockChainConfig = {
+    chainId: 421614,
+    operatorPrivateKey: "0xabc123",
+    treasuryAddress: "0xTreasury",
+    centuariAddress: "",
 };
 
 describe("WithdrawService", () => {
@@ -54,21 +50,13 @@ describe("WithdrawService", () => {
         mockPortfolioRepository.manager.connection.createQueryRunner.mockReturnValue(
             mockQueryRunner,
         );
-        mockConfigService.get.mockImplementation((key: string) => {
-            const config: Record<string, string> = {
-                DEPOSIT_CHAIN_ID: "421614",
-                OPERATOR_PRIVATE_KEY: "0xabc123",
-                TREASURY_ADDRESS: "0xTreasury",
-            };
-            return config[key];
-        });
         service = new WithdrawService(
             mockViemService as any,
             mockTokensService as any,
             mockPortfolioRepository as any,
             mockPortfolioService as any,
             mockOrderRepository as any,
-            mockConfigService as any,
+            mockChainConfig as any,
         );
     });
 
@@ -90,7 +78,11 @@ describe("WithdrawService", () => {
             mockTokensService.getTokenByAssetId.mockResolvedValue(mockToken);
             mockQueryRunner.query
                 .mockResolvedValueOnce([
-                    { id: "portfolio-row-id", amount: "1000000000", is_collateral: false },
+                    {
+                        id: "portfolio-row-id",
+                        amount: "1000000000",
+                        is_collateral: false,
+                    },
                 ])
                 .mockResolvedValueOnce(undefined);
             mockViemService.writeContract.mockResolvedValue({
@@ -117,7 +109,11 @@ describe("WithdrawService", () => {
             mockTokensService.getTokenByAssetId.mockResolvedValue(mockToken);
             mockQueryRunner.query
                 .mockResolvedValueOnce([
-                    { id: "portfolio-row-id", amount: "1000000000", is_collateral: false },
+                    {
+                        id: "portfolio-row-id",
+                        amount: "1000000000",
+                        is_collateral: false,
+                    },
                 ])
                 .mockResolvedValueOnce(undefined);
             mockViemService.writeContract.mockResolvedValue({
@@ -144,7 +140,11 @@ describe("WithdrawService", () => {
             mockTokensService.getTokenByAssetId.mockResolvedValue(mockToken);
             mockQueryRunner.query
                 .mockResolvedValueOnce([
-                    { id: "portfolio-row-id", amount: "100000000", is_collateral: false },
+                    {
+                        id: "portfolio-row-id",
+                        amount: "100000000",
+                        is_collateral: false,
+                    },
                 ])
                 .mockResolvedValueOnce(undefined);
             mockViemService.writeContract.mockResolvedValue({
@@ -166,7 +166,11 @@ describe("WithdrawService", () => {
             mockTokensService.getTokenByAssetId.mockResolvedValue(mockToken);
             mockQueryRunner.query
                 .mockResolvedValueOnce([
-                    { id: "portfolio-row-id", amount: "1000000000", is_collateral: false },
+                    {
+                        id: "portfolio-row-id",
+                        amount: "1000000000",
+                        is_collateral: false,
+                    },
                 ])
                 .mockResolvedValueOnce(undefined);
             mockViemService.writeContract.mockResolvedValue({
@@ -190,7 +194,11 @@ describe("WithdrawService", () => {
             mockTokensService.getTokenByAssetId.mockResolvedValue(mockToken);
             mockQueryRunner.query
                 .mockResolvedValueOnce([
-                    { id: "collateral-row-id", amount: "500000000", is_collateral: true },
+                    {
+                        id: "collateral-row-id",
+                        amount: "500000000",
+                        is_collateral: true,
+                    },
                 ])
                 .mockResolvedValueOnce(undefined);
             mockPortfolioService.simulateHealthFactorAfterWithdrawal.mockResolvedValue(
@@ -227,7 +235,11 @@ describe("WithdrawService", () => {
             mockTokensService.getTokenByAssetId.mockResolvedValue(mockToken);
             mockQueryRunner.query
                 .mockResolvedValueOnce([
-                    { id: "collateral-row-id", amount: "1000000000", is_collateral: true },
+                    {
+                        id: "collateral-row-id",
+                        amount: "1000000000",
+                        is_collateral: true,
+                    },
                 ])
                 .mockResolvedValueOnce(undefined);
             mockPortfolioService.simulateHealthFactorAfterWithdrawal.mockResolvedValue(
@@ -256,7 +268,11 @@ describe("WithdrawService", () => {
             );
             mockTokensService.getTokenByAssetId.mockResolvedValue(mockToken);
             mockQueryRunner.query.mockResolvedValueOnce([
-                { id: "collateral-row-id", amount: "1000000000", is_collateral: true },
+                {
+                    id: "collateral-row-id",
+                    amount: "1000000000",
+                    is_collateral: true,
+                },
             ]);
             mockPortfolioService.simulateHealthFactorAfterWithdrawal.mockResolvedValue(
                 {
@@ -280,7 +296,11 @@ describe("WithdrawService", () => {
             mockTokensService.getTokenByAssetId.mockResolvedValue(mockToken);
             mockQueryRunner.query
                 .mockResolvedValueOnce([
-                    { id: "non-coll-id", amount: "300000000", is_collateral: false },
+                    {
+                        id: "non-coll-id",
+                        amount: "300000000",
+                        is_collateral: false,
+                    },
                     { id: "coll-id", amount: "700000000", is_collateral: true },
                 ])
                 .mockResolvedValueOnce(undefined) // viemService call result doesn't use query
@@ -327,7 +347,11 @@ describe("WithdrawService", () => {
             mockTokensService.getTokenByAssetId.mockResolvedValue(mockToken);
             mockQueryRunner.query
                 .mockResolvedValueOnce([
-                    { id: "non-coll-id", amount: "500000000", is_collateral: false },
+                    {
+                        id: "non-coll-id",
+                        amount: "500000000",
+                        is_collateral: false,
+                    },
                     { id: "coll-id", amount: "500000000", is_collateral: true },
                 ])
                 .mockResolvedValueOnce(undefined);
@@ -418,7 +442,11 @@ describe("WithdrawService", () => {
             );
             mockTokensService.getTokenByAssetId.mockResolvedValue(mockToken);
             mockQueryRunner.query.mockResolvedValueOnce([
-                { id: "portfolio-row-id", amount: "10000000000", is_collateral: false },
+                {
+                    id: "portfolio-row-id",
+                    amount: "10000000000",
+                    is_collateral: false,
+                },
             ]);
             mockViemService.writeContract.mockRejectedValue(
                 new Error("Contract execution reverted"),

@@ -69,8 +69,10 @@ describe("OrdersService", () => {
             getOrCreateAccount: jest.fn(),
             getOpenOrders: jest.fn(),
             findAccountByWallet: jest.fn(),
+            getOrderById: jest.fn(),
             getTotalOpenQuantity: jest.fn().mockResolvedValue(0n),
             getOpenBorrowOrders: jest.fn().mockResolvedValue([]),
+            hasCounterpartyOrders: jest.fn().mockResolvedValue(true),
         };
 
         const mockTokensService: jest.Mocked<TokensService> = {
@@ -103,6 +105,9 @@ describe("OrdersService", () => {
                 .mockResolvedValue({ healthFactor: 2 }),
             getAssetBalance: jest.fn().mockResolvedValue("1000000000"),
             checkAvailableBalanceForLend: jest
+                .fn()
+                .mockResolvedValue(undefined),
+            checkAvailableBalanceForBorrowFees: jest
                 .fn()
                 .mockResolvedValue(undefined),
         };
@@ -809,7 +814,7 @@ describe("OrdersService", () => {
                 status: OrderStatus.Cancelled,
             };
 
-            orderRepository.getOpenOrders.mockResolvedValue([openOrder]);
+            orderRepository.getOrderById.mockResolvedValue(openOrder);
             orderRepository.findAccountByWallet.mockResolvedValue({
                 id: mockAccountId,
             } as any);
@@ -837,7 +842,7 @@ describe("OrdersService", () => {
                 status: OrderStatus.Cancelled,
             };
 
-            orderRepository.getOpenOrders.mockResolvedValue([partialOrder]);
+            orderRepository.getOrderById.mockResolvedValue(partialOrder);
             orderRepository.findAccountByWallet.mockResolvedValue({
                 id: mockAccountId,
             } as any);
@@ -853,7 +858,7 @@ describe("OrdersService", () => {
         });
 
         it("should throw NotFoundException for non-existent order", async () => {
-            orderRepository.getOpenOrders.mockResolvedValue([]);
+            orderRepository.getOrderById.mockResolvedValue(null);
 
             await expect(
                 service.cancelOrder("non-existent-uuid", mockWalletAddress),
@@ -867,7 +872,7 @@ describe("OrdersService", () => {
                 status: OrderStatus.Open,
             });
 
-            orderRepository.getOpenOrders.mockResolvedValue([otherWalletOrder]);
+            orderRepository.getOrderById.mockResolvedValue(otherWalletOrder);
             orderRepository.findAccountByWallet.mockResolvedValue({
                 id: mockAccountId,
             } as any);
@@ -883,7 +888,7 @@ describe("OrdersService", () => {
                 status: OrderStatus.Filled,
             });
 
-            orderRepository.getOpenOrders.mockResolvedValue([filledOrder]);
+            orderRepository.getOrderById.mockResolvedValue(filledOrder);
             orderRepository.findAccountByWallet.mockResolvedValue({
                 id: mockAccountId,
             } as any);
@@ -899,7 +904,7 @@ describe("OrdersService", () => {
                 status: OrderStatus.Cancelled,
             });
 
-            orderRepository.getOpenOrders.mockResolvedValue([cancelledOrder]);
+            orderRepository.getOrderById.mockResolvedValue(cancelledOrder);
             orderRepository.findAccountByWallet.mockResolvedValue({
                 id: mockAccountId,
             } as any);
@@ -915,7 +920,7 @@ describe("OrdersService", () => {
                 status: OrderStatus.Open,
             });
 
-            orderRepository.getOpenOrders.mockResolvedValue([openOrder]);
+            orderRepository.getOrderById.mockResolvedValue(openOrder);
             orderRepository.findAccountByWallet.mockResolvedValue({
                 id: mockAccountId,
             } as any);

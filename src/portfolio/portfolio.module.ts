@@ -19,7 +19,7 @@ import { MarketModule } from "../market/market.module";
     imports: [
         TypeOrmModule.forFeature([Portfolio, Token, LendPosition]),
         ConfigModule,
-        CoreModule,
+        forwardRef(() => CoreModule),
         forwardRef(() => OrdersModule),
         PriceModule,
         TokensModule,

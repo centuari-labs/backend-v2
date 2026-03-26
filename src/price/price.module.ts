@@ -1,4 +1,4 @@
-import { Module } from "@nestjs/common";
+import { Module, forwardRef } from "@nestjs/common";
 import { TokensModule } from "../tokens/tokens.module";
 import { CoreModule } from "../core/core.module";
 import { PRICE_PROVIDER } from "./interfaces/price-provider.interface";
@@ -7,7 +7,7 @@ import { PriceService } from "./price.service";
 import { PriceWorker } from "./price.worker";
 
 @Module({
-    imports: [TokensModule, CoreModule],
+    imports: [TokensModule, forwardRef(() => CoreModule)],
     providers: [
         {
             provide: PRICE_PROVIDER,

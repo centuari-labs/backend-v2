@@ -16,7 +16,7 @@ import { MarketWorker } from "./market.worker";
     imports: [
         TypeOrmModule.forFeature([Market, Token]),
         TokensModule,
-        CoreModule,
+        forwardRef(() => CoreModule),
         PriceModule,
         forwardRef(() => OrdersModule),
     ],

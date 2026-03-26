@@ -26,7 +26,7 @@ import {
 import { PriceService } from "../price/price.service";
 import { HEALTH_FACTOR_NO_DEBT } from "../portfolio/helpers/health-factor.helpers";
 
-const ORDER_CYCLE_INTERVAL_MS = 10_000;
+const ORDER_CYCLE_INTERVAL_MS = 60_000;
 const CACHE_REFRESH_INTERVAL_MS = 600_000;
 
 const RATE_MIN = 500;

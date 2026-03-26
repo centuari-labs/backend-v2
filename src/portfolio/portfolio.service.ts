@@ -7,12 +7,12 @@ import {
 } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { DataSource, Repository } from "typeorm";
-import { ConfigService } from "@nestjs/config";
 import type { TransactionReceipt } from "viem";
 import { Token } from "../tokens/entities/token.entity";
 import { PriceService } from "../price/price.service";
 import { TokensService } from "../tokens/tokens.service";
 import { ViemService } from "../core/viem/viem.service";
+import { ChainConfigService } from "../core/chain-config/chain-config.service";
 import { centuariAbi } from "../../abis/centuari";
 import {
     WithdrawLendPositionDto,
@@ -44,7 +44,11 @@ import {
     calculateUsdAmount,
     createPaginatedResponse,
 } from "./helpers/position.helpers";
-import { baseUnitsToHuman, safeBigInt, toPercentage } from "../common/utils/number.utils";
+import {
+    baseUnitsToHuman,
+    safeBigInt,
+    toPercentage,
+} from "../common/utils/number.utils";
 import { getFirstEventFromReceipt } from "../common/utils/event.utils";
 import {
     computeHealthFactor,
@@ -60,9 +64,6 @@ import { OrderSide, OrderStatus } from "../orders/constants/order.constants";
 @Injectable()
 export class PortfolioService {
     private readonly logger = new Logger(PortfolioService.name);
-    private readonly chainId: number;
-    private readonly operatorPrivateKey: string;
-    private readonly centuariAddress: string;
 
     constructor(
         @InjectRepository(Token)
@@ -73,17 +74,9 @@ export class PortfolioService {
         private readonly orderRepository: OrderRepository,
         private readonly marketRepository: MarketRepositories,
         private readonly viemService: ViemService,
-        private readonly configService: ConfigService,
+        private readonly chainConfig: ChainConfigService,
         private readonly dataSource: DataSource,
-    ) {
-        this.chainId = Number(
-            this.configService.get<string>("DEPOSIT_CHAIN_ID") ?? "421614",
-        );
-        this.operatorPrivateKey =
-            this.configService.get<string>("OPERATOR_PRIVATE_KEY") ?? "";
-        this.centuariAddress =
-            this.configService.get<string>("CENTUARI_ADDRESS") ?? "";
-    }
+    ) {}
 
     async getMyPortfolio(wallet: string): Promise<MyPortfolioResponseDto> {
         const account = await this.orderRepository.findAccountByWallet(wallet);
@@ -125,10 +118,9 @@ export class PortfolioService {
 
         let allTimeReturnUsd = 0;
         for (const position of allLendPositions) {
-            const decimals =
-                await this.tokensService.getTokenDecimalsByAssetId(
-                    position.asset_id,
-                );
+            const decimals = await this.tokensService.getTokenDecimalsByAssetId(
+                position.asset_id,
+            );
             if (decimals == null) continue;
 
             const amountHuman = Number(
@@ -457,8 +449,8 @@ export class PortfolioService {
         const riskParams =
             collateralAssetIds.length > 0
                 ? await this.portfolioRepository.getRiskParamsByCollateralTokenIds(
-                    collateralAssetIds,
-                )
+                      collateralAssetIds,
+                  )
                 : [];
         const riskLtvMap = new Map(
             riskParams.map((r) => [r.asset_id, Number(r.avg_ltv)]),
@@ -580,10 +572,7 @@ export class PortfolioService {
         );
         const portfolioBalance = safeBigInt(portfolioBalanceRaw);
 
-        const lockedAmount = await this.getLockedAmount(
-            accountId,
-            assetId,
-        );
+        const lockedAmount = await this.getLockedAmount(accountId, assetId);
 
         const totalOpenOrders = await this.orderRepository.getTotalOpenQuantity(
             accountId,
@@ -613,8 +602,7 @@ export class PortfolioService {
         estimatedTradeFeeBaseUnits = "0",
     ): Promise<void> {
         const totalFees =
-            BigInt(settlementFeeBaseUnits) +
-            BigInt(estimatedTradeFeeBaseUnits);
+            BigInt(settlementFeeBaseUnits) + BigInt(estimatedTradeFeeBaseUnits);
 
         if (totalFees <= 0n) return;
 
@@ -681,8 +669,7 @@ export class PortfolioService {
                 baseUnitsToHuman(ua.amount ?? "0", decimals),
             );
 
-            const openLendBaseUnits =
-                openLendMap.get(ua.asset_id) ?? "0";
+            const openLendBaseUnits = openLendMap.get(ua.asset_id) ?? "0";
             const lockedBaseUnits = ua.locked_amount ?? "0";
             const totalLockedBaseUnits =
                 safeBigInt(openLendBaseUnits) + safeBigInt(lockedBaseUnits);
@@ -690,10 +677,7 @@ export class PortfolioService {
                 baseUnitsToHuman(totalLockedBaseUnits.toString(), decimals),
             );
 
-            const walletBalance = Math.max(
-                0,
-                totalAmountHuman - lockedHuman,
-            );
+            const walletBalance = Math.max(0, totalAmountHuman - lockedHuman);
 
             // risk table stores basis points (e.g. 7500 = 75%)
             const ltv = risk ? Number(risk.avg_ltv) / 10000 : 0;
@@ -800,10 +784,7 @@ export class PortfolioService {
                     (pos) => !assetIdSet.has(pos.assetId),
                 );
 
-                const simulated = computeHealthFactor(
-                    remaining,
-                    debtPositions,
-                );
+                const simulated = computeHealthFactor(remaining, debtPositions);
 
                 if (simulated.healthFactor < MIN_HEALTH_FACTOR) {
                     throw new BadRequestException(
@@ -820,10 +801,7 @@ export class PortfolioService {
         );
     }
 
-    async getOrderHistory(
-        wallet: string,
-        query: OrderHistoryQueryDto,
-    ) {
+    async getOrderHistory(wallet: string, query: OrderHistoryQueryDto) {
         const account = await this.orderRepository.findAccountByWallet(wallet);
         if (!account) {
             return createPaginatedResponse(
@@ -856,9 +834,9 @@ export class PortfolioService {
             amount: baseUnitsToHuman(row.amount, Number(row.decimals) || 0),
             filledQuantity: row.filled_quantity
                 ? baseUnitsToHuman(
-                    row.filled_quantity,
-                    Number(row.decimals) || 0,
-                )
+                      row.filled_quantity,
+                      Number(row.decimals) || 0,
+                  )
                 : null,
             status: row.status,
             cancelReason: row.cancel_reason ?? null,
@@ -870,7 +848,9 @@ export class PortfolioService {
                 imageUrl: row.image_url,
                 tokenAddress: row.token_address,
             },
-            maturity: row.maturity ? new Date(row.maturity).toISOString() : null,
+            maturity: row.maturity
+                ? new Date(row.maturity).toISOString()
+                : null,
             fee:
                 row.total_fee && row.total_fee !== "0"
                     ? baseUnitsToHuman(row.total_fee, Number(row.decimals) || 0)
@@ -919,9 +899,9 @@ export class PortfolioService {
             amount: baseUnitsToHuman(row.amount, Number(row.decimals) || 0),
             filledQuantity: row.filled_quantity
                 ? baseUnitsToHuman(
-                    row.filled_quantity,
-                    Number(row.decimals) || 0,
-                )
+                      row.filled_quantity,
+                      Number(row.decimals) || 0,
+                  )
                 : null,
             status: row.status,
             cancelReason: row.cancel_reason ?? null,
@@ -954,10 +934,7 @@ export class PortfolioService {
         return match ? match.total_amount : "0";
     }
 
-    async getLockedAmount(
-        accountId: string,
-        assetId: string,
-    ): Promise<bigint> {
+    async getLockedAmount(accountId: string, assetId: string): Promise<bigint> {
         const result = await this.portfolioRepository.findOne({
             where: { accountId, assetId },
             select: ["lockedAmount"],
@@ -977,18 +954,15 @@ export class PortfolioService {
             .then((a) => a.id);
 
         // Fetch all lend positions for this (account, market)
-        const positions =
-            await this.portfolioRepository.getLendPositions(
-                accountId,
-                marketId,
-            );
+        const positions = await this.portfolioRepository.getLendPositions(
+            accountId,
+            marketId,
+        );
         if (!positions || positions.length === 0) {
             throw new NotFoundException("No active lend positions found");
         }
 
-        const market = await this.marketRepository.getMarketWithAsset(
-            marketId,
-        );
+        const market = await this.marketRepository.getMarketWithAsset(marketId);
         if (!market) {
             throw new NotFoundException("Market not found");
         }
@@ -1055,9 +1029,9 @@ export class PortfolioService {
     ): Promise<TransactionReceipt> {
         try {
             const receipt = (await this.viemService.writeContract(
-                this.chainId,
-                this.operatorPrivateKey,
-                this.centuariAddress,
+                this.chainConfig.chainId,
+                this.chainConfig.operatorPrivateKey,
+                this.chainConfig.centuariAddress,
                 centuariAbi,
                 "withdrawLendPosition",
                 [marketId, loanToken, maturity, cbtAmount],
@@ -1190,8 +1164,8 @@ export class PortfolioService {
         const riskParams =
             assetIds.length > 0
                 ? await this.portfolioRepository.getRiskParamsByCollateralTokenIds(
-                    assetIds,
-                )
+                      assetIds,
+                  )
                 : [];
         const riskMap = new Map(riskParams.map((r) => [r.asset_id, r]));
 
@@ -1252,7 +1226,9 @@ export class PortfolioService {
             const token = tokenMap.get(row.asset_id);
             const decimals = token?.decimals ?? 0;
             const price = allPrices[row.asset_id.toLowerCase()] ?? 0;
-            const debtHuman = Number(baseUnitsToHuman(row.amount ?? "0", decimals));
+            const debtHuman = Number(
+                baseUnitsToHuman(row.amount ?? "0", decimals),
+            );
             const debtUsd = debtHuman * price;
             settledDebtUsd += debtUsd;
             debts.push({
@@ -1326,15 +1302,15 @@ export class PortfolioService {
 
             const totalFee = isLender
                 ? (
-                    BigInt(row.maker_fee || "0") +
-                    BigInt(row.taker_fee || "0") +
-                    BigInt(row.lender_settlement_fee || "0")
-                ).toString()
+                      BigInt(row.maker_fee || "0") +
+                      BigInt(row.taker_fee || "0") +
+                      BigInt(row.lender_settlement_fee || "0")
+                  ).toString()
                 : (
-                    BigInt(row.maker_fee || "0") +
-                    BigInt(row.taker_fee || "0") +
-                    BigInt(row.borrower_settlement_fee || "0")
-                ).toString();
+                      BigInt(row.maker_fee || "0") +
+                      BigInt(row.taker_fee || "0") +
+                      BigInt(row.borrower_settlement_fee || "0")
+                  ).toString();
 
             return {
                 id: row.id,

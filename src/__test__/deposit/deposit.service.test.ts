@@ -3,8 +3,10 @@ import { Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { DepositService } from "../../deposit/deposit.service";
 import { ViemService } from "../../core/viem/viem.service";
+import { ChainConfigService } from "../../core/chain-config/chain-config.service";
 import { TokensService } from "../../tokens/tokens.service";
 import { TokensRepository } from "../../tokens/repositories/tokens.repository";
+import { ChainIndexerService } from "../../chain-indexer/chain-indexer.service";
 
 describe("DepositService", () => {
     let service: DepositService;
@@ -63,10 +65,16 @@ describe("DepositService", () => {
             get: jest.fn().mockImplementation((key: string) => {
                 const config: Record<string, string> = {
                     NODE_ENV: "production",
-                    DEPOSIT_CHAIN_ID: "421614",
                 };
                 return config[key];
             }),
+        };
+
+        const mockChainConfig: Partial<ChainConfigService> = {
+            chainId: 421614,
+            operatorPrivateKey: "",
+            treasuryAddress: "",
+            centuariAddress: "",
         };
 
         const module: TestingModule = await Test.createTestingModule({
@@ -76,6 +84,11 @@ describe("DepositService", () => {
                 { provide: TokensService, useValue: mockTokensService },
                 { provide: TokensRepository, useValue: mockTokensRepository },
                 { provide: ConfigService, useValue: mockConfigService },
+                {
+                    provide: ChainIndexerService,
+                    useValue: { processTransactionDeposits: jest.fn() },
+                },
+                { provide: ChainConfigService, useValue: mockChainConfig },
             ],
         }).compile();
 

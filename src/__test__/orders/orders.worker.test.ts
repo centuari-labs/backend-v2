@@ -8,6 +8,7 @@ import { OrdersService } from "../../orders/orders.service";
 import { Market } from "../../market/entities/market.entity";
 import { Token } from "../../tokens/entities/token.entity";
 import { ViemService } from "../../core/viem/viem.service";
+import { ChainConfigService } from "../../core/chain-config/chain-config.service";
 import { FaucetService } from "../../faucet/faucet.service";
 import { PortfolioService } from "../../portfolio/portfolio.service";
 import { PortfolioRepository } from "../../portfolio/repositories/portfolio.repository";
@@ -78,15 +79,24 @@ describe("OrdersWorker", () => {
                     },
                 },
                 {
+                    provide: ChainConfigService,
+                    useValue: {
+                        chainId: 421614,
+                        operatorPrivateKey: "0xtest",
+                        treasuryAddress: "0xTreasury",
+                        centuariAddress: "",
+                    },
+                },
+                {
                     provide: PortfolioService,
                     useValue: {
                         getAssetBalance: jest.fn().mockResolvedValue("0"),
-                        getHealthFactorForAccount: jest
+                        getHealthFactorForAccount: jest.fn().mockResolvedValue({
+                            healthFactor: Infinity,
+                        }),
+                        setAssetAsCollateral: jest
                             .fn()
-                            .mockResolvedValue({
-                                healthFactor: Infinity,
-                            }),
-                        setAssetAsCollateral: jest.fn().mockResolvedValue(undefined),
+                            .mockResolvedValue(undefined),
                         checkAvailableBalanceForLend: jest
                             .fn()
                             .mockResolvedValue(undefined),

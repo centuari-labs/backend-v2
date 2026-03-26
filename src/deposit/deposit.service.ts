@@ -2,6 +2,7 @@ import { Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { parseUnits, formatUnits } from "viem";
 import { ViemService } from "../core/viem/viem.service";
+import { ChainConfigService } from "../core/chain-config/chain-config.service";
 import { TokensService } from "../tokens/tokens.service";
 import { TokensRepository } from "../tokens/repositories/tokens.repository";
 import { ChainIndexerService } from "../chain-indexer/chain-indexer.service";
@@ -17,7 +18,6 @@ import type {
 export class DepositService {
     private readonly logger = new Logger(DepositService.name);
     private readonly isDevMode: boolean;
-    private readonly chainId: number;
 
     constructor(
         private readonly tokensService: TokensService,
@@ -25,12 +25,10 @@ export class DepositService {
         private readonly viemService: ViemService,
         private readonly configService: ConfigService,
         private readonly chainIndexerService: ChainIndexerService,
+        private readonly chainConfig: ChainConfigService,
     ) {
         this.isDevMode =
             this.configService.get<string>("NODE_ENV") !== "production";
-        this.chainId = Number(
-            this.configService.get<string>("DEPOSIT_CHAIN_ID") ?? "421614",
-        );
     }
 
     async getBalance(
@@ -50,7 +48,7 @@ export class DepositService {
         }
 
         const rawBalance = await this.viemService.readContract<bigint>(
-            this.chainId,
+            this.chainConfig.chainId,
             token.tokenAddress,
             erc20Abi,
             "balanceOf",

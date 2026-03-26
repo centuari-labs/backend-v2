@@ -10,7 +10,7 @@ import { OrderRepository } from "../orders/repositories/order.repository";
 import { ViemService } from "../core/viem/viem.service";
 import { TokensService } from "../tokens/tokens.service";
 import { MarketRepositories } from "../market/repository/market.repository";
-import { ConfigService } from "@nestjs/config";
+import { ChainConfigService } from "../core/chain-config/chain-config.service";
 import { RepayRepository } from "./repositories/repay.repository";
 import { RepayRequestDto, RepayResponseDto } from "./dto/repay.dto";
 import { parseUnits } from "viem";
@@ -23,26 +23,15 @@ import { PortfolioRepository } from "./repositories/portfolio.repository";
 @Injectable()
 export class RepayService {
     private readonly logger = new Logger(RepayService.name);
-    private readonly chainId: number;
-    private readonly operatorPrivateKey: string;
-    private readonly centuariAddress: string;
 
     constructor(
         private readonly viemService: ViemService,
         private readonly orderRepository: OrderRepository,
         private readonly repayRepository: RepayRepository,
         private readonly portfolioRepository: PortfolioRepository,
-        private readonly configService: ConfigService,
+        private readonly chainConfig: ChainConfigService,
         private readonly dataSource: DataSource,
-    ) {
-        this.chainId = Number(
-            this.configService.get<string>("DEPOSIT_CHAIN_ID") ?? "421614",
-        );
-        this.operatorPrivateKey =
-            this.configService.get<string>("OPERATOR_PRIVATE_KEY") ?? "";
-        this.centuariAddress =
-            this.configService.get<string>("CENTUARI_ADDRESS") ?? "";
-    }
+    ) {}
 
     async repay(
         dto: RepayRequestDto,
@@ -55,13 +44,14 @@ export class RepayService {
             .getOrCreateAccount(walletAddress, privyUserId)
             .then((a) => a.id);
 
-        const market =
-            await this.repayRepository.getMarketWithAsset(marketId);
+        const market = await this.repayRepository.getMarketWithAsset(marketId);
         if (!market) throw new NotFoundException("Market not found");
 
         // Sum total debt across all positions for this (account, market)
-        const totalDebtStr =
-            await this.repayRepository.getUserTotalDebt(accountId, marketId);
+        const totalDebtStr = await this.repayRepository.getUserTotalDebt(
+            accountId,
+            marketId,
+        );
         const totalDebt = BigInt(totalDebtStr);
         if (totalDebt <= 0n) {
             throw new NotFoundException("No active borrow positions found");
@@ -168,9 +158,9 @@ export class RepayService {
     ): Promise<string> {
         try {
             const receipt = (await this.viemService.writeContract(
-                this.chainId,
-                this.operatorPrivateKey,
-                this.centuariAddress,
+                this.chainConfig.chainId,
+                this.chainConfig.operatorPrivateKey,
+                this.chainConfig.centuariAddress,
                 centuariAbi,
                 "repay",
                 [marketId, borrower, token, amount],
@@ -195,8 +185,8 @@ export class RepayService {
         borrower: string,
     ): Promise<bigint> {
         const debt = await this.viemService.readContract<bigint>(
-            this.chainId,
-            this.centuariAddress,
+            this.chainConfig.chainId,
+            this.chainConfig.centuariAddress,
             centuariAbi,
             "getBorrowPosition",
             [marketId, borrower],
@@ -218,12 +208,11 @@ export class RepayService {
     ): Promise<void> {
         try {
             await this.dataSource.transaction(async (manager) => {
-                const positions =
-                    await this.repayRepository.getBorrowPositions(
-                        accountId,
-                        marketId,
-                        manager,
-                    );
+                const positions = await this.repayRepository.getBorrowPositions(
+                    accountId,
+                    marketId,
+                    manager,
+                );
 
                 let remaining = repayAmount;
                 for (const pos of positions) {
@@ -277,12 +266,11 @@ export class RepayService {
         tokenAddress: string,
     ): Promise<void> {
         await this.dataSource.transaction(async (manager) => {
-            const positions =
-                await this.repayRepository.getBorrowPositions(
-                    accountId,
-                    marketId,
-                    manager,
-                );
+            const positions = await this.repayRepository.getBorrowPositions(
+                accountId,
+                marketId,
+                manager,
+            );
             let totalSynced = 0n;
             for (const pos of positions) {
                 const posDebt = BigInt(pos.debt);

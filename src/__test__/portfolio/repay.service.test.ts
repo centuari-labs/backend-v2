@@ -6,7 +6,7 @@ import { OrderRepository } from "../../orders/repositories/order.repository";
 import { RepayRepository } from "../../portfolio/repositories/repay.repository";
 import { PortfolioRepository } from "../../portfolio/repositories/portfolio.repository";
 import { MarketRepositories } from "../../market/repository/market.repository";
-import { ConfigService } from "@nestjs/config";
+import { ChainConfigService } from "../../core/chain-config/chain-config.service";
 import {
     BadRequestException,
     NotFoundException,
@@ -21,7 +21,7 @@ describe("RepayService", () => {
     let orderRepository: jest.Mocked<OrderRepository>;
     let repayRepository: jest.Mocked<RepayRepository>;
     let portfolioRepository: jest.Mocked<PortfolioRepository>;
-    let configService: jest.Mocked<ConfigService>;
+    let chainConfig: jest.Mocked<ChainConfigService>;
     let dataSource: jest.Mocked<DataSource>;
     let manager: jest.Mocked<EntityManager>;
 
@@ -58,13 +58,11 @@ describe("RepayService", () => {
             upsertPortfolio: jest.fn(),
         } as any;
 
-        configService = {
-            get: jest.fn((key: string) => {
-                if (key === "DEPOSIT_CHAIN_ID") return "421614";
-                if (key === "OPERATOR_PRIVATE_KEY") return "0xoperator";
-                if (key === "CENTUARI_ADDRESS") return "0xcentuari";
-                return null;
-            }),
+        chainConfig = {
+            chainId: 421614,
+            operatorPrivateKey: "0xoperator",
+            treasuryAddress: "",
+            centuariAddress: "0xcentuari",
         } as any;
 
         const module: TestingModule = await Test.createTestingModule({
@@ -77,7 +75,7 @@ describe("RepayService", () => {
                     provide: PortfolioRepository,
                     useValue: portfolioRepository,
                 },
-                { provide: ConfigService, useValue: configService },
+                { provide: ChainConfigService, useValue: chainConfig },
                 { provide: DataSource, useValue: dataSource },
             ],
         }).compile();
@@ -115,9 +113,7 @@ describe("RepayService", () => {
                 parseUnits("200", 18).toString(),
             );
             // On-chain debt check
-            viemService.readContract.mockResolvedValue(
-                parseUnits("200", 18),
-            );
+            viemService.readContract.mockResolvedValue(parseUnits("200", 18));
             viemService.writeContract.mockResolvedValue({
                 transactionHash: "0xtx",
             } as any);
@@ -169,9 +165,7 @@ describe("RepayService", () => {
                 parseUnits("50", 18).toString(),
             );
             // On-chain debt check
-            viemService.readContract.mockResolvedValue(
-                parseUnits("50", 18),
-            );
+            viemService.readContract.mockResolvedValue(parseUnits("50", 18));
 
             await expect(
                 service.repay(dto, walletAddress, privyUserId),

@@ -10,10 +10,10 @@ import {
 } from "@nestjs/common";
 import { Wallet, CurrentUser } from "../common/decorators/wallet.decorator";
 import { AuthGuard } from "../common/guards/auth.guard";
-import { CreateBorrowLimitOrderDto } from "./dto/create-borrow-limit-order.dto";
-import { CreateBorrowMarketOrderDto } from "./dto/create-borrow-market-order.dto";
-import { CreateLendLimitOrderDto } from "./dto/create-lend-limit-order.dto";
-import { CreateLendMarketOrderDto } from "./dto/create-lend-market-order.dto";
+import {
+    CreateLimitOrderDto,
+    CreateMarketOrderDto,
+} from "./dto/create-order.dto";
 import { OrdersService } from "./orders.service";
 import { OrderResponse } from "./dto/order-response.dto";
 
@@ -25,7 +25,7 @@ export class OrdersController {
     @Post("lend/market")
     @HttpCode(HttpStatus.CREATED)
     async createLendMarketOrder(
-        @Body() dto: CreateLendMarketOrderDto,
+        @Body() dto: CreateMarketOrderDto,
         @Wallet() walletAddress: string,
         @CurrentUser() user: { userId: string },
     ): Promise<OrderResponse> {
@@ -39,7 +39,7 @@ export class OrdersController {
     @Post("lend/limit")
     @HttpCode(HttpStatus.CREATED)
     async createLendLimitOrder(
-        @Body() dto: CreateLendLimitOrderDto,
+        @Body() dto: CreateLimitOrderDto,
         @Wallet() walletAddress: string,
         @CurrentUser() user: { userId: string },
     ): Promise<OrderResponse> {
@@ -53,7 +53,7 @@ export class OrdersController {
     @Post("borrow/market")
     @HttpCode(HttpStatus.CREATED)
     async createBorrowMarketOrder(
-        @Body() dto: CreateBorrowMarketOrderDto,
+        @Body() dto: CreateMarketOrderDto,
         @Wallet() walletAddress: string,
         @CurrentUser() user: { userId: string },
     ): Promise<OrderResponse> {
@@ -67,7 +67,7 @@ export class OrdersController {
     @Post("borrow/limit")
     @HttpCode(HttpStatus.CREATED)
     async createBorrowLimitOrder(
-        @Body() dto: CreateBorrowLimitOrderDto,
+        @Body() dto: CreateLimitOrderDto,
         @Wallet() walletAddress: string,
         @CurrentUser() user: { userId: string },
     ): Promise<OrderResponse> {

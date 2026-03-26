@@ -124,7 +124,22 @@ case "$COMMAND" in
 
         if [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 300 ]; then
             echo -e "${GREEN}Success!${NC}"
-            pretty_print "$BODY_RESPONSE"
+            if command -v jq &>/dev/null; then
+                CODES=$(echo "$BODY_RESPONSE" | jq -r '.data.codes // .codes // []')
+                echo ""
+                printf "${CYAN}%-20s %-10s %-22s${NC}\n" "CODE" "MAX USES" "EXPIRES"
+                printf "%-20s %-10s %-22s\n" "--------------------" "----------" "----------------------"
+                echo "$CODES" | jq -r '.[] | [
+                    .code,
+                    (.max_uses | if . == -1 then "∞" else tostring end),
+                    (.expires_at // "never")
+                ] | @tsv' | while IFS=$'\t' read -r code max_uses expires; do
+                    printf "%-20s %-10s %-22s\n" "$code" "$max_uses" "$expires"
+                done
+                echo ""
+            else
+                echo "$BODY_RESPONSE"
+            fi
         else
             echo -e "${RED}Error (HTTP $HTTP_CODE):${NC}"
             pretty_print "$BODY_RESPONSE"
@@ -144,7 +159,45 @@ case "$COMMAND" in
         BODY_RESPONSE=$(echo "$RESPONSE" | sed '$d')
 
         if [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 300 ]; then
-            pretty_print "$BODY_RESPONSE"
+            if command -v jq &>/dev/null; then
+                # Extract codes array (handle both wrapped and unwrapped responses)
+                CODES=$(echo "$BODY_RESPONSE" | jq -r '.data.codes // .codes // []')
+                COUNT=$(echo "$CODES" | jq 'length')
+
+                if [ "$COUNT" -eq 0 ]; then
+                    echo -e "${YELLOW}No access codes found.${NC}"
+                else
+                    echo ""
+                    printf "${CYAN}%-38s %-20s %-10s %-10s %-8s %-22s %-22s${NC}\n" \
+                        "ID" "CODE" "MAX USES" "USED" "ACTIVE" "EXPIRES" "CREATED"
+                    printf "%-38s %-20s %-10s %-10s %-8s %-22s %-22s\n" \
+                        "--------------------------------------" "--------------------" "----------" "----------" "--------" "----------------------" "----------------------"
+
+                    echo "$CODES" | jq -r '.[] | [
+                        .id,
+                        .code,
+                        (.max_uses | if . == -1 then "∞" else tostring end),
+                        (.current_uses | tostring),
+                        (if .is_active then "✓" else "✗" end),
+                        (.expires_at // "never"),
+                        (.created_at | split("T") | .[0])
+                    ] | @tsv' | while IFS=$'\t' read -r id code max_uses used active expires created; do
+                        # Color active/inactive
+                        if [ "$active" = "✓" ]; then
+                            active_color="${GREEN}${active}${NC}"
+                        else
+                            active_color="${RED}${active}${NC}"
+                        fi
+                        printf "%-38s %-20s %-10s %-10s %-8b %-22s %-22s\n" \
+                            "$id" "$code" "$max_uses" "$used" "$active_color" "$expires" "$created"
+                    done
+
+                    echo ""
+                    echo -e "${CYAN}Total: $COUNT code(s)${NC}"
+                fi
+            else
+                echo "$BODY_RESPONSE"
+            fi
         else
             echo -e "${RED}Error (HTTP $HTTP_CODE):${NC}"
             pretty_print "$BODY_RESPONSE"

@@ -13,7 +13,6 @@ export enum OrderStatus {
     Filled = "FILLED",
     Cancelled = "CANCELLED",
     PartiallyFilled = "PARTIALLY_FILLED",
-    Updated = "UPDATED",
 }
 
 export const order_group_status = {

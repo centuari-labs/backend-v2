@@ -1,4 +1,5 @@
 import { Injectable, BadRequestException, Logger } from "@nestjs/common";
+import { parseContractError } from "../common/utils/contract-errors.utils";
 import { InjectRepository } from "@nestjs/typeorm";
 import { In, Repository } from "typeorm";
 import { ViemService } from "../core/viem/viem.service";
@@ -195,14 +196,16 @@ export class FaucetService {
                 );
                 outcomes.push(result);
             } catch (error) {
+                const rawMsg =
+                    error instanceof Error ? error.message : String(error);
                 this.logger.error(
-                    `Failed to mint token=${tokenAddress} for recipient=${recipientAddress}: ${error}`,
+                    `Failed to mint token=${tokenAddress} for recipient=${recipientAddress}: ${rawMsg}`,
                 );
+                const parsed = parseContractError(rawMsg);
                 outcomes.push({
                     tokenAddress,
                     amount: "0",
-                    error:
-                        error instanceof Error ? error.message : String(error),
+                    error: parsed.message,
                 });
             }
         }

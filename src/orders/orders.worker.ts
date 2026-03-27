@@ -5,6 +5,7 @@ import { In, Repository } from "typeorm";
 import { ConfigService } from "@nestjs/config";
 import type { TransactionReceipt } from "viem";
 import { ViemService } from "../core/viem/viem.service";
+import { ChainConfigService } from "../core/chain-config/chain-config.service";
 import { FaucetService } from "../faucet/faucet.service";
 import { erc20Abi } from "../abis/ERC20";
 import { treasuryAbi } from "../abis/Treasury";
@@ -68,8 +69,6 @@ export class OrdersWorker implements OnModuleInit {
         marketIds: string[];
     }> = [];
     private botAccounts: BotAccount[] = [];
-    private chainId: number;
-    private treasuryAddress: string;
 
     constructor(
         private readonly orderRepository: OrderRepository,
@@ -81,11 +80,12 @@ export class OrdersWorker implements OnModuleInit {
         private readonly viemService: ViemService,
         private readonly faucetService: FaucetService,
         private readonly configService: ConfigService,
+        private readonly chainConfig: ChainConfigService,
         private readonly portfolioService: PortfolioService,
         private readonly portfolioRepository: PortfolioRepository,
         private readonly tokensService: TokensService,
         private readonly priceService: PriceService,
-    ) {}
+    ) { }
 
     private initialized = false;
     private cycleInProgress = false;
@@ -102,14 +102,9 @@ export class OrdersWorker implements OnModuleInit {
             "OrdersWorker enabled — scheduling background initialization.",
         );
 
-        this.chainId = Number(
-            this.configService.get<string>("DEPOSIT_CHAIN_ID") ?? "421614",
-        );
-        this.treasuryAddress =
-            this.configService.get<string>("TREASURY_ADDRESS") ??
-            (() => {
-                throw new Error("TREASURY_ADDRESS is not configured");
-            })();
+        if (!this.chainConfig.treasuryAddress) {
+            throw new Error("TREASURY_ADDRESS is not configured");
+        }
 
         this.botAccounts = this.deriveBotAccounts();
 
@@ -231,7 +226,7 @@ export class OrdersWorker implements OnModuleInit {
         const collateralTokens = await this.tokenRepository.find({
             where: {
                 isLoanToken: false,
-                chainId: this.chainId as unknown as number,
+                chainId: this.chainConfig.chainId as unknown as number,
             },
         });
 
@@ -297,8 +292,8 @@ export class OrdersWorker implements OnModuleInit {
             specs.map((s) =>
                 this.viemService
                     .readContract<boolean>(
-                        this.chainId,
-                        this.treasuryAddress,
+                        this.chainConfig.chainId,
+                        this.chainConfig.treasuryAddress,
                         treasuryAbi,
                         "supportedToken",
                         [s.tokenAddress],
@@ -324,11 +319,11 @@ export class OrdersWorker implements OnModuleInit {
         // Ensure max approval for each token
         for (const spec of supportedSpecs) {
             const allowance = await this.viemService.readContract<bigint>(
-                this.chainId,
+                this.chainConfig.chainId,
                 spec.tokenAddress,
                 erc20Abi,
                 "allowance",
-                [bot.wallet, this.treasuryAddress],
+                [bot.wallet, this.chainConfig.treasuryAddress],
             );
             if (allowance === 0n) {
                 await this.writeContractWithNonceRetry(
@@ -337,7 +332,7 @@ export class OrdersWorker implements OnModuleInit {
                     erc20Abi,
                     "approve",
                     [
-                        this.treasuryAddress,
+                        this.chainConfig.treasuryAddress,
                         BigInt(
                             "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
                         ),
@@ -350,7 +345,7 @@ export class OrdersWorker implements OnModuleInit {
         // Call faucet once for all tokens
         try {
             await this.faucetService.requestTokensBatch(
-                this.chainId,
+                this.chainConfig.chainId,
                 bot.wallet,
                 tokenAddresses,
             );
@@ -369,7 +364,7 @@ export class OrdersWorker implements OnModuleInit {
             try {
                 const walletBalance =
                     await this.viemService.readContract<bigint>(
-                        this.chainId,
+                        this.chainConfig.chainId,
                         spec.tokenAddress,
                         erc20Abi,
                         "balanceOf",
@@ -379,7 +374,7 @@ export class OrdersWorker implements OnModuleInit {
 
                 const receipt = await this.writeContractWithNonceRetry(
                     bot.privateKey,
-                    this.treasuryAddress,
+                    this.chainConfig.treasuryAddress,
                     treasuryAbi,
                     "deposit",
                     [spec.tokenAddress, walletBalance],
@@ -395,7 +390,7 @@ export class OrdersWorker implements OnModuleInit {
                         }).filter(
                             (log) =>
                                 log.address?.toLowerCase() ===
-                                this.treasuryAddress.toLowerCase(),
+                                this.chainConfig.treasuryAddress.toLowerCase(),
                         );
 
                         for (const log of depositedLogs) {
@@ -470,7 +465,9 @@ export class OrdersWorker implements OnModuleInit {
         botAddress: string,
     ): Promise<void> {
         try {
-            const publicClient = this.viemService.getPublicClient(this.chainId);
+            const publicClient = this.viemService.getPublicClient(
+                this.chainConfig.chainId,
+            );
             const balance = await publicClient.getBalance({
                 address: botAddress as `0x${string}`,
             });
@@ -483,7 +480,7 @@ export class OrdersWorker implements OnModuleInit {
             );
             const walletClient = this.viemService.getWalletClient(
                 operatorKey,
-                this.chainId,
+                this.chainConfig.chainId,
             );
             const hash = await walletClient.sendTransaction({
                 account: operatorAccount,
@@ -511,8 +508,8 @@ export class OrdersWorker implements OnModuleInit {
     ): Promise<void> {
         try {
             const onChainBalance = await this.viemService.readContract<bigint>(
-                this.chainId,
-                this.treasuryAddress,
+                this.chainConfig.chainId,
+                this.chainConfig.treasuryAddress,
                 treasuryAbi,
                 "balanceOf",
                 [bot.wallet, tokenAddress],
@@ -565,7 +562,7 @@ export class OrdersWorker implements OnModuleInit {
             const collateralTokens = await this.tokenRepository.find({
                 where: {
                     isLoanToken: false,
-                    chainId: this.chainId as unknown as number,
+                    chainId: this.chainConfig.chainId as unknown as number,
                 },
             });
             if (collateralTokens.length === 0) return;
@@ -919,16 +916,17 @@ export class OrdersWorker implements OnModuleInit {
         assetId: string,
         decimals: number,
     ): Promise<string | null> {
-        const portfolioBalanceRaw =
-            await this.portfolioService.getAssetBalance(accountId, assetId);
+        const portfolioBalanceRaw = await this.portfolioService.getAssetBalance(
+            accountId,
+            assetId,
+        );
         const portfolioBalance = BigInt(portfolioBalanceRaw);
 
-        const totalOpenOrders =
-            await this.orderRepository.getTotalOpenQuantity(
-                accountId,
-                assetId,
-                OrderSide.Lend,
-            );
+        const totalOpenOrders = await this.orderRepository.getTotalOpenQuantity(
+            accountId,
+            assetId,
+            OrderSide.Lend,
+        );
 
         const availableBalance = portfolioBalance - totalOpenOrders;
         if (availableBalance <= 0n) return null;
@@ -943,9 +941,7 @@ export class OrdersWorker implements OnModuleInit {
         // Check against minimum USD threshold
         const price = await this.priceService.getPrice(assetId);
         const usdValue =
-            price != null && price > 0
-                ? numericAmount * price
-                : numericAmount;
+            price != null && price > 0 ? numericAmount * price : numericAmount;
         if (usdValue < LEND_QUANTITY_USD_MIN) return null;
 
         return numericAmount.toFixed(2);
@@ -972,7 +968,7 @@ export class OrdersWorker implements OnModuleInit {
     ): Promise<TransactionReceipt> {
         try {
             const receipt = await this.viemService.writeContract(
-                this.chainId,
+                this.chainConfig.chainId,
                 privateKey,
                 address,
                 abi,
@@ -987,10 +983,13 @@ export class OrdersWorker implements OnModuleInit {
             this.logger.warn(
                 `Nonce error on ${functionName}; resetting wallet client and retrying`,
             );
-            this.viemService.resetWalletClient(privateKey, this.chainId);
+            this.viemService.resetWalletClient(
+                privateKey,
+                this.chainConfig.chainId,
+            );
             await new Promise((r) => setTimeout(r, 2000));
             const receipt = await this.viemService.writeContract(
-                this.chainId,
+                this.chainConfig.chainId,
                 privateKey,
                 address,
                 abi,
@@ -1012,16 +1011,17 @@ export class OrdersWorker implements OnModuleInit {
         assetId: string,
         quantityBaseUnits: string,
     ): Promise<boolean> {
-        const portfolioBalanceRaw =
-            await this.portfolioService.getAssetBalance(accountId, assetId);
+        const portfolioBalanceRaw = await this.portfolioService.getAssetBalance(
+            accountId,
+            assetId,
+        );
         const portfolioBalance = BigInt(portfolioBalanceRaw);
 
-        const totalOpenOrders =
-            await this.orderRepository.getTotalOpenQuantity(
-                accountId,
-                assetId,
-                OrderSide.Lend,
-            );
+        const totalOpenOrders = await this.orderRepository.getTotalOpenQuantity(
+            accountId,
+            assetId,
+            OrderSide.Lend,
+        );
 
         const availableBalance = portfolioBalance - totalOpenOrders;
         return BigInt(quantityBaseUnits) <= availableBalance;
@@ -1039,11 +1039,13 @@ export class OrdersWorker implements OnModuleInit {
         if (assetPrice == null || assetPrice <= 0) return false;
         const newOrderUsd = Number(amount) * assetPrice;
 
-        const hfResult =
-            await this.portfolioService.getHealthFactorForAccount(accountId, {
+        const hfResult = await this.portfolioService.getHealthFactorForAccount(
+            accountId,
+            {
                 additionalBorrowUsd: newOrderUsd,
                 includeOpenOrders: true,
-            });
+            },
+        );
 
         return (
             hfResult.healthFactor === HEALTH_FACTOR_NO_DEBT ||
@@ -1068,8 +1070,7 @@ export class OrdersWorker implements OnModuleInit {
                 RATE_MIN +
                 HALF_SPREAD +
                 Math.floor(
-                    Math.random() *
-                        (RATE_MAX - RATE_MIN - MAX_SPREAD_BPS + 1),
+                    Math.random() * (RATE_MAX - RATE_MIN - MAX_SPREAD_BPS + 1),
                 );
         } else {
             // Drift mid-rate slightly

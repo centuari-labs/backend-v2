@@ -7,7 +7,11 @@ import { PriceService } from "../../price/price.service";
 import { TokensService } from "../../tokens/tokens.service";
 import { PortfolioRepository } from "../../portfolio/repositories/portfolio.repository";
 import { OrderRepository } from "../../orders/repositories/order.repository";
+import { MarketRepositories } from "../../market/repository/market.repository";
+import { ViemService } from "../../core/viem/viem.service";
+import { ChainConfigService } from "../../core/chain-config/chain-config.service";
 import { OrderSide, OrderStatus } from "../../orders/constants/order.constants";
+import { DataSource } from "typeorm";
 
 describe("PortfolioService", () => {
     let service: PortfolioService;
@@ -97,6 +101,18 @@ describe("PortfolioService", () => {
                     useValue: portfolioRepositoryMock,
                 },
                 { provide: OrderRepository, useValue: orderRepositoryMock },
+                { provide: MarketRepositories, useValue: {} },
+                { provide: ViemService, useValue: {} },
+                {
+                    provide: ChainConfigService,
+                    useValue: {
+                        chainId: 421614,
+                        operatorPrivateKey: "",
+                        treasuryAddress: "",
+                        centuariAddress: "",
+                    },
+                },
+                { provide: DataSource, useValue: {} },
             ],
         }).compile();
 

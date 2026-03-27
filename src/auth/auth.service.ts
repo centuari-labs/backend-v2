@@ -1,7 +1,14 @@
-import { BadRequestException, Injectable, Logger } from "@nestjs/common";
+import {
+    BadRequestException,
+    Injectable,
+    Logger,
+    NotFoundException,
+} from "@nestjs/common";
+import { randomBytes } from "node:crypto";
 import { DatabaseService } from "../core/database/database.service";
 import { ViemService } from "../core/viem/viem.service";
 import type { DepositWalletResponse } from "./dto/validate-wallet.dto";
+import type { GenerateAccessCodesDto } from "./dto/generate-access-codes.dto";
 
 @Injectable()
 export class AuthService {
@@ -55,6 +62,142 @@ export class AuthService {
         );
 
         return account;
+    }
+
+    async redeemAccessCode(privyUserId: string, code: string) {
+        const accessCode = await this.databaseService.queryOne<{
+            id: string;
+            max_uses: number;
+            current_uses: number;
+            expires_at: string | null;
+        }>("SELECT * FROM access_codes WHERE code = $1 AND is_active = true", [
+            code,
+        ]);
+        if (!accessCode) {
+            throw new BadRequestException("Invalid access code");
+        }
+
+        if (
+            accessCode.expires_at &&
+            new Date(accessCode.expires_at) < new Date()
+        ) {
+            throw new BadRequestException("Access code has expired");
+        }
+
+        if (
+            accessCode.max_uses !== -1 &&
+            accessCode.current_uses >= accessCode.max_uses
+        ) {
+            throw new BadRequestException(
+                "Access code has reached its usage limit",
+            );
+        }
+
+        // Idempotent: if user already redeemed any code, just ensure flag is set
+        const existing = await this.databaseService.queryOne(
+            "SELECT 1 FROM access_code_redemptions WHERE privy_user_id = $1 LIMIT 1",
+            [privyUserId],
+        );
+        if (existing) {
+            await this.databaseService.query(
+                "UPDATE accounts SET access_granted = true WHERE privy_user_id = $1",
+                [privyUserId],
+            );
+            return { granted: true };
+        }
+
+        // Redeem: insert redemption, increment uses, flag account
+        await this.databaseService.query(
+            "INSERT INTO access_code_redemptions (access_code_id, privy_user_id) VALUES ($1, $2)",
+            [accessCode.id, privyUserId],
+        );
+        await this.databaseService.query(
+            "UPDATE access_codes SET current_uses = current_uses + 1 WHERE id = $1",
+            [accessCode.id],
+        );
+        await this.databaseService.query(
+            "UPDATE accounts SET access_granted = true WHERE privy_user_id = $1",
+            [privyUserId],
+        );
+
+        this.logger.log(`Access code redeemed by privy user ${privyUserId}`);
+
+        return { granted: true };
+    }
+
+    async generateAccessCodes(opts: GenerateAccessCodesDto) {
+        const count = opts.count ?? 1;
+        const maxUses = opts.max_uses ?? 1;
+        const prefix = opts.prefix ?? "CENTUARI";
+        const expiresAt = opts.expires_at ?? null;
+
+        const codes: Array<{
+            id: string;
+            code: string;
+            max_uses: number;
+            expires_at: string | null;
+        }> = [];
+
+        for (let i = 0; i < count; i++) {
+            const code = `${prefix}-${this.generateRandomCode(5)}`;
+
+            const row = await this.databaseService.queryOne<{
+                id: string;
+                code: string;
+                max_uses: number;
+                expires_at: string | null;
+            }>(
+                `INSERT INTO access_codes (code, max_uses, expires_at)
+                 VALUES ($1, $2, $3)
+                 RETURNING id, code, max_uses, expires_at`,
+                [code, maxUses, expiresAt],
+            );
+
+            if (row) {
+                codes.push(row);
+            }
+        }
+
+        this.logger.log(
+            `Generated ${codes.length} access codes with prefix ${prefix}`,
+        );
+
+        return { codes };
+    }
+
+    async listAccessCodes() {
+        const codes = await this.databaseService.query(
+            `SELECT id, code, max_uses, current_uses, is_active, expires_at, created_at
+             FROM access_codes
+             ORDER BY created_at DESC`,
+        );
+
+        return { codes };
+    }
+
+    async deactivateAccessCode(id: string) {
+        const code = await this.databaseService.queryOne(
+            "UPDATE access_codes SET is_active = false WHERE id = $1 RETURNING *",
+            [id],
+        );
+
+        if (!code) {
+            throw new NotFoundException("Access code not found");
+        }
+
+        this.logger.log(`Deactivated access code ${id}`);
+
+        return code;
+    }
+
+    private generateRandomCode(length: number): string {
+        const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+        const bytes = randomBytes(length);
+        let result = "";
+        for (let i = 0; i < length; i++) {
+            result += chars[bytes[i] % chars.length];
+        }
+        return result;
     }
 
     async updateName(privyUserId: string, name: string) {

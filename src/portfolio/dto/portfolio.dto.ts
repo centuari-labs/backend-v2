@@ -105,6 +105,7 @@ export class MyPositionQueryDto {
 
 export class MyPositionItemDto {
     id: string;
+    marketId: string;
     symbol: string;
     name: string;
     shares: number;

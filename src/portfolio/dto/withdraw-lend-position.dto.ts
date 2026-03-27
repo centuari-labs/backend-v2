@@ -2,7 +2,7 @@ import { IsUUID } from "class-validator";
 
 export class WithdrawLendPositionDto {
     @IsUUID()
-    positionId: string;
+    marketId: string;
 }
 
 export class WithdrawLendPositionResponseDto {

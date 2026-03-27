@@ -48,6 +48,7 @@ export class RepayRepository {
             .createQueryBuilder()
             .select("m.id", "id")
             .addSelect("m.maturity", "maturity")
+            .addSelect("m.asset_id", "assetId")
             .addSelect("a.decimals", "decimals")
             .addSelect("a.token_address", "tokenAddress")
             .from("markets", "m")
@@ -86,7 +87,7 @@ export class RepayRepository {
         await manager
             .createQueryBuilder()
             .update("borrow_positions")
-            .set({ debt, updatedAt: () => "NOW()" })
+            .set({ debt, updated_at: () => "NOW()" })
             .where("id = :positionId", { positionId })
             .execute();
     }

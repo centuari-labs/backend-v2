@@ -1,13 +1,14 @@
 import {
     BadRequestException,
     Injectable,
+    InternalServerErrorException,
     Logger,
     NotFoundException,
 } from "@nestjs/common";
-import { ConfigService } from "@nestjs/config";
 import { parseUnits } from "viem";
 import type { TransactionReceipt } from "viem";
 import { ViemService } from "../core/viem/viem.service";
+import { ChainConfigService } from "../core/chain-config/chain-config.service";
 import { TokensService } from "../tokens/tokens.service";
 import { PortfolioRepository } from "../portfolio/repositories/portfolio.repository";
 import { PortfolioService } from "../portfolio/portfolio.service";
@@ -15,6 +16,7 @@ import { OrderRepository } from "../orders/repositories/order.repository";
 import { HEALTH_FACTOR_NO_DEBT } from "../portfolio/helpers/health-factor.helpers";
 import { treasuryAbi } from "../../abis/treasury";
 import { humanToBaseUnits } from "../common/utils/number.utils";
+import { parseContractError } from "../common/utils/contract-errors.utils";
 import type {
     WithdrawRequestDto,
     WithdrawResponseDto,
@@ -23,9 +25,6 @@ import type {
 @Injectable()
 export class WithdrawService {
     private readonly logger = new Logger(WithdrawService.name);
-    private readonly chainId: number;
-    private readonly operatorPrivateKey: string;
-    private readonly treasuryAddress: string;
 
     constructor(
         private readonly viemService: ViemService,
@@ -33,16 +32,8 @@ export class WithdrawService {
         private readonly portfolioRepository: PortfolioRepository,
         private readonly portfolioService: PortfolioService,
         private readonly orderRepository: OrderRepository,
-        private readonly configService: ConfigService,
-    ) {
-        this.chainId = Number(
-            this.configService.get<string>("DEPOSIT_CHAIN_ID") ?? "421614",
-        );
-        this.operatorPrivateKey =
-            this.configService.get<string>("OPERATOR_PRIVATE_KEY") ?? "";
-        this.treasuryAddress =
-            this.configService.get<string>("TREASURY_ADDRESS") ?? "";
-    }
+        private readonly chainConfig: ChainConfigService,
+    ) {}
 
     async withdraw(
         dto: WithdrawRequestDto,
@@ -148,9 +139,9 @@ export class WithdrawService {
             );
 
             const receipt = (await this.viemService.writeContract(
-                this.chainId,
-                this.operatorPrivateKey,
-                this.treasuryAddress,
+                this.chainConfig.chainId,
+                this.chainConfig.operatorPrivateKey,
+                this.chainConfig.treasuryAddress,
                 treasuryAbi,
                 "withdraw",
                 [token.tokenAddress, walletAddress, amountInBaseUnits],
@@ -199,9 +190,25 @@ export class WithdrawService {
                 txHash: receipt.transactionHash,
                 status: "success",
             };
-        } catch (error) {
+        } catch (error: any) {
             await queryRunner.rollbackTransaction();
-            throw error;
+            if (
+                error instanceof BadRequestException ||
+                error instanceof NotFoundException
+            ) {
+                throw error;
+            }
+            this.logger.error(
+                `Withdraw contract call failed: ${error.message}`,
+            );
+            const parsed = parseContractError(error.message, {
+                InsufficientFunds:
+                    "Insufficient balance in Treasury to withdraw this amount.",
+            });
+            if (parsed.isKnown) {
+                throw new BadRequestException(parsed.message);
+            }
+            throw new InternalServerErrorException(parsed.message);
         } finally {
             await queryRunner.release();
         }

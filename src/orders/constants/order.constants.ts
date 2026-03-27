@@ -15,6 +15,11 @@ export enum OrderStatus {
     PartiallyFilled = "PARTIALLY_FILLED",
 }
 
+export enum CancelReason {
+    UserCancelled = "USER_CANCELLED",
+    Ioc = "IOC",
+}
+
 export const order_group_status = {
     active: "active",
     cancelled: "cancelled",

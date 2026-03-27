@@ -7,6 +7,7 @@ import type { RawOpenOrderRow } from "../dto/open-orders.dto";
 
 export interface RawPosition {
     position_id: string;
+    market_id: string;
     asset_id: string;
     side: OrderSide;
     rate: string;
@@ -30,6 +31,7 @@ export interface RawOrderHistoryRow {
     amount: string;
     filled_quantity: string | null;
     status: string;
+    cancel_reason: string | null;
     asset_id: string;
     name: string;
     symbol: string;
@@ -214,24 +216,36 @@ export class PortfolioRepository extends Repository<Portfolio> {
         if (includeLend) {
             const lendQuery = this.dataSource
                 .createQueryBuilder()
-                .select("lp.id", "position_id")
+                .select("lp.market_id", "position_id")
+                .addSelect("lp.market_id", "market_id")
                 .addSelect("lp.asset_id", "asset_id")
                 .addSelect("'LEND'", "side")
-                .addSelect("COALESCE(lp.apr, 0) / 100.0", "rate")
-                .addSelect("lp.shares", "quantity")
+                .addSelect(
+                    "CASE WHEN SUM(lp.amount) > 0 THEN SUM(COALESCE(lp.apr, 0)::numeric * lp.amount::numeric) / SUM(lp.amount::numeric) / 100.0 ELSE 0 END",
+                    "rate",
+                )
+                .addSelect("SUM(lp.shares)", "quantity")
                 .addSelect("t.symbol", "symbol")
                 .addSelect("t.name", "name")
                 .addSelect("t.token_address", "token_address")
                 .addSelect("t.image_url", "image_url")
                 .addSelect("COALESCE(t.decimals, 0)", "decimals")
-                .addSelect("lp.amount", "base_amount")
+                .addSelect("SUM(lp.amount)", "base_amount")
                 .addSelect("m.maturity", "maturity")
-                .addSelect("lp.created_at", "created_at")
+                .addSelect("MIN(lp.created_at)", "created_at")
                 .from("lend_positions", "lp")
                 .innerJoin("assets", "t", "lp.asset_id = t.id")
                 .leftJoin("markets", "m", "lp.market_id = m.id")
                 .where("lp.account_id = :accountId", { accountId })
-                .andWhere("lp.shares > 0");
+                .andWhere("lp.shares > 0")
+                .groupBy("lp.market_id")
+                .addGroupBy("lp.asset_id")
+                .addGroupBy("t.symbol")
+                .addGroupBy("t.name")
+                .addGroupBy("t.token_address")
+                .addGroupBy("t.image_url")
+                .addGroupBy("t.decimals")
+                .addGroupBy("m.maturity");
 
             if (assetId) {
                 lendQuery.andWhere("lp.asset_id = :assetId", { assetId });
@@ -239,7 +253,10 @@ export class PortfolioRepository extends Repository<Portfolio> {
 
             const countQuery = this.dataSource
                 .createQueryBuilder()
-                .select("COUNT(*)", "count")
+                .select(
+                    "COUNT(DISTINCT (lp.asset_id, lp.market_id))",
+                    "count",
+                )
                 .from("lend_positions", "lp")
                 .where("lp.account_id = :accountId", { accountId })
                 .andWhere("lp.shares > 0");
@@ -260,24 +277,36 @@ export class PortfolioRepository extends Repository<Portfolio> {
         if (includeBorrow) {
             const borrowQuery = this.dataSource
                 .createQueryBuilder()
-                .select("bp.id", "position_id")
+                .select("bp.market_id", "position_id")
+                .addSelect("bp.market_id", "market_id")
                 .addSelect("bp.asset_id", "asset_id")
                 .addSelect("'BORROW'", "side")
-                .addSelect("COALESCE(bp.apr, 0) / 100.0", "rate")
-                .addSelect("bp.debt", "quantity")
+                .addSelect(
+                    "CASE WHEN SUM(bp.amount) > 0 THEN SUM(COALESCE(bp.apr, 0)::numeric * bp.amount::numeric) / SUM(bp.amount::numeric) / 100.0 ELSE 0 END",
+                    "rate",
+                )
+                .addSelect("SUM(bp.debt)", "quantity")
                 .addSelect("t.symbol", "symbol")
                 .addSelect("t.name", "name")
                 .addSelect("t.token_address", "token_address")
                 .addSelect("t.image_url", "image_url")
                 .addSelect("COALESCE(t.decimals, 0)", "decimals")
-                .addSelect("bp.amount", "base_amount")
+                .addSelect("SUM(bp.amount)", "base_amount")
                 .addSelect("m.maturity", "maturity")
-                .addSelect("bp.created_at", "created_at")
+                .addSelect("MIN(bp.created_at)", "created_at")
                 .from("borrow_positions", "bp")
                 .innerJoin("assets", "t", "bp.asset_id = t.id")
                 .leftJoin("markets", "m", "bp.market_id = m.id")
                 .where("bp.account_id = :accountId", { accountId })
-                .andWhere("bp.debt > 0");
+                .andWhere("bp.debt > 0")
+                .groupBy("bp.market_id")
+                .addGroupBy("bp.asset_id")
+                .addGroupBy("t.symbol")
+                .addGroupBy("t.name")
+                .addGroupBy("t.token_address")
+                .addGroupBy("t.image_url")
+                .addGroupBy("t.decimals")
+                .addGroupBy("m.maturity");
 
             if (assetId) {
                 borrowQuery.andWhere("bp.asset_id = :assetId", { assetId });
@@ -285,7 +314,10 @@ export class PortfolioRepository extends Repository<Portfolio> {
 
             const countQuery = this.dataSource
                 .createQueryBuilder()
-                .select("COUNT(*)", "count")
+                .select(
+                    "COUNT(DISTINCT (bp.asset_id, bp.market_id))",
+                    "count",
+                )
                 .from("borrow_positions", "bp")
                 .where("bp.account_id = :accountId", { accountId })
                 .andWhere("bp.debt > 0");
@@ -468,6 +500,7 @@ export class PortfolioRepository extends Repository<Portfolio> {
         const dataQuery = `
             SELECT o.id, o.side::text, o.type::text as order_type, o.rate,
                    o.quantity as amount, o.filled_quantity, o.status::text,
+                   o.cancel_reason::text,
                    a.id as asset_id, a.name, a.symbol, a.image_url,
                    COALESCE(a.decimals, 0) as decimals, a.token_address,
                    (
@@ -568,6 +601,7 @@ export class PortfolioRepository extends Repository<Portfolio> {
         const dataQuery = `
             SELECT o.id, o.side::text, o.type::text as order_type, o.rate,
                    o.quantity as amount, o.filled_quantity, o.status::text,
+                   o.cancel_reason::text,
                    a.id as asset_id, a.name, a.symbol, a.image_url,
                    COALESCE(a.decimals, 0) as decimals, a.token_address,
                    m.maturity,
@@ -654,7 +688,8 @@ export class PortfolioRepository extends Repository<Portfolio> {
             .from("lend_positions", "lp")
             .where("lp.account_id = :accountId", { accountId })
             .andWhere("lp.market_id = :marketId", { marketId })
-            .andWhere("lp.shares > 0");
+            .andWhere("lp.shares > 0")
+            .orderBy("lp.created_at", "ASC");
 
         if (manager) {
             qb = qb.setLock("pessimistic_write");

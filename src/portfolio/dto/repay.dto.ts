@@ -3,7 +3,7 @@ import { IsNotEmpty, IsString, IsUUID } from "class-validator";
 export class RepayRequestDto {
     @IsUUID()
     @IsNotEmpty()
-    positionId: string;
+    marketId: string;
 
     @IsString()
     @IsNotEmpty()

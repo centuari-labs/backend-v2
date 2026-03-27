@@ -10,9 +10,9 @@ import { NatsService } from "../core/nats/nats.service";
 import { MarketRepositories } from "../market/repository/market.repository";
 import { PriceService } from "../price/price.service";
 import { TokensService } from "../tokens/tokens.service";
-import { DataSource } from "typeorm";
 import { NATS_SUBJECTS } from "./constants/nats-subjects.constants";
 import {
+    CancelReason,
     OrderSide,
     OrderStatus,
     OrderType,
@@ -21,13 +21,13 @@ import {
     MAKER_FEE_RATE_BPS,
     TAKER_FEE_RATE_BPS,
 } from "./constants/order.constants";
-import type { CreateBorrowLimitOrderDto } from "./dto/create-borrow-limit-order.dto";
-import type { CreateBorrowMarketOrderDto } from "./dto/create-borrow-market-order.dto";
-import type { CreateLendLimitOrderDto } from "./dto/create-lend-limit-order.dto";
-import type { CreateLendMarketOrderDto } from "./dto/create-lend-market-order.dto";
+import { DataSource } from "typeorm";
+import type {
+    BaseCreateOrderDto,
+    CreateLimitOrderDto,
+    CreateMarketOrderDto,
+} from "./dto/create-order.dto";
 import { OrderResponse } from "./dto/order-response.dto";
-import { UpdateOrderDto } from "./dto/update-order.dto";
-import { OrderMarket } from "./entities/order-market.entity";
 import { Order } from "./entities/order.entity";
 import {
     toPercentage,
@@ -43,8 +43,18 @@ import {
     orderSchema,
     MatchingEngineOrder,
 } from "./matching-engine/order.schema";
+import { UpdateOrderDto } from "./dto/update-order.dto";
+import { OrderMarket } from "./entities/order-market.entity";
 
 const MIN_HEALTH_FACTOR = 1;
+
+interface PreparedOrderContext {
+    accountId: string;
+    decimals: number;
+    quantityBaseUnits: string;
+    settlementFeeBaseUnits: string;
+    estimatedTradeFeeBaseUnits: string;
+}
 
 @Injectable()
 export class OrdersService {
@@ -72,357 +82,130 @@ export class OrdersService {
     }
 
     async createLendMarketOrder(
-        dto: CreateLendMarketOrderDto,
+        dto: CreateMarketOrderDto,
         walletAddress: string,
         privyUserId: string,
     ): Promise<OrderResponse> {
-        const accountId = await this.getOrCreateAccount(
+        const ctx = await this.prepareOrder(
+            dto,
+            OrderType.Market,
             walletAddress,
             privyUserId,
         );
-
-        await this.tokensService.validateTokenByAssetId(dto.assetId);
-        const decimals = await this.tokensService.getTokenDecimalsByAssetId(
-            dto.assetId,
-        );
-        const quantityBaseUnits = humanToBaseUnits(dto.amount, decimals!);
-
-        const settlementFee = await this.computeSettlementFee(
-            dto.assetId,
-            dto.amount,
-            decimals!,
-        );
-        const estimatedTradeFee = this.computeEstimatedTradeFee(
-            dto.amount,
-            decimals!,
-            OrderType.Market,
-        );
-
         await this.portfolioService.checkAvailableBalanceForLend(
-            accountId,
+            ctx.accountId,
             dto.assetId,
-            quantityBaseUnits,
-            settlementFee,
-            estimatedTradeFee,
+            ctx.quantityBaseUnits,
+            ctx.settlementFeeBaseUnits,
+            ctx.estimatedTradeFeeBaseUnits,
         );
-
-        const hasCounterparty =
-            await this.orderRepository.hasCounterpartyOrders(
-                dto.assetId,
-                OrderSide.Lend,
-                dto.marketIds ?? [],
-                accountId,
-            );
-        if (!hasCounterparty) {
-            throw new BadRequestException(
-                "No available liquidity for this market order",
-            );
-        }
-
-        const order = this.orderRepository.create({
-            accountId,
-            assetId: dto.assetId,
-            side: OrderSide.Lend,
-            type: OrderType.Market,
-            quantity: quantityBaseUnits,
-            settlementFee,
-            status: OrderStatus.Open,
-            rate: 0,
-            autoRollover: dto.autoRollover ?? false,
-        });
-
-        const savedOrder = await this.orderRepository.saveOrderWithMarkets(
-            order,
+        await this.checkCounterpartyExists(
+            dto.assetId,
+            OrderSide.Lend,
             dto.marketIds ?? [],
+            ctx.accountId,
         );
-
-        const engineOrder = await this.buildMatchingEngineOrder(
-            savedOrder,
+        return this.finalizeOrder(
+            ctx,
             dto,
+            { side: OrderSide.Lend, type: OrderType.Market, rate: 0 },
             walletAddress,
-        );
-        await this.publishOrderToNats(
             NATS_SUBJECTS.LEND_MARKET,
-            engineOrder,
-            accountId,
-        );
-
-        return this.mapToResponse(
-            savedOrder,
-            dto,
-            walletAddress,
-            estimatedTradeFee,
         );
     }
 
     async createLendLimitOrder(
-        dto: CreateLendLimitOrderDto,
+        dto: CreateLimitOrderDto,
         walletAddress: string,
         privyUserId: string,
     ): Promise<OrderResponse> {
-        const accountId = await this.getOrCreateAccount(
+        const ctx = await this.prepareOrder(
+            dto,
+            OrderType.Limit,
             walletAddress,
             privyUserId,
         );
-
-        await this.tokensService.validateTokenByAssetId(dto.assetId);
-        const decimals = await this.tokensService.getTokenDecimalsByAssetId(
-            dto.assetId,
-        );
-        const quantityBaseUnits = humanToBaseUnits(dto.amount, decimals!);
-
-        const settlementFee = await this.computeSettlementFee(
-            dto.assetId,
-            dto.amount,
-            decimals!,
-        );
-        const estimatedTradeFee = this.computeEstimatedTradeFee(
-            dto.amount,
-            decimals!,
-            OrderType.Limit,
-        );
-
         await this.portfolioService.checkAvailableBalanceForLend(
-            accountId,
+            ctx.accountId,
             dto.assetId,
-            quantityBaseUnits,
-            settlementFee,
-            estimatedTradeFee,
+            ctx.quantityBaseUnits,
+            ctx.settlementFeeBaseUnits,
+            ctx.estimatedTradeFeeBaseUnits,
         );
-
-        const order = this.orderRepository.create({
-            accountId,
-            assetId: dto.assetId,
-            side: OrderSide.Lend,
-            type: OrderType.Limit,
-            quantity: quantityBaseUnits,
-            settlementFee,
-            rate: dto.rate,
-            status: OrderStatus.Open,
-            autoRollover: dto.autoRollover ?? false,
-        });
-
-        const savedOrder = await this.orderRepository.saveOrderWithMarkets(
-            order,
-            dto.marketIds ?? [],
-        );
-
-        const engineOrder = await this.buildMatchingEngineOrder(
-            savedOrder,
+        return this.finalizeOrder(
+            ctx,
             dto,
+            {
+                side: OrderSide.Lend,
+                type: OrderType.Limit,
+                rate: dto.rate,
+            },
             walletAddress,
-        );
-        await this.publishOrderToNats(
             NATS_SUBJECTS.LEND_LIMIT,
-            engineOrder,
-            accountId,
-        );
-
-        return this.mapToResponse(
-            savedOrder,
-            dto,
-            walletAddress,
-            estimatedTradeFee,
         );
     }
 
     async createBorrowMarketOrder(
-        dto: CreateBorrowMarketOrderDto,
+        dto: CreateMarketOrderDto,
         walletAddress: string,
         privyUserId: string,
     ): Promise<OrderResponse> {
-        const accountId = await this.getOrCreateAccount(
+        const ctx = await this.prepareOrder(
+            dto,
+            OrderType.Market,
             walletAddress,
             privyUserId,
         );
-        await this.tokensService.validateTokenByAssetId(dto.assetId);
-
-        const decimals = await this.tokensService.getTokenDecimalsByAssetId(
-            dto.assetId,
-        );
-        if (decimals == null) {
-            throw new BadRequestException("Token decimals not configured");
-        }
-        const quantityBaseUnits = humanToBaseUnits(dto.amount, decimals);
-        const settlementFee = await this.computeSettlementFee(
-            dto.assetId,
-            dto.amount,
-            decimals,
-        );
-        const estimatedTradeFee = this.computeEstimatedTradeFee(
-            dto.amount,
-            decimals,
-            OrderType.Market,
-        );
-
         await this.portfolioService.checkAvailableBalanceForBorrowFees(
-            accountId,
+            ctx.accountId,
             dto.assetId,
-            settlementFee,
-            estimatedTradeFee,
+            ctx.settlementFeeBaseUnits,
+            ctx.estimatedTradeFeeBaseUnits,
         );
-
-        const hasCounterparty =
-            await this.orderRepository.hasCounterpartyOrders(
-                dto.assetId,
-                OrderSide.Borrow,
-                dto.marketIds ?? [],
-                accountId,
-            );
-        if (!hasCounterparty) {
-            throw new BadRequestException(
-                "No available liquidity for this market order",
-            );
-        }
-
-        const assetPrice = await this.priceService.getPrice(dto.assetId);
-        if (assetPrice == null || assetPrice <= 0) {
-            throw new BadRequestException("Price not available for this asset");
-        }
-        const newOrderUsd = Number(dto.amount) * assetPrice;
-
-        const hfResult = await this.portfolioService.getHealthFactorForAccount(
-            accountId,
-            {
-                additionalBorrowUsd: newOrderUsd,
-                includeOpenOrders: true,
-            },
-        );
-        if (
-            hfResult.healthFactor !== HEALTH_FACTOR_NO_DEBT &&
-            Number.isFinite(hfResult.healthFactor) &&
-            hfResult.healthFactor < MIN_HEALTH_FACTOR
-        ) {
-            throw new BadRequestException(
-                "Borrow would reduce health factor below 1 (considering open orders); position not allowed.",
-            );
-        }
-
-        const order = this.orderRepository.create({
-            accountId,
-            assetId: dto.assetId,
-            side: OrderSide.Borrow,
-            type: OrderType.Market,
-            quantity: quantityBaseUnits,
-            settlementFee,
-            status: OrderStatus.Open,
-            rate: 0,
-            autoRollover: dto.autoRollover ?? false,
-        });
-
-        const savedOrder = await this.orderRepository.saveOrderWithMarkets(
-            order,
+        await this.checkCounterpartyExists(
+            dto.assetId,
+            OrderSide.Borrow,
             dto.marketIds ?? [],
+            ctx.accountId,
         );
-
-        const engineOrder = await this.buildMatchingEngineOrder(
-            savedOrder,
+        await this.validateHealthFactor(ctx.accountId, dto);
+        return this.finalizeOrder(
+            ctx,
             dto,
+            { side: OrderSide.Borrow, type: OrderType.Market, rate: 0 },
             walletAddress,
-        );
-        await this.publishOrderToNats(
             NATS_SUBJECTS.BORROW_MARKET,
-            engineOrder,
-            accountId,
-        );
-
-        return this.mapToResponse(
-            savedOrder,
-            dto,
-            walletAddress,
-            estimatedTradeFee,
         );
     }
 
     async createBorrowLimitOrder(
-        dto: CreateBorrowLimitOrderDto,
+        dto: CreateLimitOrderDto,
         walletAddress: string,
         privyUserId: string,
     ): Promise<OrderResponse> {
-        const accountId = await this.getOrCreateAccount(
+        const ctx = await this.prepareOrder(
+            dto,
+            OrderType.Limit,
             walletAddress,
             privyUserId,
         );
-        await this.tokensService.validateTokenByAssetId(dto.assetId);
-
-        const decimals = await this.tokensService.getTokenDecimalsByAssetId(
-            dto.assetId,
-        );
-        const quantityBaseUnits = humanToBaseUnits(dto.amount, decimals!);
-        const settlementFee = await this.computeSettlementFee(
-            dto.assetId,
-            dto.amount,
-            decimals!,
-        );
-        const estimatedTradeFee = this.computeEstimatedTradeFee(
-            dto.amount,
-            decimals!,
-            OrderType.Limit,
-        );
-
         await this.portfolioService.checkAvailableBalanceForBorrowFees(
-            accountId,
+            ctx.accountId,
             dto.assetId,
-            settlementFee,
-            estimatedTradeFee,
+            ctx.settlementFeeBaseUnits,
+            ctx.estimatedTradeFeeBaseUnits,
         );
-
-        const assetPrice = await this.priceService.getPrice(dto.assetId);
-        if (assetPrice == null || assetPrice <= 0) {
-            throw new BadRequestException("Price not available for this asset");
-        }
-        const newOrderUsd = Number(dto.amount) * assetPrice;
-
-        const hfResult = await this.portfolioService.getHealthFactorForAccount(
-            accountId,
+        await this.validateHealthFactor(ctx.accountId, dto);
+        return this.finalizeOrder(
+            ctx,
+            dto,
             {
-                additionalBorrowUsd: newOrderUsd,
-                includeOpenOrders: true,
+                side: OrderSide.Borrow,
+                type: OrderType.Limit,
+                rate: dto.rate,
             },
-        );
-        if (
-            hfResult.healthFactor !== HEALTH_FACTOR_NO_DEBT &&
-            Number.isFinite(hfResult.healthFactor) &&
-            hfResult.healthFactor < MIN_HEALTH_FACTOR
-        ) {
-            throw new BadRequestException(
-                "Borrow would reduce health factor below 1 (considering open orders); position not allowed.",
-            );
-        }
-
-        const order = this.orderRepository.create({
-            accountId,
-            assetId: dto.assetId,
-            side: OrderSide.Borrow,
-            type: OrderType.Limit,
-            quantity: quantityBaseUnits,
-            settlementFee,
-            rate: dto.rate,
-            status: OrderStatus.Open,
-            autoRollover: dto.autoRollover ?? false,
-        });
-
-        const savedOrder = await this.orderRepository.saveOrderWithMarkets(
-            order,
-            dto.marketIds ?? [],
-        );
-
-        const engineOrder = await this.buildMatchingEngineOrder(
-            savedOrder,
-            dto,
             walletAddress,
-        );
-        await this.publishOrderToNats(
             NATS_SUBJECTS.BORROW_LIMIT,
-            engineOrder,
-            accountId,
-        );
-
-        return this.mapToResponse(
-            savedOrder,
-            dto,
-            walletAddress,
-            estimatedTradeFee,
         );
     }
 
@@ -452,6 +235,7 @@ export class OrdersService {
         }
 
         order.status = OrderStatus.Cancelled;
+        order.cancelReason = CancelReason.UserCancelled;
 
         const updatedOrder = await this.orderRepository.save(order);
 
@@ -460,6 +244,7 @@ export class OrdersService {
 
         return updatedOrder;
     }
+
 
     async updateOrder(
         orderId: string,
@@ -553,13 +338,155 @@ export class OrdersService {
 
             const engineOrder = await this.buildMatchingEngineOrder(
                 updatedOrder,
-                dto,
+                { marketIds: dto.marketIds },
                 walletAddress,
             );
             await this.natsService.publish(NATS_SUBJECTS.UPDATE, engineOrder);
 
             return updatedOrder;
         });
+    }
+
+    private async prepareOrder(
+        dto: { assetId: string; amount: string },
+        orderType: OrderType,
+        walletAddress: string,
+        privyUserId: string,
+    ): Promise<PreparedOrderContext> {
+        const accountId = await this.getOrCreateAccount(
+            walletAddress,
+            privyUserId,
+        );
+        await this.tokensService.validateTokenByAssetId(dto.assetId);
+        const decimals = await this.tokensService.getTokenDecimalsByAssetId(
+            dto.assetId,
+        );
+        if (decimals == null) {
+            throw new BadRequestException("Token decimals not configured");
+        }
+        const quantityBaseUnits = humanToBaseUnits(dto.amount, decimals);
+        const settlementFeeBaseUnits = await this.computeSettlementFee(
+            dto.assetId,
+            dto.amount,
+            decimals,
+        );
+        const estimatedTradeFeeBaseUnits = this.computeEstimatedTradeFee(
+            dto.amount,
+            decimals,
+            orderType,
+        );
+        return {
+            accountId,
+            decimals,
+            quantityBaseUnits,
+            settlementFeeBaseUnits,
+            estimatedTradeFeeBaseUnits,
+        };
+    }
+
+    private async checkCounterpartyExists(
+        assetId: string,
+        side: OrderSide,
+        marketIds: string[],
+        accountId: string,
+    ): Promise<void> {
+        const hasCounterparty =
+            await this.orderRepository.hasCounterpartyOrders(
+                assetId,
+                side,
+                marketIds,
+                accountId,
+            );
+        if (!hasCounterparty) {
+            throw new BadRequestException(
+                "No available liquidity for this market order",
+            );
+        }
+    }
+
+    private async validateHealthFactor(
+        accountId: string,
+        dto: { assetId: string; amount: string },
+    ): Promise<void> {
+        const assetPrice = await this.priceService.getPrice(dto.assetId);
+        if (assetPrice == null || assetPrice <= 0) {
+            throw new BadRequestException("Price not available for this asset");
+        }
+        const newOrderUsd = Number(dto.amount) * assetPrice;
+        const hfResult = await this.portfolioService.getHealthFactorForAccount(
+            accountId,
+            {
+                additionalBorrowUsd: newOrderUsd,
+                includeOpenOrders: true,
+            },
+        );
+        if (
+            hfResult.healthFactor !== HEALTH_FACTOR_NO_DEBT &&
+            Number.isFinite(hfResult.healthFactor) &&
+            hfResult.healthFactor < MIN_HEALTH_FACTOR
+        ) {
+            throw new BadRequestException(
+                "Borrow would reduce health factor below 1 (considering open orders); position not allowed.",
+            );
+        }
+    }
+
+    private async finalizeOrder(
+        ctx: PreparedOrderContext,
+        dto: BaseCreateOrderDto,
+        orderParams: {
+            side: OrderSide;
+            type: OrderType;
+            rate: number;
+        },
+        walletAddress: string,
+        natsSubject: string,
+    ): Promise<OrderResponse> {
+        const order = this.orderRepository.create({
+            accountId: ctx.accountId,
+            assetId: dto.assetId,
+            side: orderParams.side,
+            type: orderParams.type,
+            quantity: ctx.quantityBaseUnits,
+            settlementFee: ctx.settlementFeeBaseUnits,
+            status: OrderStatus.Open,
+            rate: orderParams.rate,
+            autoRollover: dto.autoRollover ?? false,
+        });
+
+        const savedOrder = await this.orderRepository.saveOrderWithMarkets(
+            order,
+            dto.marketIds ?? [],
+        );
+
+        const engineOrder = await this.buildMatchingEngineOrder(
+            savedOrder,
+            dto,
+            walletAddress,
+        );
+        await this.publishOrderToNats(natsSubject, engineOrder, ctx.accountId);
+
+        return this.mapToResponse(
+            savedOrder,
+            dto,
+            walletAddress,
+            ctx.estimatedTradeFeeBaseUnits,
+        );
+    }
+
+    private async resolveMarketMaturities(
+        marketIds: string[],
+    ): Promise<Map<string, number>> {
+        const marketEntities =
+            await this.marketRepository.getMarketsByIds(marketIds);
+        const maturityByMarketId = new Map<string, number>();
+        for (const market of marketEntities) {
+            const maturityUnix = market.maturity
+                ? Math.floor(market.maturity.getTime() / 1000)
+                : 0;
+            maturityByMarketId.set(market.id, maturityUnix);
+        }
+        return maturityByMarketId;
     }
 
     private async computeSettlementFee(
@@ -620,24 +547,13 @@ export class OrdersService {
 
     private async mapToResponse(
         order: Order,
-        dto:
-            | CreateLendMarketOrderDto
-            | CreateLendLimitOrderDto
-            | CreateBorrowMarketOrderDto
-            | CreateBorrowLimitOrderDto,
+        dto: BaseCreateOrderDto,
         walletAddress: string,
         estimatedTradeFeeBaseUnits = "0",
     ): Promise<OrderResponse> {
-        const marketEntities = await this.marketRepository.getMarketsByIds(
+        const maturityByMarketId = await this.resolveMarketMaturities(
             dto.marketIds ?? [],
         );
-        const maturityByMarketId = new Map<string, number>();
-        for (const market of marketEntities) {
-            const maturityUnix = market.maturity
-                ? Math.floor(market.maturity.getTime() / 1000)
-                : 0;
-            maturityByMarketId.set(market.id, maturityUnix);
-        }
         const markets = (dto.marketIds ?? []).map((marketId) => ({
             marketId,
             maturity: maturityByMarketId.get(marketId) ?? 0,
@@ -678,27 +594,15 @@ export class OrdersService {
 
     private async buildMatchingEngineOrder(
         order: Order,
-        dto:
-            | CreateLendMarketOrderDto
-            | CreateLendLimitOrderDto
-            | CreateBorrowMarketOrderDto
-            | CreateBorrowLimitOrderDto
-            | UpdateOrderDto,
+        dto: { marketIds: string[] },
         walletAddress: string,
     ): Promise<MatchingEngineOrder> {
         const token = await this.tokensService.getTokenByAssetId(order.assetId);
         const loanToken = token.tokenAddress;
 
-        const marketEntities = await this.marketRepository.getMarketsByIds(
+        const maturityByMarketId = await this.resolveMarketMaturities(
             dto.marketIds ?? [],
         );
-        const maturityByMarketId = new Map<string, number>();
-        for (const market of marketEntities) {
-            const maturityUnix = market.maturity
-                ? Math.floor(market.maturity.getTime() / 1000)
-                : 0;
-            maturityByMarketId.set(market.id, maturityUnix);
-        }
         const markets = (dto.marketIds ?? []).map((marketId) => ({
             marketId,
             maturity: maturityByMarketId.get(marketId) ?? 0,

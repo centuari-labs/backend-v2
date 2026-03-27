@@ -4,8 +4,9 @@ import { ViemService } from "../../core/viem/viem.service";
 import { TokensService } from "../../tokens/tokens.service";
 import { OrderRepository } from "../../orders/repositories/order.repository";
 import { RepayRepository } from "../../portfolio/repositories/repay.repository";
+import { PortfolioRepository } from "../../portfolio/repositories/portfolio.repository";
 import { MarketRepositories } from "../../market/repository/market.repository";
-import { ConfigService } from "@nestjs/config";
+import { ChainConfigService } from "../../core/chain-config/chain-config.service";
 import {
     BadRequestException,
     NotFoundException,
@@ -19,13 +20,15 @@ describe("RepayService", () => {
     let viemService: jest.Mocked<ViemService>;
     let orderRepository: jest.Mocked<OrderRepository>;
     let repayRepository: jest.Mocked<RepayRepository>;
-    let configService: jest.Mocked<ConfigService>;
+    let portfolioRepository: jest.Mocked<PortfolioRepository>;
+    let chainConfig: jest.Mocked<ChainConfigService>;
     let dataSource: jest.Mocked<DataSource>;
     let manager: jest.Mocked<EntityManager>;
 
     beforeEach(async () => {
         viemService = {
             writeContract: jest.fn(),
+            readContract: jest.fn(),
         } as any;
 
         orderRepository = {
@@ -51,13 +54,15 @@ describe("RepayService", () => {
             updateBorrowPositionDebt: jest.fn(),
         } as any;
 
-        configService = {
-            get: jest.fn((key: string) => {
-                if (key === "DEPOSIT_CHAIN_ID") return "421614";
-                if (key === "OPERATOR_PRIVATE_KEY") return "0xoperator";
-                if (key === "CENTUARI_ADDRESS") return "0xcentuari";
-                return null;
-            }),
+        portfolioRepository = {
+            upsertPortfolio: jest.fn(),
+        } as any;
+
+        chainConfig = {
+            chainId: 421614,
+            operatorPrivateKey: "0xoperator",
+            treasuryAddress: "",
+            centuariAddress: "0xcentuari",
         } as any;
 
         const module: TestingModule = await Test.createTestingModule({
@@ -66,7 +71,11 @@ describe("RepayService", () => {
                 { provide: ViemService, useValue: viemService },
                 { provide: OrderRepository, useValue: orderRepository },
                 { provide: RepayRepository, useValue: repayRepository },
-                { provide: ConfigService, useValue: configService },
+                {
+                    provide: PortfolioRepository,
+                    useValue: portfolioRepository,
+                },
+                { provide: ChainConfigService, useValue: chainConfig },
                 { provide: DataSource, useValue: dataSource },
             ],
         }).compile();
@@ -77,18 +86,11 @@ describe("RepayService", () => {
     describe("repay", () => {
         const walletAddress = "0xwallet";
         const privyUserId = "privy-1";
-        const positionId = "pos-1";
         const marketId = "market-1";
         const assetId = "asset-1";
         const maturity = new Date(1710240000 * 1000);
-        const dto = { positionId, amount: "100" };
+        const dto = { marketId, amount: "100" };
         const account = { id: "acc-1" };
-        const position = {
-            id: positionId,
-            debt: parseUnits("200", 18).toString(),
-            marketId,
-            accountId: account.id,
-        };
         const market = {
             id: marketId,
             assetId,
@@ -97,59 +99,73 @@ describe("RepayService", () => {
             tokenAddress: "0xtoken",
         };
 
-        it("should successfully repay part of a borrow position", async () => {
+        it("should successfully repay with FIFO deduction across positions", async () => {
+            const positions = [
+                { id: "pos-1", debt: parseUnits("60", 18).toString() },
+                { id: "pos-2", debt: parseUnits("140", 18).toString() },
+            ];
+
             orderRepository.getOrCreateAccount.mockResolvedValue(
                 account as any,
             );
-            repayRepository.getBorrowPositionById.mockResolvedValue(
-                position as any,
-            );
             repayRepository.getMarketWithAsset.mockResolvedValue(market as any);
+            repayRepository.getUserTotalDebt.mockResolvedValue(
+                parseUnits("200", 18).toString(),
+            );
+            // On-chain debt check
+            viemService.readContract.mockResolvedValue(parseUnits("200", 18));
             viemService.writeContract.mockResolvedValue({
                 transactionHash: "0xtx",
             } as any);
+            repayRepository.getBorrowPositions.mockResolvedValue(
+                positions as any,
+            );
 
             const result = await service.repay(dto, walletAddress, privyUserId);
 
             expect(result).toEqual({ txHash: "0xtx", status: "success" });
-            expect(
-                repayRepository.getBorrowPositionById,
-            ).toHaveBeenCalledWith(positionId, account.id);
             expect(repayRepository.getMarketWithAsset).toHaveBeenCalledWith(
                 marketId,
             );
+            // FIFO: first position fully repaid (60), second partially (40)
             expect(
                 repayRepository.updateBorrowPositionDebt,
-            ).toHaveBeenCalledWith(
+            ).toHaveBeenCalledTimes(2);
+            expect(
+                repayRepository.updateBorrowPositionDebt,
+            ).toHaveBeenNthCalledWith(1, manager, "pos-1", "0");
+            expect(
+                repayRepository.updateBorrowPositionDebt,
+            ).toHaveBeenNthCalledWith(
+                2,
                 manager,
-                positionId,
-                parseUnits("100", 18).toString(),
+                "pos-2",
+                (parseUnits("140", 18) - parseUnits("40", 18)).toString(),
             );
         });
 
-        it("should throw NotFoundException if position not found", async () => {
+        it("should throw NotFoundException if no active positions found", async () => {
             orderRepository.getOrCreateAccount.mockResolvedValue(
                 account as any,
             );
-            repayRepository.getBorrowPositionById.mockResolvedValue(null);
+            repayRepository.getMarketWithAsset.mockResolvedValue(market as any);
+            repayRepository.getUserTotalDebt.mockResolvedValue("0");
 
             await expect(
                 service.repay(dto, walletAddress, privyUserId),
             ).rejects.toThrow(NotFoundException);
         });
 
-        it("should throw BadRequestException if repay amount > position debt", async () => {
-            const smallDebtPosition = {
-                ...position,
-                debt: parseUnits("50", 18).toString(),
-            };
+        it("should throw BadRequestException if repay amount > total debt", async () => {
             orderRepository.getOrCreateAccount.mockResolvedValue(
                 account as any,
             );
-            repayRepository.getBorrowPositionById.mockResolvedValue(
-                smallDebtPosition as any,
-            );
             repayRepository.getMarketWithAsset.mockResolvedValue(market as any);
+            repayRepository.getUserTotalDebt.mockResolvedValue(
+                parseUnits("50", 18).toString(),
+            );
+            // On-chain debt check
+            viemService.readContract.mockResolvedValue(parseUnits("50", 18));
 
             await expect(
                 service.repay(dto, walletAddress, privyUserId),

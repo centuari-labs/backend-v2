@@ -1,20 +1,21 @@
 import {
+    ArrayMinSize,
     IsArray,
+    IsBoolean,
+    IsInt,
     IsNotEmpty,
+    IsOptional,
     IsString,
+    IsUUID,
     Max,
     Min,
-    ArrayMinSize,
-    IsBoolean,
-    IsOptional,
-    IsUUID,
-    IsInt,
 } from "class-validator";
 import {
     IsMinAmount,
     IsPositiveNumericString,
 } from "../../common/validators/amount.validator";
-export class CreateBorrowLimitOrderDto {
+
+export class BaseCreateOrderDto {
     @IsString()
     @IsNotEmpty()
     assetId: string;
@@ -40,12 +41,18 @@ export class CreateBorrowLimitOrderDto {
     })
     marketIds: string[];
 
-    @IsInt({ message: "Rate must be an integer" })
-    @Min(1, { message: "Rate must be at least 1 basis point (0.01%)" })
-    @Max(10000, { message: "Rate must not exceed 10000 basis points (100%)" })
-    rate: number;
-
     @IsOptional()
     @IsBoolean()
     autoRollover?: boolean;
+}
+
+export class CreateMarketOrderDto extends BaseCreateOrderDto {}
+
+export class CreateLimitOrderDto extends BaseCreateOrderDto {
+    @IsInt({ message: "Rate must be an integer" })
+    @Min(1, { message: "Rate must be at least 1 basis point (0.01%)" })
+    @Max(10000, {
+        message: "Rate must not exceed 10000 basis points (100%)",
+    })
+    rate: number;
 }

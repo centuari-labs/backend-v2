@@ -5,6 +5,7 @@ import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
 import { parseAbiItem, parseEventLogs, type Hash } from "viem";
 import { ViemService } from "../core/viem/viem.service";
+import { ChainConfigService } from "../core/chain-config/chain-config.service";
 import { DatabaseService } from "../core/database/database.service";
 import { PortfolioRepository } from "../portfolio/repositories/portfolio.repository";
 import { portfolioUuidFor } from "../common/utils/uuid.utils";
@@ -23,8 +24,6 @@ const depositedEvent = parseAbiItem(
 @Injectable()
 export class ChainIndexerService implements OnModuleInit {
     private readonly logger = new Logger(ChainIndexerService.name);
-    private readonly chainId: number;
-    private readonly treasuryAddress: string;
     private readonly startBlock: bigint;
     private readonly enabled: boolean;
     private polling = false;
@@ -38,16 +37,8 @@ export class ChainIndexerService implements OnModuleInit {
         @InjectRepository(Token)
         private readonly tokenRepository: Repository<Token>,
         private readonly configService: ConfigService,
+        private readonly chainConfig: ChainConfigService,
     ) {
-        const chains = this.configService.get<string>(
-            "SUPPORTED_CHAINS",
-            "421614",
-        );
-        this.chainId = Number(chains.split(",")[0].trim());
-        this.treasuryAddress = this.configService.get<string>(
-            "TREASURY_ADDRESS",
-            "",
-        );
         this.startBlock = BigInt(
             this.configService.get<string>("INDEXER_START_BLOCK", "0"),
         );
@@ -64,7 +55,7 @@ export class ChainIndexerService implements OnModuleInit {
             return;
         }
 
-        if (!this.treasuryAddress) {
+        if (!this.chainConfig.treasuryAddress) {
             this.logger.warn(
                 "TREASURY_ADDRESS not set — chain indexer disabled",
             );
@@ -73,7 +64,7 @@ export class ChainIndexerService implements OnModuleInit {
 
         await this.ensureStateRow();
         this.logger.log(
-            `Chain indexer initialized for Treasury ${this.treasuryAddress} on chain ${this.chainId}`,
+            `Chain indexer initialized for Treasury ${this.chainConfig.treasuryAddress} on chain ${this.chainConfig.chainId}`,
         );
     }
 
@@ -84,7 +75,7 @@ export class ChainIndexerService implements OnModuleInit {
      */
     async processTransactionDeposits(txHash: string): Promise<number> {
         const receipt = await this.viemService.getTransactionReceipt(
-            this.chainId,
+            this.chainConfig.chainId,
             txHash as Hash,
         );
 
@@ -100,7 +91,7 @@ export class ChainIndexerService implements OnModuleInit {
         }).filter(
             (log) =>
                 log.address?.toLowerCase() ===
-                this.treasuryAddress.toLowerCase(),
+                this.chainConfig.treasuryAddress.toLowerCase(),
         );
 
         let processed = 0;
@@ -126,7 +117,8 @@ export class ChainIndexerService implements OnModuleInit {
 
     @Interval(DEFAULT_POLL_INTERVAL_MS)
     async poll() {
-        if (!this.enabled || !this.treasuryAddress || this.polling) return;
+        if (!this.enabled || !this.chainConfig.treasuryAddress || this.polling)
+            return;
 
         this.polling = true;
         try {
@@ -143,7 +135,9 @@ export class ChainIndexerService implements OnModuleInit {
 
     private async pollDeposits() {
         const lastProcessedBlock = await this.getLastProcessedBlock();
-        const publicClient = this.viemService.getPublicClient(this.chainId);
+        const publicClient = this.viemService.getPublicClient(
+            this.chainConfig.chainId,
+        );
         const currentBlock = await publicClient.getBlockNumber();
 
         if (currentBlock <= lastProcessedBlock) return;
@@ -157,7 +151,7 @@ export class ChainIndexerService implements OnModuleInit {
         this.logger.debug(`Polling blocks ${fromBlock} → ${toBlock}`);
 
         const logs = await publicClient.getLogs({
-            address: this.treasuryAddress as `0x${string}`,
+            address: this.chainConfig.treasuryAddress as `0x${string}`,
             event: depositedEvent,
             fromBlock,
             toBlock,

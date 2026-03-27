@@ -189,6 +189,11 @@ export const centuariAbi = [
         name: "repay",
         inputs: [
             {
+                name: "marketId",
+                type: "bytes32",
+                internalType: "bytes32",
+            },
+            {
                 name: "borrower",
                 type: "address",
                 internalType: "address",
@@ -197,11 +202,6 @@ export const centuariAbi = [
                 name: "loanToken",
                 type: "address",
                 internalType: "address",
-            },
-            {
-                name: "maturity",
-                type: "uint256",
-                internalType: "uint256",
             },
             {
                 name: "amount",
@@ -377,6 +377,11 @@ export const centuariAbi = [
         type: "function",
         name: "withdrawLendPosition",
         inputs: [
+            {
+                name: "marketId",
+                type: "bytes32",
+                internalType: "bytes32",
+            },
             {
                 name: "loanToken",
                 type: "address",

@@ -354,4 +354,194 @@ describe("OrderRepository", () => {
             expect(result).toBeNull();
         });
     });
+
+    describe("findActiveLimitOrdersForOrderbook", () => {
+        function createMockQb(rawResults: any[] = []) {
+            return {
+                select: jest.fn().mockReturnThis(),
+                addSelect: jest.fn().mockReturnThis(),
+                innerJoin: jest.fn().mockReturnThis(),
+                leftJoin: jest.fn().mockReturnThis(),
+                where: jest.fn().mockReturnThis(),
+                andWhere: jest.fn().mockReturnThis(),
+                groupBy: jest.fn().mockReturnThis(),
+                addGroupBy: jest.fn().mockReturnThis(),
+                getRawMany: jest.fn().mockResolvedValue(rawResults),
+            };
+        }
+
+        it("should return mapped order rows with numeric rate", async () => {
+            const mockQb = createMockQb([
+                {
+                    id: "order-1",
+                    assetId: MOCK_IDS.assetId,
+                    side: OrderSide.Lend,
+                    type: OrderType.Limit,
+                    rate: "500",
+                    quantity: "1000000",
+                    filledQuantity: "0",
+                    settlementFee: "100",
+                    accountId: MOCK_IDS.accountId,
+                    status: OrderStatus.Open,
+                    userWallet: MOCK_IDS.walletAddress,
+                    markets: [{ marketId: "m1", maturity: 1704067200 }],
+                },
+            ]);
+
+            jest.spyOn(repository, "createQueryBuilder").mockReturnValue(
+                mockQb as any,
+            );
+
+            const result = await repository.findActiveLimitOrdersForOrderbook(
+                MOCK_IDS.assetId,
+            );
+
+            expect(result).toHaveLength(1);
+            expect(result[0].rate).toBe(500);
+            expect(result[0].id).toBe("order-1");
+            expect(result[0].markets).toEqual([
+                { marketId: "m1", maturity: 1704067200 },
+            ]);
+        });
+
+        it("should return empty array when no active orders", async () => {
+            const mockQb = createMockQb([]);
+            jest.spyOn(repository, "createQueryBuilder").mockReturnValue(
+                mockQb as any,
+            );
+
+            const result = await repository.findActiveLimitOrdersForOrderbook(
+                MOCK_IDS.assetId,
+            );
+
+            expect(result).toEqual([]);
+        });
+
+        it("should default markets to empty array when null", async () => {
+            const mockQb = createMockQb([
+                {
+                    id: "order-1",
+                    assetId: MOCK_IDS.assetId,
+                    side: OrderSide.Lend,
+                    type: OrderType.Limit,
+                    rate: "500",
+                    quantity: "1000000",
+                    filledQuantity: "0",
+                    settlementFee: "100",
+                    accountId: MOCK_IDS.accountId,
+                    status: OrderStatus.Open,
+                    userWallet: MOCK_IDS.walletAddress,
+                    markets: null,
+                },
+            ]);
+
+            jest.spyOn(repository, "createQueryBuilder").mockReturnValue(
+                mockQb as any,
+            );
+
+            const result = await repository.findActiveLimitOrdersForOrderbook(
+                MOCK_IDS.assetId,
+            );
+
+            expect(result[0].markets).toEqual([]);
+        });
+    });
+
+    describe("findOrderForTracking", () => {
+        function createMockQb(rawResults: any[] = []) {
+            return {
+                select: jest.fn().mockReturnThis(),
+                addSelect: jest.fn().mockReturnThis(),
+                innerJoin: jest.fn().mockReturnThis(),
+                leftJoin: jest.fn().mockReturnThis(),
+                where: jest.fn().mockReturnThis(),
+                groupBy: jest.fn().mockReturnThis(),
+                addGroupBy: jest.fn().mockReturnThis(),
+                getRawMany: jest.fn().mockResolvedValue(rawResults),
+            };
+        }
+
+        it("should return single order for tracking", async () => {
+            const mockQb = createMockQb([
+                {
+                    id: "order-1",
+                    assetId: MOCK_IDS.assetId,
+                    side: OrderSide.Lend,
+                    type: OrderType.Limit,
+                    rate: "500",
+                    quantity: "1000000",
+                    filledQuantity: "200000",
+                    settlementFee: "100",
+                    accountId: MOCK_IDS.accountId,
+                    status: OrderStatus.PartiallyFilled,
+                    userWallet: MOCK_IDS.walletAddress,
+                    markets: [{ marketId: "m1", maturity: 1704067200 }],
+                },
+            ]);
+
+            jest.spyOn(repository, "createQueryBuilder").mockReturnValue(
+                mockQb as any,
+            );
+
+            const result = await repository.findOrderForTracking("order-1");
+
+            expect(result).not.toBeNull();
+            expect(result!.id).toBe("order-1");
+            expect(result!.rate).toBe(500);
+            expect(result!.status).toBe(OrderStatus.PartiallyFilled);
+        });
+
+        it("should return null when order not found", async () => {
+            const mockQb = createMockQb([]);
+            jest.spyOn(repository, "createQueryBuilder").mockReturnValue(
+                mockQb as any,
+            );
+
+            const result = await repository.findOrderForTracking("nonexistent");
+
+            expect(result).toBeNull();
+        });
+    });
+
+    describe("findActiveOrderIdsByAsset", () => {
+        function createMockQb(rawResults: any[] = []) {
+            return {
+                select: jest.fn().mockReturnThis(),
+                where: jest.fn().mockReturnThis(),
+                andWhere: jest.fn().mockReturnThis(),
+                getRawMany: jest.fn().mockResolvedValue(rawResults),
+            };
+        }
+
+        it("should return array of active order IDs", async () => {
+            const mockQb = createMockQb([
+                { id: "order-1" },
+                { id: "order-2" },
+                { id: "order-3" },
+            ]);
+
+            jest.spyOn(repository, "createQueryBuilder").mockReturnValue(
+                mockQb as any,
+            );
+
+            const result = await repository.findActiveOrderIdsByAsset(
+                MOCK_IDS.assetId,
+            );
+
+            expect(result).toEqual(["order-1", "order-2", "order-3"]);
+        });
+
+        it("should return empty array when no active orders", async () => {
+            const mockQb = createMockQb([]);
+            jest.spyOn(repository, "createQueryBuilder").mockReturnValue(
+                mockQb as any,
+            );
+
+            const result = await repository.findActiveOrderIdsByAsset(
+                MOCK_IDS.assetId,
+            );
+
+            expect(result).toEqual([]);
+        });
+    });
 });

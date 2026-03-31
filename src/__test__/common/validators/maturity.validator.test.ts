@@ -11,7 +11,9 @@ class TestMaturitiesDto {
 }
 
 describe("Maturity Validators", () => {
-    const fixedNow = new Date(Date.UTC(2026, 1, 15, 0, 0, 0)); // 2026-02-15 UTC
+    // Use current date so the test always aligns with what the validator
+    // computes at runtime (it calls validateMaturitiesUtcSeconds with no `now`).
+    const fixedNow = new Date();
     const allowedMaturities = getAllowedMaturitiesUtcSeconds(fixedNow);
 
     const createDto = (maturities: number[]): TestMaturitiesDto => {

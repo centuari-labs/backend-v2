@@ -1,4 +1,8 @@
-import { BadRequestException, NotFoundException } from "@nestjs/common";
+import {
+    BadRequestException,
+    InternalServerErrorException,
+    NotFoundException,
+} from "@nestjs/common";
 import { WithdrawService } from "../../withdraw/withdraw.service";
 import { HEALTH_FACTOR_NO_DEBT } from "../../portfolio/helpers/health-factor.helpers";
 
@@ -454,7 +458,7 @@ describe("WithdrawService", () => {
 
             await expect(
                 service.withdraw({ assetId, amount: "100" }, walletAddress),
-            ).rejects.toThrow("Contract execution reverted");
+            ).rejects.toThrow(InternalServerErrorException);
             expect(mockQueryRunner.rollbackTransaction).toHaveBeenCalled();
             expect(mockQueryRunner.release).toHaveBeenCalled();
         });

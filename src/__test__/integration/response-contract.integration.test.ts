@@ -29,6 +29,7 @@ import { MarketService } from "src/market/market.service";
 import { PortfolioController } from "src/portfolio/portfolio.controller";
 import { PortfolioService } from "src/portfolio/portfolio.service";
 
+import { RepayService } from "src/portfolio/repay.service";
 import { AuthGuard } from "src/common/guards/auth.guard";
 import { AuthStrategyFactory } from "src/common/guards/strategies/auth-strategy.factory";
 import { PrivyAuthStrategy } from "src/common/guards/strategies/privy-auth.strategy";
@@ -79,6 +80,7 @@ describe("Response Contract Integration", () => {
                 { provide: OrdersService, useValue: mockOrdersService },
                 { provide: MarketService, useValue: mockMarketService },
                 { provide: PortfolioService, useValue: mockPortfolioService },
+                { provide: RepayService, useValue: { repay: jest.fn() } },
                 AuthGuard,
                 AuthStrategyFactory,
                 PrivyAuthStrategy,

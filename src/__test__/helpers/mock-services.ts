@@ -71,6 +71,9 @@ export function createMockPortfolioService(): Partial<
             .mockResolvedValue({ healthFactor: 2 }),
         calculateOpenBorrowOrdersUsd: jest.fn().mockResolvedValue(0),
         checkAvailableBalanceForLend: jest.fn().mockResolvedValue(undefined),
+        checkAvailableBalanceForBorrowFees: jest
+            .fn()
+            .mockResolvedValue(undefined),
     } as any;
 }
 

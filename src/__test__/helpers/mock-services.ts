@@ -107,3 +107,49 @@ export function createMockDataSource(): Partial<jest.Mocked<DataSource>> {
         createEntityManager: jest.fn(),
     } as any;
 }
+
+export function createMockDatabaseService() {
+    return {
+        query: jest.fn().mockResolvedValue([]),
+        queryOne: jest.fn().mockResolvedValue(null),
+        insert: jest.fn().mockResolvedValue({}),
+        getPool: jest.fn(),
+    };
+}
+
+export function createMockViemServiceFull() {
+    return {
+        isValidAddress: jest.fn().mockReturnValue(true),
+        generateWallet: jest.fn().mockReturnValue({
+            address: "0xPairedWallet",
+            privateKey: "0xPairedKey",
+        }),
+        getTransactionReceipt: jest.fn(),
+        getPublicClient: jest.fn(),
+        readContract: jest.fn(),
+        writeContract: jest.fn(),
+        resetWalletClient: jest.fn(),
+        getWalletClient: jest.fn(),
+        waitForTransaction: jest.fn(),
+    };
+}
+
+export function createMockChainConfigService() {
+    return {
+        chainId: 421614,
+        operatorPrivateKey: "0xabc123",
+        treasuryAddress: "0xTreasuryAddress",
+        centuariAddress: "0xCentuariAddress",
+        settlementAddress: "0xSettlementAddress",
+    };
+}
+
+export function createMockConfigService(
+    overrides: Record<string, any> = {},
+) {
+    return {
+        get: jest.fn((key: string, defaultValue?: any) =>
+            key in overrides ? overrides[key] : defaultValue,
+        ),
+    };
+}

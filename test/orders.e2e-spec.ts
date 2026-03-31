@@ -39,27 +39,24 @@ describe("Orders E2E", () => {
     const devToken = `DEV_TOKEN_${devWallet}`;
 
     const createOrderResponse = (
-        overrides: Partial<OrderResponse["data"]> = {},
+        overrides: Partial<OrderResponse> = {},
     ): OrderResponse => ({
-        statusCode: HttpStatus.CREATED,
-        data: {
-            orderId: mockOrderId,
-            walletAddress: devWallet,
-            assetId: mockAssetId,
-            markets: [{ marketId: mockMarketId, maturity: 1748736000 }],
-            timestamp: Date.now(),
-            side: OrderSide.Lend,
-            type: OrderType.Limit,
-            status: OrderStatus.Open,
-            originalAmount: "1000",
-            settlementFeeAmount: "50000",
-            estimatedTradeFeeAmount: "100000",
-            autoRollover: false,
-            rate: 5,
-            createdAt: new Date(),
-            updatedAt: new Date(),
-            ...overrides,
-        },
+        orderId: mockOrderId,
+        walletAddress: devWallet,
+        assetId: mockAssetId,
+        markets: [{ marketId: mockMarketId, maturity: 1748736000 }],
+        timestamp: Date.now(),
+        side: OrderSide.Lend,
+        type: OrderType.Limit,
+        status: OrderStatus.Open,
+        originalAmount: "1000",
+        settlementFeeAmount: "50000",
+        estimatedTradeFeeAmount: "100000",
+        autoRollover: false,
+        rate: 5,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        ...overrides,
     });
 
     beforeAll(async () => {
@@ -123,7 +120,6 @@ describe("Orders E2E", () => {
                 })
                 .expect(HttpStatus.CREATED);
 
-            expect(body.statusCode).toBe(HttpStatus.CREATED);
             expect(ordersService.createLendMarketOrder).toHaveBeenCalledWith(
                 expect.objectContaining({ assetId: mockAssetId }),
                 devWallet,
@@ -152,8 +148,7 @@ describe("Orders E2E", () => {
                 })
                 .expect(HttpStatus.CREATED);
 
-            expect(body.statusCode).toBe(HttpStatus.CREATED);
-            expect(body.data.rate).toBe(5);
+            expect(body.rate).toBe(5);
         });
     });
 
@@ -176,8 +171,7 @@ describe("Orders E2E", () => {
                 })
                 .expect(HttpStatus.CREATED);
 
-            expect(body.statusCode).toBe(HttpStatus.CREATED);
-            expect(body.data.side).toBe(OrderSide.Borrow);
+            expect(body.side).toBe(OrderSide.Borrow);
         });
     });
 
@@ -201,8 +195,7 @@ describe("Orders E2E", () => {
                 })
                 .expect(HttpStatus.CREATED);
 
-            expect(body.statusCode).toBe(HttpStatus.CREATED);
-            expect(body.data.rate).toBe(7.5);
+            expect(body.rate).toBe(7.5);
         });
     });
 
@@ -279,17 +272,15 @@ describe("Orders E2E", () => {
                 })
                 .expect(HttpStatus.CREATED);
 
-            expect(body).toHaveProperty("statusCode");
-            expect(body).toHaveProperty("data");
-            expect(body.data).toHaveProperty("orderId");
-            expect(body.data).toHaveProperty("walletAddress");
-            expect(body.data).toHaveProperty("assetId");
-            expect(body.data).toHaveProperty("markets");
-            expect(body.data).toHaveProperty("side");
-            expect(body.data).toHaveProperty("type");
-            expect(body.data).toHaveProperty("status");
-            expect(body.data).toHaveProperty("originalAmount");
-            expect(body.data).toHaveProperty("rate");
+            expect(body).toHaveProperty("orderId");
+            expect(body).toHaveProperty("walletAddress");
+            expect(body).toHaveProperty("assetId");
+            expect(body).toHaveProperty("markets");
+            expect(body).toHaveProperty("side");
+            expect(body).toHaveProperty("type");
+            expect(body).toHaveProperty("status");
+            expect(body).toHaveProperty("originalAmount");
+            expect(body).toHaveProperty("rate");
         });
 
         it("should pass wallet from dev token to service", async () => {

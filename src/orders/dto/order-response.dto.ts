@@ -5,7 +5,7 @@ import {
     OrderType,
 } from "../constants/order.constants";
 
-export interface OrderResponseData {
+export class OrderResponse {
     orderId: string;
     walletAddress: string;
     assetId: string;
@@ -38,9 +38,4 @@ export interface OrderResponseData {
     rate: number;
     createdAt: Date;
     updatedAt: Date;
-}
-
-export class OrderResponse {
-    statusCode: HttpStatus;
-    data: OrderResponseData;
 }

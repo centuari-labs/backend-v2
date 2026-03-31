@@ -168,10 +168,9 @@ describe("Orders Flow Integration", () => {
                 MOCK_IDS.privyUserId,
             );
 
-            expect(result.statusCode).toBe(HttpStatus.CREATED);
-            expect(result.data.side).toBe(OrderSide.Lend);
-            expect(result.data.type).toBe(OrderType.Limit);
-            expect(result.data.rate).toBe(5); // 500 BPS = 5%
+            expect(result.side).toBe(OrderSide.Lend);
+            expect(result.type).toBe(OrderType.Limit);
+            expect(result.rate).toBe(5); // 500 BPS = 5%
             expect(natsService.publish).toHaveBeenCalledWith(
                 "orders.lend.limit",
                 expect.objectContaining({
@@ -223,8 +222,7 @@ describe("Orders Flow Integration", () => {
                 MOCK_IDS.privyUserId,
             );
 
-            expect(result.statusCode).toBe(HttpStatus.CREATED);
-            expect(result.data.rate).toBe(0);
+            expect(result.rate).toBe(0);
             expect(natsService.publish).toHaveBeenCalledWith(
                 "orders.lend.market",
                 expect.anything(),
@@ -276,8 +274,7 @@ describe("Orders Flow Integration", () => {
                 MOCK_IDS.privyUserId,
             );
 
-            expect(result.statusCode).toBe(HttpStatus.CREATED);
-            expect(result.data.side).toBe(OrderSide.Borrow);
+            expect(result.side).toBe(OrderSide.Borrow);
             expect(natsService.publish).toHaveBeenCalledWith(
                 "orders.borrow.limit",
                 expect.anything(),

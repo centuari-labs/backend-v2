@@ -6,7 +6,6 @@ import {
 } from "src/orders/constants/order.constants";
 import {
     OrderResponse,
-    OrderResponseData,
 } from "src/orders/dto/order-response.dto";
 import { toPercentage } from "src/common/utils/number.utils";
 
@@ -17,39 +16,31 @@ describe("OrderResponse contract", () => {
     const mockMarketId = "c0000000-0000-0000-0000-000000000001";
 
     function buildOrderResponse(
-        overrides: Partial<OrderResponseData> = {},
+        overrides: Partial<OrderResponse> = {},
     ): OrderResponse {
         return {
-            statusCode: HttpStatus.CREATED,
-            data: {
-                orderId: mockOrderId,
-                walletAddress: mockWallet,
-                assetId: mockAssetId,
-                markets: [{ marketId: mockMarketId, maturity: 1748736000 }],
-                timestamp: Date.now(),
-                side: OrderSide.Lend,
-                type: OrderType.Limit,
-                status: OrderStatus.Open,
-                originalAmount: "1000",
-                settlementFeeAmount: "50000",
-                estimatedTradeFeeAmount: "100000",
-                autoRollover: false,
-                rate: 6.5,
-                createdAt: new Date(),
-                updatedAt: new Date(),
-                ...overrides,
-            },
+            orderId: mockOrderId,
+            walletAddress: mockWallet,
+            assetId: mockAssetId,
+            markets: [{ marketId: mockMarketId, maturity: 1748736000 }],
+            timestamp: Date.now(),
+            side: OrderSide.Lend,
+            type: OrderType.Limit,
+            status: OrderStatus.Open,
+            originalAmount: "1000",
+            settlementFeeAmount: "50000",
+            estimatedTradeFeeAmount: "100000",
+            autoRollover: false,
+            rate: 6.5,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            ...overrides,
         };
     }
 
-    it("has statusCode 201 for new orders", () => {
+    it("has all required fields", () => {
         const resp = buildOrderResponse();
-        expect(resp.statusCode).toBe(HttpStatus.CREATED);
-    });
-
-    it("has all required fields in data", () => {
-        const resp = buildOrderResponse();
-        const required: (keyof OrderResponseData)[] = [
+        const required: (keyof OrderResponse)[] = [
             "orderId",
             "walletAddress",
             "assetId",
@@ -67,14 +58,14 @@ describe("OrderResponse contract", () => {
             "updatedAt",
         ];
         for (const field of required) {
-            expect(resp.data).toHaveProperty(field);
+            expect(resp).toHaveProperty(field);
         }
     });
 
     it("markets array contains { marketId, maturity } entries", () => {
         const resp = buildOrderResponse();
-        expect(resp.data.markets).toHaveLength(1);
-        expect(resp.data.markets[0]).toEqual({
+        expect(resp.markets).toHaveLength(1);
+        expect(resp.markets[0]).toEqual({
             marketId: mockMarketId,
             maturity: 1748736000,
         });
@@ -82,7 +73,7 @@ describe("OrderResponse contract", () => {
 
     it("maturity is Unix timestamp in seconds (not milliseconds)", () => {
         const resp = buildOrderResponse();
-        const maturity = resp.data.markets[0].maturity;
+        const maturity = resp.markets[0].maturity;
         // Unix seconds should be in the billions range (not trillions)
         expect(maturity).toBeGreaterThan(1_000_000_000);
         expect(maturity).toBeLessThan(10_000_000_000);
@@ -120,30 +111,30 @@ describe("OrderResponse contract", () => {
         const responseRate = toPercentage(dbRateBps);
         const resp = buildOrderResponse({ rate: responseRate });
 
-        expect(resp.data.rate).toBe(6.5);
+        expect(resp.rate).toBe(6.5);
     });
 
     it("orderId is a UUID string", () => {
         const resp = buildOrderResponse();
-        expect(resp.data.orderId).toMatch(
+        expect(resp.orderId).toMatch(
             /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
         );
     });
 
     it("side enum values are LEND or BORROW", () => {
-        expect(buildOrderResponse({ side: OrderSide.Lend }).data.side).toBe(
+        expect(buildOrderResponse({ side: OrderSide.Lend }).side).toBe(
             "LEND",
         );
-        expect(buildOrderResponse({ side: OrderSide.Borrow }).data.side).toBe(
+        expect(buildOrderResponse({ side: OrderSide.Borrow }).side).toBe(
             "BORROW",
         );
     });
 
     it("type enum values are MARKET or LIMIT", () => {
-        expect(buildOrderResponse({ type: OrderType.Market }).data.type).toBe(
+        expect(buildOrderResponse({ type: OrderType.Market }).type).toBe(
             "MARKET",
         );
-        expect(buildOrderResponse({ type: OrderType.Limit }).data.type).toBe(
+        expect(buildOrderResponse({ type: OrderType.Limit }).type).toBe(
             "LIMIT",
         );
     });

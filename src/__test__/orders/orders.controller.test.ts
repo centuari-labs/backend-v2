@@ -34,24 +34,21 @@ describe("OrdersController", () => {
     const mockUser = { userId: "dev-user-123" };
 
     const mockOrderResponse: OrderResponse = {
-        statusCode: HttpStatus.CREATED,
-        data: {
-            orderId: MOCK_IDS.orderId,
-            walletAddress: mockWalletAddress,
-            assetId: MOCK_IDS.assetId,
-            markets: [{ marketId: MOCK_IDS.marketId, maturity: 1748736000 }],
-            timestamp: Date.now(),
-            side: OrderSide.Lend,
-            type: OrderType.Limit,
-            status: OrderStatus.Open,
-            originalAmount: "1000",
-            settlementFeeAmount: "50000",
-            estimatedTradeFeeAmount: "100000",
-            autoRollover: false,
-            rate: 5,
-            createdAt: new Date(),
-            updatedAt: new Date(),
-        },
+        orderId: MOCK_IDS.orderId,
+        walletAddress: mockWalletAddress,
+        assetId: MOCK_IDS.assetId,
+        markets: [{ marketId: MOCK_IDS.marketId, maturity: 1748736000 }],
+        timestamp: Date.now(),
+        side: OrderSide.Lend,
+        type: OrderType.Limit,
+        status: OrderStatus.Open,
+        originalAmount: "1000",
+        settlementFeeAmount: "50000",
+        estimatedTradeFeeAmount: "100000",
+        autoRollover: false,
+        rate: 5,
+        createdAt: new Date(),
+        updatedAt: new Date(),
     };
 
     beforeEach(async () => {
@@ -135,12 +132,9 @@ describe("OrdersController", () => {
             };
             const borrowResponse = {
                 ...mockOrderResponse,
-                data: {
-                    ...mockOrderResponse.data,
-                    side: OrderSide.Borrow,
-                    type: OrderType.Market,
-                    rate: 0,
-                },
+                side: OrderSide.Borrow,
+                type: OrderType.Market,
+                rate: 0,
             };
             ordersService.createBorrowMarketOrder.mockResolvedValue(
                 borrowResponse,
@@ -171,12 +165,9 @@ describe("OrdersController", () => {
             };
             const borrowResponse = {
                 ...mockOrderResponse,
-                data: {
-                    ...mockOrderResponse.data,
-                    side: OrderSide.Borrow,
-                    type: OrderType.Limit,
-                    rate: 7.5,
-                },
+                side: OrderSide.Borrow,
+                type: OrderType.Limit,
+                rate: 7.5,
             };
             ordersService.createBorrowLimitOrder.mockResolvedValue(
                 borrowResponse,
@@ -241,7 +232,7 @@ describe("OrdersController", () => {
             };
             const customResponse = {
                 ...mockOrderResponse,
-                data: { ...mockOrderResponse.data, originalAmount: "500" },
+                originalAmount: "500",
             };
             ordersService.createLendMarketOrder.mockResolvedValue(
                 customResponse,
@@ -253,7 +244,7 @@ describe("OrdersController", () => {
                 mockUser,
             );
 
-            expect(result.data.originalAmount).toBe("500");
+            expect(result.originalAmount).toBe("500");
         });
 
         it("should propagate service exceptions", async () => {

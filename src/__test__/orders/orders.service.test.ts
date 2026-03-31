@@ -220,12 +220,11 @@ describe("OrdersService", () => {
                 mockPrivyUserId,
             );
 
-            expect(result.statusCode).toBe(HttpStatus.CREATED);
-            expect(result.data.side).toBe(OrderSide.Lend);
-            expect(result.data.type).toBe(OrderType.Limit);
-            expect(result.data.rate).toBe(5); // 500 basis points = 5%
-            expect(result.data.autoRollover).toBe(false);
-            expect(result.data.markets).toEqual([
+            expect(result.side).toBe(OrderSide.Lend);
+            expect(result.type).toBe(OrderType.Limit);
+            expect(result.rate).toBe(5); // 500 basis points = 5%
+            expect(result.autoRollover).toBe(false);
+            expect(result.markets).toEqual([
                 { marketId: mockMarketId, maturity: mockMaturityUnix },
             ]);
             expect(orderRepository.saveOrderWithMarkets).toHaveBeenCalledWith(
@@ -290,7 +289,7 @@ describe("OrdersService", () => {
                 mockPrivyUserId,
             );
 
-            expect(result.data.originalAmount).toBe("1000");
+            expect(result.originalAmount).toBe("1000");
         });
 
         it("should set initial status to Open", async () => {
@@ -313,7 +312,7 @@ describe("OrdersService", () => {
                 mockPrivyUserId,
             );
 
-            expect(result.data.status).toBe(OrderStatus.Open);
+            expect(result.status).toBe(OrderStatus.Open);
         });
 
         it("should publish order to NATS", async () => {
@@ -461,12 +460,11 @@ describe("OrdersService", () => {
                 mockPrivyUserId,
             );
 
-            expect(result.statusCode).toBe(HttpStatus.CREATED);
-            expect(result.data.side).toBe(OrderSide.Lend);
-            expect(result.data.type).toBe(OrderType.Market);
-            expect(result.data.rate).toBe(0);
-            expect(result.data.autoRollover).toBe(false);
-            expect(result.data.markets).toEqual([
+            expect(result.side).toBe(OrderSide.Lend);
+            expect(result.type).toBe(OrderType.Market);
+            expect(result.rate).toBe(0);
+            expect(result.autoRollover).toBe(false);
+            expect(result.markets).toEqual([
                 { marketId: mockMarketId, maturity: mockMaturityUnix },
             ]);
             expect(orderRepository.saveOrderWithMarkets).toHaveBeenCalledWith(
@@ -594,12 +592,11 @@ describe("OrdersService", () => {
                 mockPrivyUserId,
             );
 
-            expect(result.statusCode).toBe(HttpStatus.CREATED);
-            expect(result.data.side).toBe(OrderSide.Borrow);
-            expect(result.data.type).toBe(OrderType.Limit);
-            expect(result.data.rate).toBe(7.5); // 750 basis points = 7.5%
-            expect(result.data.autoRollover).toBe(false);
-            expect(result.data.markets).toEqual([
+            expect(result.side).toBe(OrderSide.Borrow);
+            expect(result.type).toBe(OrderType.Limit);
+            expect(result.rate).toBe(7.5); // 750 basis points = 7.5%
+            expect(result.autoRollover).toBe(false);
+            expect(result.markets).toEqual([
                 { marketId: mockMarketId, maturity: mockMaturityUnix },
             ]);
             expect(orderRepository.saveOrderWithMarkets).toHaveBeenCalledWith(
@@ -727,12 +724,11 @@ describe("OrdersService", () => {
                 mockPrivyUserId,
             );
 
-            expect(result.statusCode).toBe(HttpStatus.CREATED);
-            expect(result.data.side).toBe(OrderSide.Borrow);
-            expect(result.data.type).toBe(OrderType.Market);
-            expect(result.data.rate).toBe(0);
-            expect(result.data.autoRollover).toBe(false);
-            expect(result.data.markets).toEqual([
+            expect(result.side).toBe(OrderSide.Borrow);
+            expect(result.type).toBe(OrderType.Market);
+            expect(result.rate).toBe(0);
+            expect(result.autoRollover).toBe(false);
+            expect(result.markets).toEqual([
                 { marketId: mockMarketId, maturity: mockMaturityUnix },
             ]);
             expect(orderRepository.saveOrderWithMarkets).toHaveBeenCalledWith(

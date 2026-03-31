@@ -29,7 +29,11 @@ import { OrdersWorker } from "./orders.worker";
         FaucetModule,
     ],
     controllers: [OrdersController],
-    providers: [OrdersService, OrderRepository, OrdersWorker],
+    providers: [
+        OrdersService,
+        OrderRepository,
+        OrdersWorker,
+    ],
     exports: [OrdersService, OrderRepository],
 })
 export class OrdersModule {}

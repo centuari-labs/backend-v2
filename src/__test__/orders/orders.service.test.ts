@@ -11,6 +11,9 @@ import { Market } from "../../market/entities/market.entity";
 import { MarketRepositories } from "../../market/repository/market.repository";
 import { PriceService } from "../../price/price.service";
 import { TokensService } from "../../tokens/tokens.service";
+import { DataSource } from "typeorm";
+import { OrderMarket } from "../../orders/entities/order-market.entity";
+import { UpdateOrderDto } from "../../orders/dto/update-order.dto";
 import { NatsService } from "../../core/nats/nats.service";
 import {
     OrderSide,
@@ -33,6 +36,7 @@ describe("OrdersService", () => {
         getPrice: jest.MockedFunction<PriceService["getPrice"]>;
     };
     let portfolioService: jest.Mocked<PortfolioService>;
+    let dataSource: jest.Mocked<DataSource>;
 
     const mockWalletAddress = "0x1234567890abcdef1234567890abcdef12345678";
     const mockPrivyUserId = "did:privy:mock-user-id";
@@ -68,11 +72,11 @@ describe("OrdersService", () => {
             saveOrderWithMarkets: jest.fn(),
             getOrCreateAccount: jest.fn(),
             getOpenOrders: jest.fn(),
-            findAccountByWallet: jest.fn(),
             getOrderById: jest.fn(),
+            findAccountByWallet: jest.fn(),
+            hasCounterpartyOrders: jest.fn().mockResolvedValue(true),
             getTotalOpenQuantity: jest.fn().mockResolvedValue(0n),
             getOpenBorrowOrders: jest.fn().mockResolvedValue([]),
-            hasCounterpartyOrders: jest.fn().mockResolvedValue(true),
         };
 
         const mockTokensService: jest.Mocked<TokensService> = {
@@ -112,6 +116,25 @@ describe("OrdersService", () => {
                 .mockResolvedValue(undefined),
         };
 
+        const mockManager = {
+            getRepository: jest.fn().mockImplementation((entity) => {
+                if (entity === OrderMarket) {
+                    return {
+                        save: jest.fn().mockResolvedValue({}),
+                        delete: jest.fn().mockResolvedValue({}),
+                    };
+                }
+                return {
+                    findOne: jest.fn(),
+                    save: jest.fn().mockImplementation((val) => Promise.resolve(val)),
+                };
+            }),
+        };
+
+        const mockDataSource = {
+            transaction: jest.fn().mockImplementation((cb: any) => cb(mockManager)),
+        };
+
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 OrdersService,
@@ -139,6 +162,10 @@ describe("OrdersService", () => {
                     provide: PortfolioService,
                     useValue: mockPortfolioService,
                 },
+                {
+                    provide: DataSource,
+                    useValue: mockDataSource,
+                },
             ],
         }).compile();
 
@@ -154,6 +181,7 @@ describe("OrdersService", () => {
         priceService = {
             getPrice: module.get(PriceService).getPrice as any,
         };
+        dataSource = module.get(DataSource);
     });
 
     afterEach(() => {
@@ -939,6 +967,140 @@ describe("OrdersService", () => {
                     walletAddress: mockWalletAddress,
                 }),
             );
+        });
+    });
+
+    describe("updateOrder", () => {
+        const updateDto: UpdateOrderDto = {
+            amount: "1500",
+            marketIds: [mockMarketId],
+            rate: 600,
+        };
+
+        it("should successfully update an order", async () => {
+            const existingOrder = createMockOrder({
+                status: OrderStatus.Open,
+            });
+
+            orderRepository.findAccountByWallet.mockResolvedValue({
+                id: mockAccountId,
+            } as any);
+            tokensService.getTokenDecimalsByAssetId.mockResolvedValue(6);
+            
+            // Mock transaction manager repository results
+            const mockRepo = {
+                findOne: jest.fn().mockResolvedValue(existingOrder),
+                save: jest.fn().mockImplementation((v) => Promise.resolve(v)),
+                delete: jest.fn().mockResolvedValue({}),
+            };
+            (dataSource.transaction as jest.Mock).mockImplementationOnce(async (cb) => {
+                return cb({
+                    getRepository: jest.fn().mockReturnValue(mockRepo),
+                });
+            });
+
+            const result = await service.updateOrder(
+                existingOrder.id,
+                mockWalletAddress,
+                updateDto,
+            );
+
+            expect(result.quantity).toBe("1500000000"); // 1500 * 10^6
+            expect(result.rate).toBe(600);
+            expect(result.status).toBe(OrderStatus.Open);
+            expect(result.settlementFee).toBe("50000"); // 1500 * 0.01% = 0.15, capped to 0.05
+            expect(natsService.publish).toHaveBeenCalled();
+        });
+
+        it("should maintain PartiallyFilled status if order was already partially filled", async () => {
+            const existingOrder = createMockOrder({
+                status: OrderStatus.PartiallyFilled,
+                filledQuantity: "500000000", // 500
+            });
+
+            orderRepository.findAccountByWallet.mockResolvedValue({ id: mockAccountId } as any);
+            tokensService.getTokenDecimalsByAssetId.mockResolvedValue(6);
+            
+            const mockRepo = {
+                findOne: jest.fn().mockResolvedValue(existingOrder),
+                save: jest.fn().mockImplementation((v) => Promise.resolve(v)),
+                delete: jest.fn().mockResolvedValue({}),
+            };
+            (dataSource.transaction as jest.Mock).mockImplementationOnce(async (cb) => {
+                return cb({ getRepository: jest.fn().mockReturnValue(mockRepo) });
+            });
+
+            const result = await service.updateOrder(existingOrder.id, mockWalletAddress, updateDto);
+
+            expect(result.status).toBe(OrderStatus.PartiallyFilled);
+            expect(BigInt(result.quantity)).toBe(1500000000n);
+        });
+
+        it("should throw BadRequestException if new quantity is less than or equal to filled quantity", async () => {
+            const existingOrder = createMockOrder({
+                status: OrderStatus.PartiallyFilled,
+                filledQuantity: "2000000000", // 2000
+            });
+
+            orderRepository.findAccountByWallet.mockResolvedValue({ id: mockAccountId } as any);
+            tokensService.getTokenDecimalsByAssetId.mockResolvedValue(6);
+            
+            const mockRepo = {
+                findOne: jest.fn().mockResolvedValue(existingOrder),
+            };
+            (dataSource.transaction as jest.Mock).mockImplementationOnce(async (cb) => {
+                return cb({ getRepository: jest.fn().mockReturnValue(mockRepo) });
+            });
+
+            await expect(
+                service.updateOrder(existingOrder.id, mockWalletAddress, updateDto),
+            ).rejects.toThrow("New quantity must be greater than the already filled quantity");
+        });
+
+        it("should throw ForbiddenException if user does not own the order", async () => {
+            const otherOrder = createMockOrder({
+                accountId: "other-account",
+            });
+
+            orderRepository.findAccountByWallet.mockResolvedValue({
+                id: mockAccountId,
+            } as any);
+
+            const mockRepo = {
+                findOne: jest.fn().mockResolvedValue(otherOrder),
+            };
+            (dataSource.transaction as jest.Mock).mockImplementationOnce(async (cb) => {
+                return cb({
+                    getRepository: jest.fn().mockReturnValue(mockRepo),
+                });
+            });
+
+            await expect(
+                service.updateOrder(otherOrder.id, mockWalletAddress, updateDto),
+            ).rejects.toThrow(ForbiddenException);
+        });
+
+        it("should throw BadRequestException if order status is not open/partial", async () => {
+            const cancelledOrder = createMockOrder({
+                status: OrderStatus.Cancelled,
+            });
+
+            orderRepository.findAccountByWallet.mockResolvedValue({
+                id: mockAccountId,
+            } as any);
+
+            const mockRepo = {
+                findOne: jest.fn().mockResolvedValue(cancelledOrder),
+            };
+            (dataSource.transaction as jest.Mock).mockImplementationOnce(async (cb) => {
+                return cb({
+                    getRepository: jest.fn().mockReturnValue(mockRepo),
+                });
+            });
+
+            await expect(
+                service.updateOrder(cancelledOrder.id, mockWalletAddress, updateDto),
+            ).rejects.toThrow(BadRequestException);
         });
     });
 });

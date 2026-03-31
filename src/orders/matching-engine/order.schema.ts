@@ -97,6 +97,11 @@ export const borrowLimitOrderSchema = baseOrderSchema.extend({
         .max(10000, "Rate must not exceed 10000 basis points (100%)"),
 });
 
+export const updateOrderSchema = z.object({
+    orderId: z.string().uuid("Order ID must be a valid UUID"),
+    walletAddress: ethereumAddressSchema,
+})
+
 export const orderSchema = z.union([
     lendMarketOrderSchema,
     lendLimitOrderSchema,
@@ -109,3 +114,4 @@ export type LendLimitOrder = z.infer<typeof lendLimitOrderSchema>;
 export type BorrowMarketOrder = z.infer<typeof borrowMarketOrderSchema>;
 export type BorrowLimitOrder = z.infer<typeof borrowLimitOrderSchema>;
 export type MatchingEngineOrder = z.infer<typeof orderSchema>;
+export type UpdateOrder = z.infer<typeof updateOrderSchema>;

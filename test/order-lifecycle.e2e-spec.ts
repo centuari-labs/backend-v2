@@ -45,24 +45,21 @@ describe("Order Lifecycle E2E", () => {
     const mockMarketId = "c0000000-0000-0000-0000-000000000001";
 
     const buildOrderResponse = (overrides = {}) => ({
-        statusCode: HttpStatus.CREATED,
-        data: {
-            orderId: mockOrderId,
-            walletAddress: devWallet,
-            assetId: mockAssetId,
-            markets: [{ marketId: mockMarketId, maturity: 1748736000 }],
-            timestamp: Date.now(),
-            side: OrderSide.Lend,
-            type: OrderType.Limit,
-            status: OrderStatus.Open,
-            originalAmount: "1000",
-            settlementFeeAmount: "50000",
-            autoRollover: false,
-            rate: 6.5,
-            createdAt: new Date(),
-            updatedAt: new Date(),
-            ...overrides,
-        },
+        orderId: mockOrderId,
+        walletAddress: devWallet,
+        assetId: mockAssetId,
+        markets: [{ marketId: mockMarketId, maturity: 1748736000 }],
+        timestamp: Date.now(),
+        side: OrderSide.Lend,
+        type: OrderType.Limit,
+        status: OrderStatus.Open,
+        originalAmount: "1000",
+        settlementFeeAmount: "50000",
+        autoRollover: false,
+        rate: 6.5,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        ...overrides,
     });
 
     beforeAll(async () => {
@@ -109,7 +106,7 @@ describe("Order Lifecycle E2E", () => {
     });
 
     describe("create lend limit order", () => {
-        it("returns 201 with double-envelope response shape", async () => {
+        it("returns 201 with single-envelope response shape", async () => {
             ordersService.createLendLimitOrder.mockResolvedValue(
                 buildOrderResponse() as any,
             );
@@ -125,16 +122,14 @@ describe("Order Lifecycle E2E", () => {
                 })
                 .expect(HttpStatus.CREATED);
 
-            // Outer envelope
+            // Standard envelope from ResponseInterceptor
             expect(body.statusCode).toBe(201);
-            // Inner envelope
-            expect(body.data.statusCode).toBe(201);
-            expect(body.data.data.orderId).toBe(mockOrderId);
-            expect(body.data.data.side).toBe("LEND");
-            expect(body.data.data.type).toBe("LIMIT");
-            expect(body.data.data.status).toBe("OPEN");
-            expect(body.data.data.rate).toBe(6.5);
-            expect(body.data.data.markets[0].maturity).toBe(1748736000);
+            expect(body.data.orderId).toBe(mockOrderId);
+            expect(body.data.side).toBe("LEND");
+            expect(body.data.type).toBe("LIMIT");
+            expect(body.data.status).toBe("OPEN");
+            expect(body.data.rate).toBe(6.5);
+            expect(body.data.markets[0].maturity).toBe(1748736000);
         });
     });
 
@@ -158,9 +153,9 @@ describe("Order Lifecycle E2E", () => {
                 })
                 .expect(HttpStatus.CREATED);
 
-            expect(body.data.data.side).toBe("BORROW");
-            expect(body.data.data.type).toBe("MARKET");
-            expect(body.data.data.rate).toBe(0);
+            expect(body.data.side).toBe("BORROW");
+            expect(body.data.type).toBe("MARKET");
+            expect(body.data.rate).toBe(0);
         });
     });
 
@@ -200,9 +195,9 @@ describe("Order Lifecycle E2E", () => {
                 })
                 .expect(HttpStatus.CREATED);
 
-            const createdOrderId = createRes.body.data.data.orderId;
+            const createdOrderId = createRes.body.data.orderId;
             expect(createdOrderId).toBe(mockOrderId);
-            expect(createRes.body.data.data.status).toBe("OPEN");
+            expect(createRes.body.data.status).toBe("OPEN");
 
             // Step 2: Cancel
             ordersService.cancelOrder.mockResolvedValue({

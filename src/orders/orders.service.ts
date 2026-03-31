@@ -458,31 +458,28 @@ export class OrdersService {
         );
 
         return {
-            statusCode: HttpStatus.CREATED,
-            data: {
-                orderId: order.id,
-                walletAddress: walletAddress,
-                assetId: dto.assetId,
-                markets,
-                timestamp: new Date(order.createdAt).getTime(),
-                side: order.side,
-                type: order.type,
-                status: order.status,
-                originalAmount: dto.amount,
-                settlementFeeAmount: baseUnitsToHuman(
-                    order.settlementFee,
-                    decimals!,
-                ),
-                estimatedTradeFeeAmount: baseUnitsToHuman(
-                    estimatedTradeFeeBaseUnits,
-                    decimals!,
-                ),
-                // order.rate is stored as basis points in the DB; expose percentage in responses
-                rate: toPercentage(order.rate),
-                autoRollover: order.autoRollover,
-                createdAt: order.createdAt,
-                updatedAt: order.updatedAt,
-            },
+            orderId: order.id,
+            walletAddress: walletAddress,
+            assetId: dto.assetId,
+            markets,
+            timestamp: new Date(order.createdAt).getTime(),
+            side: order.side,
+            type: order.type,
+            status: order.status,
+            originalAmount: dto.amount,
+            settlementFeeAmount: baseUnitsToHuman(
+                order.settlementFee,
+                decimals!,
+            ),
+            estimatedTradeFeeAmount: baseUnitsToHuman(
+                estimatedTradeFeeBaseUnits,
+                decimals!,
+            ),
+            // order.rate is stored as basis points in the DB; expose percentage in responses
+            rate: toPercentage(order.rate),
+            autoRollover: order.autoRollover,
+            createdAt: order.createdAt,
+            updatedAt: order.updatedAt,
         };
     }
 

@@ -72,7 +72,7 @@ export class WithdrawService {
 
         try {
             const portfolioRows = await queryRunner.query(
-                `SELECT id, amount, is_collateral FROM portfolio
+                `SELECT id, amount, locked_amount, is_collateral FROM portfolio
                  WHERE account_id = $1 AND asset_id = $2
                  FOR UPDATE`,
                 [account.id, assetId],
@@ -98,7 +98,11 @@ export class WithdrawService {
             const collateralAmount = collateralRow
                 ? Number(collateralRow.amount)
                 : 0;
-            const totalAvailable = nonCollateralAmount + collateralAmount;
+            const lockedAmount = nonCollateralRow
+                ? Number(nonCollateralRow.locked_amount ?? 0)
+                : 0;
+            const totalAvailable =
+                nonCollateralAmount + collateralAmount - lockedAmount;
 
             if (amountBaseNum > totalAvailable) {
                 throw new BadRequestException(

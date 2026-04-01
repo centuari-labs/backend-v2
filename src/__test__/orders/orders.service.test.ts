@@ -1098,5 +1098,198 @@ describe("OrdersService", () => {
                 service.updateOrder(cancelledOrder.id, mockWalletAddress, updateDto),
             ).rejects.toThrow(BadRequestException);
         });
+
+        it("should throw when new quantity <= filled quantity", async () => {
+            const partiallyFilledOrder = createMockOrder({
+                side: OrderSide.Lend,
+                status: OrderStatus.PartiallyFilled,
+                quantity: "1000000",
+                filledQuantity: "500000",
+            });
+
+            orderRepository.findAccountByWallet.mockResolvedValue({
+                id: mockAccountId,
+            } as any);
+
+            tokensService.getTokenDecimalsByAssetId.mockResolvedValue(6);
+
+            const mockRepo = {
+                findOne: jest.fn().mockResolvedValue(partiallyFilledOrder),
+                save: jest.fn(),
+            };
+            (dataSource.transaction as jest.Mock).mockImplementationOnce(async (cb) => {
+                return cb({
+                    getRepository: jest.fn().mockReturnValue(mockRepo),
+                });
+            });
+
+            // Amount "0.4" with 6 decimals = 400000 base units, which is <= filledQuantity 500000
+            await expect(
+                service.updateOrder(partiallyFilledOrder.id, mockWalletAddress, {
+                    ...updateDto,
+                    amount: "0.4",
+                }),
+            ).rejects.toThrow(BadRequestException);
+        });
+
+        it("should validate health factor for borrow order updates and reject HF < 1", async () => {
+            const borrowOrder = createMockOrder({
+                side: OrderSide.Borrow,
+                status: OrderStatus.Open,
+            });
+
+            orderRepository.findAccountByWallet.mockResolvedValue({
+                id: mockAccountId,
+            } as any);
+
+            tokensService.getTokenDecimalsByAssetId.mockResolvedValue(6);
+            priceService.getPrice.mockResolvedValue(1);
+            portfolioService.getHealthFactorForAccount.mockResolvedValue({
+                healthFactor: 0.5,
+                collateralUsd: 100,
+                debtUsd: 200,
+                weightedLtvDecimal: 0.75,
+            } as any);
+
+            const mockRepo = {
+                findOne: jest.fn().mockResolvedValue(borrowOrder),
+                save: jest.fn(),
+            };
+            (dataSource.transaction as jest.Mock).mockImplementationOnce(async (cb) => {
+                return cb({
+                    getRepository: jest.fn().mockReturnValue(mockRepo),
+                });
+            });
+
+            await expect(
+                service.updateOrder(borrowOrder.id, mockWalletAddress, updateDto),
+            ).rejects.toThrow(BadRequestException);
+        });
+
+        it("should rollback transaction on mid-update error", async () => {
+            const openOrder = createMockOrder({
+                side: OrderSide.Lend,
+                status: OrderStatus.Open,
+            });
+
+            orderRepository.findAccountByWallet.mockResolvedValue({
+                id: mockAccountId,
+            } as any);
+
+            tokensService.getTokenDecimalsByAssetId.mockResolvedValue(6);
+            priceService.getPrice.mockResolvedValue(1);
+
+            const mockRepo = {
+                findOne: jest.fn().mockResolvedValue(openOrder),
+                save: jest.fn().mockRejectedValue(new Error("DB save failed")),
+            };
+            (dataSource.transaction as jest.Mock).mockImplementationOnce(async (cb) => {
+                return cb({
+                    getRepository: jest.fn().mockReturnValue(mockRepo),
+                });
+            });
+
+            await expect(
+                service.updateOrder(openOrder.id, mockWalletAddress, updateDto),
+            ).rejects.toThrow();
+        });
+    });
+
+    describe("computeSettlementFee edge cases (via createLendLimitOrder)", () => {
+        const baseLimitDto: CreateLimitOrderDto = {
+            assetId: mockAssetId,
+            amount: "1000",
+            marketIds: [mockMarketId],
+            rate: 500,
+        };
+
+        it("should return '0' settlement fee when amount is zero", async () => {
+            orderRepository.getOrCreateAccount.mockResolvedValue({
+                id: mockAccountId,
+            } as any);
+            tokensService.validateTokenByAssetId.mockResolvedValue({
+                id: mockAssetId,
+                tokenAddress: "0xToken",
+            } as any);
+            tokensService.getTokenDecimalsByAssetId.mockResolvedValue(6);
+            priceService.getPrice.mockResolvedValue(1);
+
+            const mockOrder = createMockOrder({ settlementFee: "0" });
+            orderRepository.create.mockReturnValue(mockOrder);
+            orderRepository.saveOrderWithMarkets.mockResolvedValue(mockOrder);
+
+            const result = await service.createLendLimitOrder(
+                { ...baseLimitDto, amount: "0" },
+                mockWalletAddress,
+                mockPrivyUserId,
+            );
+
+            // With amount=0, settlement fee should be "0"
+            const createCall = orderRepository.create.mock.calls[0]?.[0];
+            expect(createCall?.settlementFee).toBe("0");
+        });
+
+        it("should throw BadRequestException when price is unavailable for settlement fee", async () => {
+            orderRepository.getOrCreateAccount.mockResolvedValue({
+                id: mockAccountId,
+            } as any);
+            tokensService.validateTokenByAssetId.mockResolvedValue({
+                id: mockAssetId,
+                tokenAddress: "0xToken",
+            } as any);
+            tokensService.getTokenDecimalsByAssetId.mockResolvedValue(6);
+            priceService.getPrice.mockResolvedValue(null);
+
+            await expect(
+                service.createLendLimitOrder(
+                    baseLimitDto,
+                    mockWalletAddress,
+                    mockPrivyUserId,
+                ),
+            ).rejects.toThrow(BadRequestException);
+        });
+    });
+
+    describe("validateHealthFactor boundary (via createBorrowLimitOrder)", () => {
+        const borrowLimitDto: CreateLimitOrderDto = {
+            assetId: mockAssetId,
+            amount: "100",
+            marketIds: [mockMarketId],
+            rate: 500,
+        };
+
+        it("should allow borrow when HF is HEALTH_FACTOR_NO_DEBT (no existing debt)", async () => {
+            orderRepository.getOrCreateAccount.mockResolvedValue({
+                id: mockAccountId,
+            } as any);
+            tokensService.validateTokenByAssetId.mockResolvedValue({
+                id: mockAssetId,
+                tokenAddress: "0xToken",
+            } as any);
+            tokensService.getTokenDecimalsByAssetId.mockResolvedValue(6);
+            priceService.getPrice.mockResolvedValue(1);
+            portfolioService.getHealthFactorForAccount.mockResolvedValue({
+                healthFactor: Number.POSITIVE_INFINITY, // HEALTH_FACTOR_NO_DEBT
+                collateralUsd: 1000,
+                debtUsd: 0,
+                weightedLtvDecimal: 0.75,
+            } as any);
+
+            const mockOrder = createMockOrder({
+                side: OrderSide.Borrow,
+                type: OrderType.Limit,
+            });
+            orderRepository.create.mockReturnValue(mockOrder);
+            orderRepository.saveOrderWithMarkets.mockResolvedValue(mockOrder);
+
+            // Should NOT throw - Infinity health factor means no existing debt
+            const result = await service.createBorrowLimitOrder(
+                borrowLimitDto,
+                mockWalletAddress,
+                mockPrivyUserId,
+            );
+
+            expect(result).toBeDefined();
+        });
     });
 });

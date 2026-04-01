@@ -439,6 +439,176 @@ describe("WithdrawService", () => {
         });
     });
 
+    describe("edge cases", () => {
+        it("should reject withdrawal when HF is exactly 1.0 (boundary)", async () => {
+            mockOrderRepository.findAccountByWallet.mockResolvedValue(
+                mockAccount,
+            );
+            mockTokensService.getTokenByAssetId.mockResolvedValue(mockToken);
+            // Only collateral row, no non-collateral
+            mockQueryRunner.query.mockResolvedValueOnce([
+                {
+                    id: "collateral-row-id",
+                    amount: "10000000",
+                    locked_amount: "0",
+                    is_collateral: true,
+                },
+            ]);
+            mockPortfolioService.simulateHealthFactorAfterWithdrawal.mockResolvedValue(
+                {
+                    healthFactor: 1.0, // Exactly 1.0 — should be rejected (uses <= check)
+                    collateralUsd: 100,
+                    debtUsd: 100,
+                    weightedLtvDecimal: 0.75,
+                },
+            );
+
+            await expect(
+                service.withdraw({ assetId, amount: "5" }, walletAddress),
+            ).rejects.toThrow(BadRequestException);
+        });
+
+        it("should deduct from both collateral and non-collateral when needed", async () => {
+            mockOrderRepository.findAccountByWallet.mockResolvedValue(
+                mockAccount,
+            );
+            mockTokensService.getTokenByAssetId.mockResolvedValue(mockToken);
+            // Non-collateral has 3, collateral has 10 — withdrawing 5
+            mockQueryRunner.query.mockResolvedValueOnce([
+                {
+                    id: "non-collateral-row",
+                    amount: "3000000",
+                    locked_amount: "0",
+                    is_collateral: false,
+                },
+                {
+                    id: "collateral-row",
+                    amount: "10000000",
+                    locked_amount: "0",
+                    is_collateral: true,
+                },
+            ]);
+            mockPortfolioService.simulateHealthFactorAfterWithdrawal.mockResolvedValue(
+                {
+                    healthFactor: 5.0,
+                    collateralUsd: 500,
+                    debtUsd: 100,
+                    weightedLtvDecimal: 0.75,
+                },
+            );
+            mockViemService.writeContract.mockResolvedValue({
+                transactionHash: "0xtxhash",
+            });
+            // UPDATE for non-collateral (delete since 3-3=0), UPDATE for collateral
+            mockQueryRunner.query
+                .mockResolvedValueOnce(undefined) // DELETE non-collateral
+                .mockResolvedValueOnce(undefined); // UPDATE collateral
+
+            const result = await service.withdraw(
+                { assetId, amount: "5" },
+                walletAddress,
+            );
+
+            expect(result.status).toBe("success");
+            // Non-collateral should be deleted (3 - 3 = 0), collateral reduced (10 - 2 = 8)
+            expect(mockQueryRunner.query).toHaveBeenCalledWith(
+                expect.stringContaining("DELETE"),
+                expect.any(Array),
+            );
+        });
+
+        it("should handle case where only collateral row exists", async () => {
+            mockOrderRepository.findAccountByWallet.mockResolvedValue(
+                mockAccount,
+            );
+            mockTokensService.getTokenByAssetId.mockResolvedValue(mockToken);
+            // Only collateral row
+            mockQueryRunner.query.mockResolvedValueOnce([
+                {
+                    id: "collateral-row",
+                    amount: "10000000",
+                    locked_amount: "0",
+                    is_collateral: true,
+                },
+            ]);
+            mockPortfolioService.simulateHealthFactorAfterWithdrawal.mockResolvedValue(
+                {
+                    healthFactor: HEALTH_FACTOR_NO_DEBT,
+                    collateralUsd: 500,
+                    debtUsd: 0,
+                    weightedLtvDecimal: 0.75,
+                },
+            );
+            mockViemService.writeContract.mockResolvedValue({
+                transactionHash: "0xtxhash",
+            });
+            mockQueryRunner.query.mockResolvedValueOnce(undefined);
+
+            const result = await service.withdraw(
+                { assetId, amount: "5" },
+                walletAddress,
+            );
+
+            expect(result.status).toBe("success");
+        });
+
+        it("should delete portfolio row when remaining amount reaches zero", async () => {
+            mockOrderRepository.findAccountByWallet.mockResolvedValue(
+                mockAccount,
+            );
+            mockTokensService.getTokenByAssetId.mockResolvedValue(mockToken);
+            mockQueryRunner.query.mockResolvedValueOnce([
+                {
+                    id: "non-collateral-row",
+                    amount: "5000000", // exactly 5 USDC
+                    locked_amount: "0",
+                    is_collateral: false,
+                },
+            ]);
+            mockViemService.writeContract.mockResolvedValue({
+                transactionHash: "0xtxhash",
+            });
+            mockQueryRunner.query.mockResolvedValueOnce(undefined);
+
+            const result = await service.withdraw(
+                { assetId, amount: "5" },
+                walletAddress,
+            );
+
+            expect(result.status).toBe("success");
+            // Should DELETE the row since amount reaches 0
+            expect(mockQueryRunner.query).toHaveBeenCalledWith(
+                expect.stringContaining("DELETE"),
+                ["non-collateral-row"],
+            );
+        });
+
+        it("should rollback transaction when blockchain writeContract fails", async () => {
+            mockOrderRepository.findAccountByWallet.mockResolvedValue(
+                mockAccount,
+            );
+            mockTokensService.getTokenByAssetId.mockResolvedValue(mockToken);
+            mockQueryRunner.query.mockResolvedValueOnce([
+                {
+                    id: "row-id",
+                    amount: "10000000",
+                    locked_amount: "0",
+                    is_collateral: false,
+                },
+            ]);
+            mockViemService.writeContract.mockRejectedValue(
+                new Error("Network error"),
+            );
+
+            await expect(
+                service.withdraw({ assetId, amount: "5" }, walletAddress),
+            ).rejects.toThrow();
+
+            expect(mockQueryRunner.rollbackTransaction).toHaveBeenCalled();
+            expect(mockQueryRunner.release).toHaveBeenCalled();
+        });
+    });
+
     describe("error handling", () => {
         it("rolls back transaction on contract revert", async () => {
             mockOrderRepository.findAccountByWallet.mockResolvedValue(

@@ -12,6 +12,8 @@ import { ViemService } from "../../core/viem/viem.service";
 import { ChainConfigService } from "../../core/chain-config/chain-config.service";
 import { OrderSide, OrderStatus } from "../../orders/constants/order.constants";
 import { DataSource } from "typeorm";
+import { BadRequestException, NotFoundException } from "@nestjs/common";
+import { HEALTH_FACTOR_NO_DEBT } from "../../portfolio/helpers/health-factor.helpers";
 
 describe("PortfolioService", () => {
     let service: PortfolioService;
@@ -972,6 +974,361 @@ describe("PortfolioService", () => {
                 ).rejects.toThrow("Account not found");
             });
         });
+
+    describe("simulateHealthFactorAfterWithdrawal", () => {
+        it("should clamp reduction to 0 when it exceeds balance", async () => {
+            tokenRepositoryMock.find.mockResolvedValue(
+                mockTokens.map((t) => ({
+                    ...t,
+                    decimals: 18,
+                    averageLTV: 7500,
+                })) as any,
+            );
+            priceServiceMock.getPrices.mockReturnValue({
+                "token-uuid-001": 3000,
+            });
+            portfolioRepositoryMock.getUserCollateralAssets.mockResolvedValue([
+                {
+                    asset_id: "token-uuid-001",
+                    amount: "1000000000000000000", // 1 ETH
+                },
+            ]);
+            portfolioRepositoryMock.getUserBorrowedAssets.mockResolvedValue([]);
+            portfolioRepositoryMock.getRiskParamsByCollateralTokenIds.mockResolvedValue(
+                [{ asset_id: "token-uuid-001", avg_ltv: "0.75" }],
+            );
+
+            // Reduce by 2 ETH (more than the 1 ETH balance) → should clamp to 0
+            const result = await service.simulateHealthFactorAfterWithdrawal(
+                mockAccountId,
+                "token-uuid-001",
+                "2000000000000000000",
+            );
+
+            // With 0 collateral and 0 debt, HF should be infinity (no debt)
+            expect(result.healthFactor).toBe(HEALTH_FACTOR_NO_DEBT);
+        });
+
+        it("should handle account with no collateral positions", async () => {
+            tokenRepositoryMock.find.mockResolvedValue([] as any);
+            priceServiceMock.getPrices.mockReturnValue({});
+            portfolioRepositoryMock.getUserCollateralAssets.mockResolvedValue(
+                [],
+            );
+            portfolioRepositoryMock.getUserBorrowedAssets.mockResolvedValue([]);
+            portfolioRepositoryMock.getRiskParamsByCollateralTokenIds.mockResolvedValue(
+                [],
+            );
+
+            const result = await service.simulateHealthFactorAfterWithdrawal(
+                mockAccountId,
+                "token-uuid-001",
+                "0",
+            );
+
+            expect(result.healthFactor).toBe(HEALTH_FACTOR_NO_DEBT);
+        });
+    });
+
+    describe("calculateOpenBorrowOrdersUsd", () => {
+        it("should return 0 when no open borrow orders", async () => {
+            orderRepositoryMock.getOpenBorrowOrders = jest
+                .fn()
+                .mockResolvedValue([]);
+            priceServiceMock.getPrices.mockReturnValue({});
+
+            const result =
+                await service.calculateOpenBorrowOrdersUsd(mockAccountId);
+
+            expect(result).toBe(0);
+        });
+
+        it("should skip orders with null price", async () => {
+            orderRepositoryMock.getOpenBorrowOrders = jest
+                .fn()
+                .mockResolvedValue([
+                    {
+                        assetId: "token-uuid-001",
+                        quantity: "1000000000000000000",
+                        filledQuantity: "0",
+                    },
+                ]);
+            priceServiceMock.getPrices.mockReturnValue({}); // no price for token-uuid-001
+
+            const result =
+                await service.calculateOpenBorrowOrdersUsd(mockAccountId);
+
+            expect(result).toBe(0);
+        });
+
+        it("should skip orders with null decimals", async () => {
+            orderRepositoryMock.getOpenBorrowOrders = jest
+                .fn()
+                .mockResolvedValue([
+                    {
+                        assetId: "unknown-token",
+                        quantity: "1000000",
+                        filledQuantity: "0",
+                    },
+                ]);
+            priceServiceMock.getPrices.mockReturnValue({
+                "unknown-token": 100,
+            });
+
+            const result =
+                await service.calculateOpenBorrowOrdersUsd(mockAccountId);
+
+            // tokensServiceMock.getTokenDecimalsByAssetId returns null for unknown tokens
+            expect(result).toBe(0);
+        });
+    });
+
+    describe("checkAvailableBalanceForLend", () => {
+        it("should throw when balance insufficient after fees", async () => {
+            portfolioRepositoryMock.getUserTotalBalances.mockResolvedValue([
+                { asset_id: "token-uuid-001", total_amount: "1000" },
+            ]);
+            portfolioRepositoryMock.findOne = jest
+                .fn()
+                .mockResolvedValue({ lockedAmount: "0" });
+            orderRepositoryMock.getTotalOpenQuantity = jest
+                .fn()
+                .mockResolvedValue(0n);
+
+            // Balance is 1000, requesting 900 + 200 fees = 1100 > 1000
+            await expect(
+                service.checkAvailableBalanceForLend(
+                    mockAccountId,
+                    "token-uuid-001",
+                    "900",
+                    "100",
+                    "100",
+                ),
+            ).rejects.toThrow(BadRequestException);
+        });
+
+        it("should pass when balance exactly matches required", async () => {
+            portfolioRepositoryMock.getUserTotalBalances.mockResolvedValue([
+                { asset_id: "token-uuid-001", total_amount: "1000" },
+            ]);
+            portfolioRepositoryMock.findOne = jest
+                .fn()
+                .mockResolvedValue(null);
+            orderRepositoryMock.getTotalOpenQuantity = jest
+                .fn()
+                .mockResolvedValue(0n);
+
+            // Balance is 1000, requesting exactly 1000
+            await expect(
+                service.checkAvailableBalanceForLend(
+                    mockAccountId,
+                    "token-uuid-001",
+                    "1000",
+                    "0",
+                    "0",
+                ),
+            ).resolves.toBeUndefined();
+        });
+
+        it("should handle zero locked amount", async () => {
+            portfolioRepositoryMock.getUserTotalBalances.mockResolvedValue([
+                { asset_id: "token-uuid-001", total_amount: "5000" },
+            ]);
+            portfolioRepositoryMock.findOne = jest
+                .fn()
+                .mockResolvedValue(null);
+            orderRepositoryMock.getTotalOpenQuantity = jest
+                .fn()
+                .mockResolvedValue(0n);
+
+            await expect(
+                service.checkAvailableBalanceForLend(
+                    mockAccountId,
+                    "token-uuid-001",
+                    "3000",
+                ),
+            ).resolves.toBeUndefined();
+        });
+    });
+
+    describe("checkAvailableBalanceForBorrowFees", () => {
+        it("should return early when fees are zero", async () => {
+            // Should not even call getAssetBalance
+            await expect(
+                service.checkAvailableBalanceForBorrowFees(
+                    mockAccountId,
+                    "token-uuid-001",
+                    "0",
+                    "0",
+                ),
+            ).resolves.toBeUndefined();
+
+            expect(
+                portfolioRepositoryMock.getUserTotalBalances,
+            ).not.toHaveBeenCalled();
+        });
+
+        it("should throw when balance insufficient for fees", async () => {
+            portfolioRepositoryMock.getUserTotalBalances.mockResolvedValue([
+                { asset_id: "token-uuid-001", total_amount: "100" },
+            ]);
+            portfolioRepositoryMock.findOne = jest
+                .fn()
+                .mockResolvedValue(null);
+            tokensServiceMock.getTokenByAssetId = jest.fn().mockResolvedValue({
+                symbol: "ETH",
+            });
+
+            await expect(
+                service.checkAvailableBalanceForBorrowFees(
+                    mockAccountId,
+                    "token-uuid-001",
+                    "200",
+                    "100",
+                ),
+            ).rejects.toThrow(BadRequestException);
+        });
+    });
+
+    describe("setAssetAsCollateral", () => {
+        it("should skip HF check when enabling collateral", async () => {
+            portfolioRepositoryMock.setAssetAsCollateral = jest
+                .fn()
+                .mockResolvedValue(undefined);
+
+            await service.setAssetAsCollateral(mockWalletAddress, {
+                assetIds: ["token-uuid-001"],
+                isCollateral: true,
+            } as any);
+
+            // Should not call buildHealthFactorInputs (no collateral/debt fetches)
+            expect(
+                portfolioRepositoryMock.getUserCollateralAssets,
+            ).not.toHaveBeenCalled();
+            expect(
+                portfolioRepositoryMock.setAssetAsCollateral,
+            ).toHaveBeenCalledWith(
+                mockAccountId,
+                ["token-uuid-001"],
+                true,
+            );
+        });
+
+        it("should perform HF check when disabling with debt — reject if HF < MIN", async () => {
+            tokenRepositoryMock.find.mockResolvedValue(
+                mockTokens.map((t) => ({
+                    ...t,
+                    decimals: 18,
+                    averageLTV: 7500,
+                })) as any,
+            );
+            priceServiceMock.getPrices.mockReturnValue({
+                "token-uuid-001": 3000,
+                "token-uuid-002": 50000,
+            });
+            portfolioRepositoryMock.getUserCollateralAssets.mockResolvedValue([
+                {
+                    asset_id: "token-uuid-001",
+                    amount: "1000000000000000000", // 1 ETH = $3000
+                },
+            ]);
+            portfolioRepositoryMock.getUserBorrowedAssets.mockResolvedValue([
+                {
+                    asset_id: "token-uuid-002",
+                    amount: "100000000", // 1 BTC = $50000
+                },
+            ]);
+            portfolioRepositoryMock.getRiskParamsByCollateralTokenIds.mockResolvedValue(
+                [{ asset_id: "token-uuid-001", avg_ltv: "0.75" }],
+            );
+
+            // Disabling token-uuid-001 (the only collateral) with outstanding debt
+            await expect(
+                service.setAssetAsCollateral(mockWalletAddress, {
+                    assetIds: ["token-uuid-001"],
+                    isCollateral: false,
+                } as any),
+            ).rejects.toThrow(BadRequestException);
+        });
+
+        it("should skip HF check when disabling without debt", async () => {
+            tokenRepositoryMock.find.mockResolvedValue([] as any);
+            priceServiceMock.getPrices.mockReturnValue({});
+            portfolioRepositoryMock.getUserCollateralAssets.mockResolvedValue([
+                {
+                    asset_id: "token-uuid-001",
+                    amount: "1000000000000000000",
+                },
+            ]);
+            portfolioRepositoryMock.getUserBorrowedAssets.mockResolvedValue([]);
+            portfolioRepositoryMock.getRiskParamsByCollateralTokenIds.mockResolvedValue(
+                [],
+            );
+            portfolioRepositoryMock.setAssetAsCollateral = jest
+                .fn()
+                .mockResolvedValue(undefined);
+
+            await service.setAssetAsCollateral(mockWalletAddress, {
+                assetIds: ["token-uuid-001"],
+                isCollateral: false,
+            } as any);
+
+            expect(
+                portfolioRepositoryMock.setAssetAsCollateral,
+            ).toHaveBeenCalled();
+        });
+    });
+
+    describe("getOrderHistory / getOpenOrders", () => {
+        it("should return empty pagination when no account found", async () => {
+            orderRepositoryMock.findAccountByWallet.mockResolvedValue(null);
+
+            const result = await service.getOrderHistory(mockWalletAddress, {
+                page: 1,
+                limit: 10,
+            } as any);
+
+            expect(result.data).toEqual([]);
+            expect(result.totalData).toBe(0);
+        });
+
+        it("should convert rate from BPS to percentage correctly", async () => {
+            portfolioRepositoryMock.getOrderHistory = jest
+                .fn()
+                .mockResolvedValue({
+                    data: [
+                        {
+                            id: "order-001",
+                            side: "Lend",
+                            order_type: "Limit",
+                            rate: "500", // 500 BPS = 5%
+                            amount: "1000000",
+                            filled_quantity: null,
+                            status: "Open",
+                            cancel_reason: null,
+                            asset_id: "token-uuid-003",
+                            name: "USDC",
+                            symbol: "USDC",
+                            decimals: "6",
+                            image_url: null,
+                            token_address: "0xUSDC",
+                            maturity: null,
+                            total_fee: null,
+                            created_at: "2025-01-01T00:00:00.000Z",
+                        },
+                    ],
+                    total: 1,
+                });
+
+            const result = await service.getOrderHistory(mockWalletAddress, {
+                page: 1,
+                limit: 10,
+            } as any);
+
+            // rate 500 BPS → toPercentage(500) = 500/10000 * 100 = 5
+            expect(result.data[0].rate).toBe(5);
+        });
+    });
 
         describe("getMyHealthFactor", () => {
             it("should return formatted health factor for account", async () => {

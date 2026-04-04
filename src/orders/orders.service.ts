@@ -56,6 +56,23 @@ interface PreparedOrderContext {
     estimatedTradeFeeBaseUnits: string;
 }
 
+interface MatchingEngineOrderPayload {
+    orderId: string;
+    walletAddress: string;
+    loanToken: string;
+    assetId: string;
+    markets: { marketId: string; maturity: number }[];
+    timestamp: number;
+    side: OrderSide;
+    type: OrderType;
+    status: OrderStatus;
+    originalAmount: string;
+    remainingAmount: string;
+    settlementFeeAmount: string;
+    remainingSettlementFeeAmount: string;
+    rate?: number;
+}
+
 @Injectable()
 export class OrdersService {
     private readonly logger = new Logger(OrdersService.name);
@@ -609,7 +626,7 @@ export class OrdersService {
         const filledQuantity = BigInt(order.filledQuantity);
         const remaining = quantity - filledQuantity;
 
-        const basePayload: any = {
+        const basePayload: MatchingEngineOrderPayload = {
             orderId: order.id,
             walletAddress,
             loanToken,

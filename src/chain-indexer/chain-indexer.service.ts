@@ -100,10 +100,13 @@ export class ChainIndexerService implements OnModuleInit {
             const isNew = await this.markAsProcessed(txHash, log.logIndex);
             if (!isNew) continue;
 
+            const { user, token, amount } = log.args;
+            if (!user || !token || amount === undefined) continue;
+
             const didProcess = await this.processDepositArgs(
-                (log.args as any).user as string,
-                (log.args as any).token as string,
-                (log.args as any).amount as bigint,
+                user,
+                token,
+                amount,
                 txHash,
                 log.logIndex,
             );
@@ -175,10 +178,13 @@ export class ChainIndexerService implements OnModuleInit {
                 continue;
             }
 
+            const { user, token, amount } = log.args;
+            if (!user || !token || amount === undefined) continue;
+
             await this.processDepositArgs(
-                log.args.user as string,
-                log.args.token as string,
-                log.args.amount as bigint,
+                user,
+                token,
+                amount,
                 log.transactionHash,
                 log.logIndex,
             );

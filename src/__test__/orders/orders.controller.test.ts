@@ -22,6 +22,7 @@ import {
     OrderStatus,
 } from "../../orders/constants/order.constants";
 import { AuthGuard } from "../../common/guards/auth.guard";
+import { WalletThrottlerGuard } from "../../common/guards/wallet-throttler.guard";
 import { OrderResponse } from "../../orders/dto/order-response.dto";
 import { createMockOrdersService } from "../helpers/mock-services";
 import { MOCK_IDS } from "../helpers/mock-factories";
@@ -59,6 +60,8 @@ describe("OrdersController", () => {
             providers: [{ provide: OrdersService, useValue: mockService }],
         })
             .overrideGuard(AuthGuard)
+            .useValue({ canActivate: () => true })
+            .overrideGuard(WalletThrottlerGuard)
             .useValue({ canActivate: () => true })
             .compile();
 

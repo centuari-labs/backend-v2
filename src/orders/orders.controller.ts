@@ -11,6 +11,7 @@ import {
 } from "@nestjs/common";
 import { Wallet, CurrentUser } from "../common/decorators/wallet.decorator";
 import { AuthGuard } from "../common/guards/auth.guard";
+import { WalletThrottlerGuard } from "../common/guards/wallet-throttler.guard";
 import {
     CreateLimitOrderDto,
     CreateMarketOrderDto,
@@ -20,9 +21,9 @@ import { OrderResponse } from "./dto/order-response.dto";
 import { UpdateOrderDto } from "./dto/update-order.dto";
 
 @Controller("orders")
-@UseGuards(AuthGuard)
+@UseGuards(AuthGuard, WalletThrottlerGuard)
 export class OrdersController {
-    constructor(private readonly ordersService: OrdersService) { }
+    constructor(private readonly ordersService: OrdersService) {}
 
     @Post("lend/market")
     @HttpCode(HttpStatus.CREATED)

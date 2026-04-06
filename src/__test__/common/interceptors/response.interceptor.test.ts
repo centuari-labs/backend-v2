@@ -19,7 +19,7 @@ function createMockCallHandler(result: unknown): CallHandler {
 }
 
 describe("ResponseInterceptor", () => {
-    let interceptor: ResponseInterceptor;
+    let interceptor: ResponseInterceptor<any>;
 
     beforeEach(() => {
         interceptor = new ResponseInterceptor();

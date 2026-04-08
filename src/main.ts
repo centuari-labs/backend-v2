@@ -1,4 +1,5 @@
 import "dotenv/config";
+import { ValidationPipe } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
 import { json, urlencoded } from "express";
 import { AppModule } from "./app.module";
@@ -28,6 +29,13 @@ async function bootstrap() {
 
     app.useGlobalInterceptors(new ResponseInterceptor());
     app.useGlobalFilters(new AllExceptionsFilter());
+    app.useGlobalPipes(
+        new ValidationPipe({
+            whitelist: true,
+            transform: true,
+            forbidNonWhitelisted: true,
+        }),
+    );
 
     app.use(json({ limit: "10kb" }));
     app.use(urlencoded({ limit: "10kb", extended: true }));

@@ -6,8 +6,6 @@ import {
     ParseUUIDPipe,
     Post,
     UseGuards,
-    UsePipes,
-    ValidationPipe,
 } from "@nestjs/common";
 import { Wallet } from "../common/decorators/wallet.decorator";
 import { AuthGuard } from "../common/guards/auth.guard";
@@ -39,7 +37,6 @@ export class DepositController {
 
     @Post("confirm")
     @UseGuards(AuthGuard)
-    @UsePipes(new ValidationPipe({ whitelist: true }))
     async confirmDeposit(
         @Body() dto: ConfirmDepositDto,
     ): Promise<ConfirmDepositResponseDto> {

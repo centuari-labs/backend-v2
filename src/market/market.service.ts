@@ -66,9 +66,15 @@ export class MarketService {
             }
         }
 
+        const now = new Date();
+        const minMaturity = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+
         const assetIds = assets.map((a) => a.id);
         const earliestMarkets =
-            await this.marketRepository.getEarliestMarketByAssetIds(assetIds);
+            await this.marketRepository.getEarliestMarketByAssetIds(
+                assetIds,
+                minMaturity,
+            );
         const earliestByAsset = new Map(
             earliestMarkets.map((m) => [
                 m.assetId,
@@ -133,9 +139,13 @@ export class MarketService {
                 (Number.parseFloat(rawLoans) / 10 ** asset.decimals) * price;
         }
 
+        const now = new Date();
+        const minMaturity = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+
         const upcomingMarkets = await this.marketRepository.getUpcomingMarkets(
             assetId,
             3,
+            minMaturity,
         );
         return {
             asset: {

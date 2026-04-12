@@ -52,6 +52,7 @@ export class MarketRepositories extends Repository<Market> {
 
     async getEarliestMarketByAssetIds(
         assetIds: string[],
+        minMaturity: Date = new Date(),
     ): Promise<{ assetId: string; marketId: string; maturity: Date }[]> {
         if (assetIds.length === 0) {
             return [];
@@ -65,9 +66,9 @@ export class MarketRepositories extends Repository<Market> {
         >(
             `SELECT DISTINCT ON (asset_id) id, asset_id, maturity
              FROM markets
-             WHERE asset_id = ANY($1::uuid[]) AND maturity >= NOW()
+             WHERE asset_id = ANY($1::uuid[]) AND maturity >= $2
              ORDER BY asset_id, maturity ASC`,
-            [assetIds],
+            [assetIds, minMaturity],
         );
         return rows.map((row) => ({
             assetId: row.asset_id,
@@ -121,10 +122,11 @@ export class MarketRepositories extends Repository<Market> {
     async getUpcomingMarkets(
         assetId: string,
         limit: number,
+        minMaturity: Date = new Date(),
     ): Promise<Market[]> {
         return this.createQueryBuilder("market")
             .where("market.asset_id = :assetId", { assetId })
-            .andWhere("market.maturity > :now", { now: new Date() })
+            .andWhere("market.maturity >= :minMaturity", { minMaturity })
             .orderBy("market.maturity", "ASC")
             .take(limit)
             .getMany();

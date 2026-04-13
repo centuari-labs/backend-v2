@@ -50,8 +50,7 @@ jobs:
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
-        with:
-          version: 10.29.2
+        # pnpm version use from "packageManager" in package.json
 
       - name: Setup Node
         uses: actions/setup-node@v4

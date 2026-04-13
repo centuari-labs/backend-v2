@@ -139,9 +139,6 @@ export class MarketService {
                 (Number.parseFloat(rawLoans) / 10 ** asset.decimals) * price;
         }
 
-        const now = new Date();
-        const minMaturity = now;
-
         const upcomingMarkets = await this.marketRepository.getUpcomingMarkets(
             assetId,
             3,

@@ -140,7 +140,7 @@ export class MarketService {
         }
 
         const now = new Date();
-        const minMaturity = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+        const minMaturity = now;
 
         const upcomingMarkets = await this.marketRepository.getUpcomingMarkets(
             assetId,

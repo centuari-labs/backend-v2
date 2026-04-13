@@ -35,36 +35,30 @@ describe("Maturity Validators", () => {
             expect(errors).toHaveLength(0);
         });
 
-        it("should skip next month if less than 7 days away", async () => {
+        it("should include next month even if less than 7 days away", async () => {
             // Mock now to be 20th of April (11 days before May 1st) -> Should include May 1st
             const now11DaysBefore = new Date(Date.UTC(2026, 3, 20)); // April 20
             const allowed1 = getAllowedMaturitiesUtcSeconds(now11DaysBefore);
             const may1st = Math.floor(Date.UTC(2026, 4, 1) / 1000);
             expect(allowed1[0]).toBe(may1st);
 
-            // Mock now to be 26th of April (5 days before May 1st) -> Should skip May 1st
+            // Mock now to be 26th of April (5 days before May 1st) -> Should STILL include May 1st
             const now5DaysBefore = new Date(Date.UTC(2026, 3, 26)); // April 26
             const allowed2 = getAllowedMaturitiesUtcSeconds(now5DaysBefore);
-            const june1st = Math.floor(Date.UTC(2026, 5, 1) / 1000);
-            expect(allowed2[0]).toBe(june1st);
+            expect(allowed2[0]).toBe(may1st);
         });
 
-        it("should correctly handle exactly 7 days before boundary", async () => {
+        it("should correctly handle dates close to boundary", async () => {
             // Exactly 7 days before May 1st (May 1st 00:00 - April 24 00:00 = 7 days)
             const exactly7DaysBefore = new Date(Date.UTC(2026, 3, 24, 0, 0, 0, 0));
             const allowed = getAllowedMaturitiesUtcSeconds(exactly7DaysBefore);
             const may1st = Math.floor(Date.UTC(2026, 4, 1) / 1000);
             expect(allowed[0]).toBe(may1st);
-        });
 
-        it("should skip if strictly less than 7 days (6 days 23 hours)", async () => {
-            // 6 days and 23 hours before May 1st
-            const slightlyLess = new Date(
-                Date.UTC(2026, 3, 24, 1, 0, 0, 0),
-            );
-            const allowed = getAllowedMaturitiesUtcSeconds(slightlyLess);
-            const june1st = Math.floor(Date.UTC(2026, 5, 1) / 1000);
-            expect(allowed[0]).toBe(june1st);
+            // 6 days and 23 hours before May 1st -> Should STILL include May 1st
+            const slightlyLess = new Date(Date.UTC(2026, 3, 24, 1, 0, 0, 0));
+            const allowedSlightly = getAllowedMaturitiesUtcSeconds(slightlyLess);
+            expect(allowedSlightly[0]).toBe(may1st);
         });
 
         it("should reject maturities not on the 1st of a month", async () => {

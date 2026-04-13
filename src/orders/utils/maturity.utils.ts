@@ -13,14 +13,9 @@ export function getAllowedMaturitiesUtcSeconds(
     const year = now.getUTCFullYear();
     const month = now.getUTCMonth(); // 0-based
 
-    const firstCandidate = Date.UTC(year, month + 1, 1);
-    const diffMs = firstCandidate - now.getTime();
-    const skipFirst = diffMs < 7 * 24 * 60 * 60 * 1000;
-
-    const startOffset = skipFirst ? 2 : 1;
     const allowedDates: number[] = [];
 
-    for (let offset = startOffset; offset < startOffset + 3; offset++) {
+    for (let offset = 1; offset <= 3; offset++) {
         const targetMonthIndex = month + offset;
         const targetYear = year + Math.floor(targetMonthIndex / 12);
         const normalizedMonth = targetMonthIndex % 12;

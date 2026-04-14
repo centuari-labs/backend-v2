@@ -66,8 +66,7 @@ export class MarketService {
             }
         }
 
-        const now = new Date();
-        const minMaturity = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+        const minMaturity = this.getHomepageMinMaturity();
 
         const assetIds = assets.map((a) => a.id);
         const earliestMarkets =
@@ -172,5 +171,16 @@ export class MarketService {
                 rate: toPercentage(item.rate),
             })),
         };
+    }
+
+    private getHomepageMinMaturity(): Date {
+        const now = new Date();
+        const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+        /**
+         * Skip maturity if it's within 7 days (inclusive).
+         * We add 1ms to ensure that a maturity exactly on the 7-day mark is skipped
+         * when using a >= comparison in the repository query.
+         */
+        return new Date(now.getTime() + SEVEN_DAYS_MS + 1);
     }
 }

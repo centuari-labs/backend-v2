@@ -122,9 +122,12 @@ export class MarketRepositories extends Repository<Market> {
     async getUpcomingMarkets(
         assetId: string,
         limit: number,
+        minMaturity: Date = new Date(),
     ): Promise<Market[]> {
         return this.createQueryBuilder("market")
             .where("market.asset_id = :assetId", { assetId })
+            .andWhere("market.maturity > :now", { now: new Date() })
+            .andWhere("market.maturity >= :minMaturity", { minMaturity })
             .orderBy("market.maturity", "ASC")
             .take(limit)
             .getMany();

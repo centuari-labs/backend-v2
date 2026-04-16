@@ -19,7 +19,7 @@ import { Market } from "../market/entities/market.entity";
 import { Token } from "../tokens/entities/token.entity";
 import { PortfolioService } from "../portfolio/portfolio.service";
 import { TokensService } from "../tokens/tokens.service";
-import { OrderSide } from "./constants/order.constants";
+import { OrderSide, OrderStatus } from "./constants/order.constants";
 import {
     humanToBaseUnits,
     baseUnitsToHuman,
@@ -687,6 +687,59 @@ export class OrdersWorker implements OnModuleInit {
             for (const entry of this.assetMarketCache) {
                 // Refresh paired rates once per asset per cycle
                 this.refreshRatesForAsset(entry.assetId);
+
+                // Audit spread: cancel active bot orders if spread > 1%
+                const { bestLendRate: bestAsk, bestBorrowRate: bestBid } =
+                    await this.orderRepository.getBestRatesForAsset(
+                        entry.assetId,
+                    );
+
+                if (
+                    bestAsk !== null &&
+                    bestBid !== null &&
+                    bestBid > 0 &&
+                    bestAsk > 0 &&
+                    bestAsk >= bestBid
+                ) {
+                    const spread = (bestAsk - bestBid) / bestBid;
+                    if (spread > 0.01) {
+                        this.logger.warn(
+                            `[OrdersWorker] Spread for ${entry.symbol} is too wide (${(spread * 100).toFixed(2)}% > 1%). Cancelling active bot orders.`,
+                        );
+                        for (const bot of this.botAccounts) {
+                            const account =
+                                await this.orderRepository.findAccountByWallet(
+                                    bot.wallet,
+                                );
+                            if (!account) continue;
+
+                            const openOrders = await this.orderRepository.find({
+                                where: {
+                                    accountId: account.id,
+                                    assetId: entry.assetId,
+                                    status: In([
+                                        OrderStatus.Open,
+                                        OrderStatus.PartiallyFilled,
+                                    ]),
+                                },
+                            });
+
+                            for (const ord of openOrders) {
+                                try {
+                                    await this.ordersService.cancelOrder(
+                                        ord.id,
+                                        bot.wallet,
+                                    );
+                                } catch (e) {
+                                    this.logger.error(
+                                        `[OrdersWorker] Failed to cancel bot order ${ord.id}: ${(e as Error).message}`,
+                                    );
+                                }
+                            }
+                        }
+                    }
+                }
+
 
                 for (const bot of this.botAccounts) {
                     if (Math.random() < MATCH_PROBABILITY) {

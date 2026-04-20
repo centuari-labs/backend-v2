@@ -119,13 +119,11 @@ describe("NatsService", () => {
 
             // Create a subscription that yields one message then completes
             let resolveIterator: () => void;
-            const iteratorDone = new Promise<void>(
-                (res) => (resolveIterator = res),
-            );
+            const iteratorDone = new Promise<void>((res) => {
+                resolveIterator = res;
+            });
 
-            const messages = [
-                { data: encoded, subject: "orders.status" },
-            ];
+            const messages = [{ data: encoded, subject: "orders.status" }];
             let index = 0;
 
             mockConnection.subscribe.mockReturnValueOnce({
@@ -157,13 +155,11 @@ describe("NatsService", () => {
             const invalidJson = new TextEncoder().encode("not valid json{{{");
 
             let resolveIterator: () => void;
-            const iteratorDone = new Promise<void>(
-                (res) => (resolveIterator = res),
-            );
+            const iteratorDone = new Promise<void>((res) => {
+                resolveIterator = res;
+            });
 
-            const messages = [
-                { data: invalidJson, subject: "orders.status" },
-            ];
+            const messages = [{ data: invalidJson, subject: "orders.status" }];
             let index = 0;
 
             mockConnection.subscribe.mockReturnValueOnce({
@@ -197,9 +193,9 @@ describe("NatsService", () => {
             const encoded = new TextEncoder().encode(JSON.stringify(testData));
 
             let resolveIterator: () => void;
-            const iteratorDone = new Promise<void>(
-                (res) => (resolveIterator = res),
-            );
+            const iteratorDone = new Promise<void>((res) => {
+                resolveIterator = res;
+            });
 
             const messages = [{ data: encoded, subject: "orders.status" }];
             let index = 0;
@@ -219,7 +215,9 @@ describe("NatsService", () => {
                 }),
             });
 
-            const callback = jest.fn().mockRejectedValue(new Error("Callback error"));
+            const callback = jest
+                .fn()
+                .mockRejectedValue(new Error("Callback error"));
             await service.onModuleInit();
 
             // Should not throw even though callback rejects

@@ -70,9 +70,7 @@ describe("AdminSecretGuard", () => {
             mockConfigService = createMockConfigService({});
             guard = new AdminSecretGuard(mockConfigService as any);
 
-            const context = createMockExecutionContext(
-                "Bearer some-token",
-            );
+            const context = createMockExecutionContext("Bearer some-token");
             expect(() => guard.canActivate(context)).toThrow(
                 UnauthorizedException,
             );

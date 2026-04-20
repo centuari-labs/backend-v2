@@ -64,9 +64,7 @@ describe("WithdrawService", () => {
 
     beforeEach(() => {
         jest.resetAllMocks();
-        mockDataSource.createQueryRunner.mockReturnValue(
-            mockQueryRunner,
-        );
+        mockDataSource.createQueryRunner.mockReturnValue(mockQueryRunner);
 
         // Setup manager method chaining
         mockQueryRunner.manager.createQueryBuilder.mockReturnThis();

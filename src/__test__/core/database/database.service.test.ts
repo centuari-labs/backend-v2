@@ -89,7 +89,9 @@ describe("DatabaseService", () => {
             ];
             mockClient.query.mockResolvedValueOnce({ rows: mockRows });
 
-            const result = await service.queryOne("SELECT * FROM users LIMIT 1");
+            const result = await service.queryOne(
+                "SELECT * FROM users LIMIT 1",
+            );
 
             expect(result).toEqual({ id: 1, name: "first" });
         });

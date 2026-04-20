@@ -612,10 +612,7 @@ export class PortfolioService {
         );
         const portfolioBalance = safeBigInt(portfolioBalanceRaw);
 
-        const lockedAmount = await this.getLockedAmount(
-            accountId,
-            assetId,
-        );
+        const lockedAmount = await this.getLockedAmount(accountId, assetId);
 
         const availableBalance = portfolioBalance - lockedAmount;
 

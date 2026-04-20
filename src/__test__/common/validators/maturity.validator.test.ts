@@ -50,14 +50,17 @@ describe("Maturity Validators", () => {
 
         it("should correctly handle dates close to boundary", async () => {
             // Exactly 7 days before May 1st (May 1st 00:00 - April 24 00:00 = 7 days)
-            const exactly7DaysBefore = new Date(Date.UTC(2026, 3, 24, 0, 0, 0, 0));
+            const exactly7DaysBefore = new Date(
+                Date.UTC(2026, 3, 24, 0, 0, 0, 0),
+            );
             const allowed = getAllowedMaturitiesUtcSeconds(exactly7DaysBefore);
             const may1st = Math.floor(Date.UTC(2026, 4, 1) / 1000);
             expect(allowed[0]).toBe(may1st);
 
             // 6 days and 23 hours before May 1st -> Should STILL include May 1st
             const slightlyLess = new Date(Date.UTC(2026, 3, 24, 1, 0, 0, 0));
-            const allowedSlightly = getAllowedMaturitiesUtcSeconds(slightlyLess);
+            const allowedSlightly =
+                getAllowedMaturitiesUtcSeconds(slightlyLess);
             expect(allowedSlightly[0]).toBe(may1st);
         });
 

@@ -7,7 +7,11 @@ import { FaucetController } from "./faucet.controller";
 import { FaucetService } from "./faucet.service";
 
 @Module({
-    imports: [forwardRef(() => CoreModule), ConfigModule, TypeOrmModule.forFeature([Token])],
+    imports: [
+        forwardRef(() => CoreModule),
+        ConfigModule,
+        TypeOrmModule.forFeature([Token]),
+    ],
     controllers: [FaucetController],
     providers: [FaucetService],
     exports: [FaucetService],

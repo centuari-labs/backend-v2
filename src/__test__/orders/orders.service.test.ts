@@ -126,13 +126,17 @@ describe("OrdersService", () => {
                 }
                 return {
                     findOne: jest.fn(),
-                    save: jest.fn().mockImplementation((val) => Promise.resolve(val)),
+                    save: jest
+                        .fn()
+                        .mockImplementation((val) => Promise.resolve(val)),
                 };
             }),
         };
 
         const mockDataSource = {
-            transaction: jest.fn().mockImplementation((cb: any) => cb(mockManager)),
+            transaction: jest
+                .fn()
+                .mockImplementation((cb: any) => cb(mockManager)),
         };
 
         const module: TestingModule = await Test.createTestingModule({
@@ -982,18 +986,20 @@ describe("OrdersService", () => {
                 id: mockAccountId,
             } as any);
             tokensService.getTokenDecimalsByAssetId.mockResolvedValue(6);
-            
+
             // Mock transaction manager repository results
             const mockRepo = {
                 findOne: jest.fn().mockResolvedValue(existingOrder),
                 save: jest.fn().mockImplementation((v) => Promise.resolve(v)),
                 delete: jest.fn().mockResolvedValue({}),
             };
-            (dataSource.transaction as jest.Mock).mockImplementationOnce(async (cb) => {
-                return cb({
-                    getRepository: jest.fn().mockReturnValue(mockRepo),
-                });
-            });
+            (dataSource.transaction as jest.Mock).mockImplementationOnce(
+                async (cb) => {
+                    return cb({
+                        getRepository: jest.fn().mockReturnValue(mockRepo),
+                    });
+                },
+            );
 
             const result = await service.updateOrder(
                 existingOrder.id,
@@ -1014,19 +1020,29 @@ describe("OrdersService", () => {
                 filledQuantity: "500000000", // 500
             });
 
-            orderRepository.findAccountByWallet.mockResolvedValue({ id: mockAccountId } as any);
+            orderRepository.findAccountByWallet.mockResolvedValue({
+                id: mockAccountId,
+            } as any);
             tokensService.getTokenDecimalsByAssetId.mockResolvedValue(6);
-            
+
             const mockRepo = {
                 findOne: jest.fn().mockResolvedValue(existingOrder),
                 save: jest.fn().mockImplementation((v) => Promise.resolve(v)),
                 delete: jest.fn().mockResolvedValue({}),
             };
-            (dataSource.transaction as jest.Mock).mockImplementationOnce(async (cb) => {
-                return cb({ getRepository: jest.fn().mockReturnValue(mockRepo) });
-            });
+            (dataSource.transaction as jest.Mock).mockImplementationOnce(
+                async (cb) => {
+                    return cb({
+                        getRepository: jest.fn().mockReturnValue(mockRepo),
+                    });
+                },
+            );
 
-            const result = await service.updateOrder(existingOrder.id, mockWalletAddress, updateDto);
+            const result = await service.updateOrder(
+                existingOrder.id,
+                mockWalletAddress,
+                updateDto,
+            );
 
             expect(result.status).toBe(OrderStatus.PartiallyFilled);
             expect(BigInt(result.quantity)).toBe(1500000000n);
@@ -1038,19 +1054,31 @@ describe("OrdersService", () => {
                 filledQuantity: "2000000000", // 2000
             });
 
-            orderRepository.findAccountByWallet.mockResolvedValue({ id: mockAccountId } as any);
+            orderRepository.findAccountByWallet.mockResolvedValue({
+                id: mockAccountId,
+            } as any);
             tokensService.getTokenDecimalsByAssetId.mockResolvedValue(6);
-            
+
             const mockRepo = {
                 findOne: jest.fn().mockResolvedValue(existingOrder),
             };
-            (dataSource.transaction as jest.Mock).mockImplementationOnce(async (cb) => {
-                return cb({ getRepository: jest.fn().mockReturnValue(mockRepo) });
-            });
+            (dataSource.transaction as jest.Mock).mockImplementationOnce(
+                async (cb) => {
+                    return cb({
+                        getRepository: jest.fn().mockReturnValue(mockRepo),
+                    });
+                },
+            );
 
             await expect(
-                service.updateOrder(existingOrder.id, mockWalletAddress, updateDto),
-            ).rejects.toThrow("New quantity must be greater than the already filled quantity");
+                service.updateOrder(
+                    existingOrder.id,
+                    mockWalletAddress,
+                    updateDto,
+                ),
+            ).rejects.toThrow(
+                "New quantity must be greater than the already filled quantity",
+            );
         });
 
         it("should throw ForbiddenException if user does not own the order", async () => {
@@ -1065,14 +1093,20 @@ describe("OrdersService", () => {
             const mockRepo = {
                 findOne: jest.fn().mockResolvedValue(otherOrder),
             };
-            (dataSource.transaction as jest.Mock).mockImplementationOnce(async (cb) => {
-                return cb({
-                    getRepository: jest.fn().mockReturnValue(mockRepo),
-                });
-            });
+            (dataSource.transaction as jest.Mock).mockImplementationOnce(
+                async (cb) => {
+                    return cb({
+                        getRepository: jest.fn().mockReturnValue(mockRepo),
+                    });
+                },
+            );
 
             await expect(
-                service.updateOrder(otherOrder.id, mockWalletAddress, updateDto),
+                service.updateOrder(
+                    otherOrder.id,
+                    mockWalletAddress,
+                    updateDto,
+                ),
             ).rejects.toThrow(ForbiddenException);
         });
 
@@ -1088,14 +1122,20 @@ describe("OrdersService", () => {
             const mockRepo = {
                 findOne: jest.fn().mockResolvedValue(cancelledOrder),
             };
-            (dataSource.transaction as jest.Mock).mockImplementationOnce(async (cb) => {
-                return cb({
-                    getRepository: jest.fn().mockReturnValue(mockRepo),
-                });
-            });
+            (dataSource.transaction as jest.Mock).mockImplementationOnce(
+                async (cb) => {
+                    return cb({
+                        getRepository: jest.fn().mockReturnValue(mockRepo),
+                    });
+                },
+            );
 
             await expect(
-                service.updateOrder(cancelledOrder.id, mockWalletAddress, updateDto),
+                service.updateOrder(
+                    cancelledOrder.id,
+                    mockWalletAddress,
+                    updateDto,
+                ),
             ).rejects.toThrow(BadRequestException);
         });
 
@@ -1117,18 +1157,24 @@ describe("OrdersService", () => {
                 findOne: jest.fn().mockResolvedValue(partiallyFilledOrder),
                 save: jest.fn(),
             };
-            (dataSource.transaction as jest.Mock).mockImplementationOnce(async (cb) => {
-                return cb({
-                    getRepository: jest.fn().mockReturnValue(mockRepo),
-                });
-            });
+            (dataSource.transaction as jest.Mock).mockImplementationOnce(
+                async (cb) => {
+                    return cb({
+                        getRepository: jest.fn().mockReturnValue(mockRepo),
+                    });
+                },
+            );
 
             // Amount "0.4" with 6 decimals = 400000 base units, which is <= filledQuantity 500000
             await expect(
-                service.updateOrder(partiallyFilledOrder.id, mockWalletAddress, {
-                    ...updateDto,
-                    amount: "0.4",
-                }),
+                service.updateOrder(
+                    partiallyFilledOrder.id,
+                    mockWalletAddress,
+                    {
+                        ...updateDto,
+                        amount: "0.4",
+                    },
+                ),
             ).rejects.toThrow(BadRequestException);
         });
 
@@ -1155,14 +1201,20 @@ describe("OrdersService", () => {
                 findOne: jest.fn().mockResolvedValue(borrowOrder),
                 save: jest.fn(),
             };
-            (dataSource.transaction as jest.Mock).mockImplementationOnce(async (cb) => {
-                return cb({
-                    getRepository: jest.fn().mockReturnValue(mockRepo),
-                });
-            });
+            (dataSource.transaction as jest.Mock).mockImplementationOnce(
+                async (cb) => {
+                    return cb({
+                        getRepository: jest.fn().mockReturnValue(mockRepo),
+                    });
+                },
+            );
 
             await expect(
-                service.updateOrder(borrowOrder.id, mockWalletAddress, updateDto),
+                service.updateOrder(
+                    borrowOrder.id,
+                    mockWalletAddress,
+                    updateDto,
+                ),
             ).rejects.toThrow(BadRequestException);
         });
 
@@ -1183,11 +1235,13 @@ describe("OrdersService", () => {
                 findOne: jest.fn().mockResolvedValue(openOrder),
                 save: jest.fn().mockRejectedValue(new Error("DB save failed")),
             };
-            (dataSource.transaction as jest.Mock).mockImplementationOnce(async (cb) => {
-                return cb({
-                    getRepository: jest.fn().mockReturnValue(mockRepo),
-                });
-            });
+            (dataSource.transaction as jest.Mock).mockImplementationOnce(
+                async (cb) => {
+                    return cb({
+                        getRepository: jest.fn().mockReturnValue(mockRepo),
+                    });
+                },
+            );
 
             await expect(
                 service.updateOrder(openOrder.id, mockWalletAddress, updateDto),

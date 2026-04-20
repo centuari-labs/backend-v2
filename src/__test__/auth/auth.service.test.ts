@@ -17,10 +17,7 @@ describe("AuthService", () => {
     beforeEach(() => {
         databaseService = createMockDatabaseService();
         viemService = createMockViemServiceFull();
-        service = new AuthService(
-            databaseService as any,
-            viemService as any,
-        );
+        service = new AuthService(databaseService as any, viemService as any);
     });
 
     afterEach(() => {
@@ -76,9 +73,7 @@ describe("AuthService", () => {
             expect(result).toEqual({ granted: true });
             // Should insert redemption
             expect(databaseService.query).toHaveBeenCalledWith(
-                expect.stringContaining(
-                    "INSERT INTO access_code_redemptions",
-                ),
+                expect.stringContaining("INSERT INTO access_code_redemptions"),
                 [accessCode.id, "did:privy:user-1"],
             );
             // Should increment uses
@@ -234,9 +229,8 @@ describe("AuthService", () => {
             };
             databaseService.insert.mockResolvedValue(depositWallet);
 
-            const result = await service.validateAndCreateDepositWallet(
-                "0xUserWallet",
-            );
+            const result =
+                await service.validateAndCreateDepositWallet("0xUserWallet");
 
             expect(result).toEqual(depositWallet);
             expect(viemService.isValidAddress).toHaveBeenCalledWith(

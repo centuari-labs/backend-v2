@@ -25,7 +25,9 @@ export class ResponseInterceptor<T>
     ): Observable<ResponseEnvelope<ExtractData<T>>> {
         return next.handle().pipe(
             map((result) => {
-                const statusCode = context.switchToHttp().getResponse().statusCode;
+                const statusCode = context
+                    .switchToHttp()
+                    .getResponse().statusCode;
 
                 // Detect paginated structural responses to prevent data.data antipattern
                 if (

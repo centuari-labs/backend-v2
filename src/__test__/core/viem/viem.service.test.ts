@@ -13,7 +13,7 @@ jest.mock("viem", () => ({
 
 jest.mock("viem/accounts", () => ({
     ...jest.requireActual("viem/accounts"),
-    privateKeyToAccount: jest.fn((key) => ({ address: "0xMockAddress" })),
+    privateKeyToAccount: jest.fn((_key) => ({ address: "0xMockAddress" })),
 }));
 
 describe("ViemService", () => {

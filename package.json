@@ -20,7 +20,7 @@
         "test:e2e": "jest --config ./test/jest-e2e.json",
         "test:integration": "jest --config ./jest-integration.config.json",
         "test:integration:price": "node -r dotenv/config node_modules/jest/bin/jest.js src/__test__/price/providers/coingecko-tokens.integration.test.ts",
-        "lint": "biome check --apply .",
+        "lint": "biome check --write .",
         "format": "biome format --write .",
         "db": "ts-node src/core/database/scripts/db.ts"
     },

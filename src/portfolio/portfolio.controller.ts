@@ -104,7 +104,7 @@ export class PortfolioController {
             user.userId,
         );
     }
-  
+
     @Get("open-orders")
     async getOpenOrders(
         @Wallet() wallet: string,

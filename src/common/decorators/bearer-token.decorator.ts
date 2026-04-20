@@ -5,7 +5,7 @@ import { createParamDecorator, ExecutionContext } from "@nestjs/common";
  * Needed for Privy Wallet API's generateUserSigner() which requires the user's JWT.
  */
 export const BearerToken = createParamDecorator(
-    (data: unknown, ctx: ExecutionContext): string => {
+    (_data: unknown, ctx: ExecutionContext): string => {
         const request = ctx.switchToHttp().getRequest();
         const authHeader = request.headers.authorization;
         if (!authHeader) return "";

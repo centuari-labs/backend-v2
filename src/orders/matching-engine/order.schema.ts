@@ -100,7 +100,7 @@ export const borrowLimitOrderSchema = baseOrderSchema.extend({
 export const updateOrderSchema = z.object({
     orderId: z.string().uuid("Order ID must be a valid UUID"),
     walletAddress: ethereumAddressSchema,
-})
+});
 
 export const orderSchema = z.union([
     lendMarketOrderSchema,

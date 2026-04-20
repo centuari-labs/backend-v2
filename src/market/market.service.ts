@@ -17,7 +17,7 @@ export class MarketService {
         private readonly rateRepository: RateRepository,
         private readonly tokensRepository: TokensRepository,
         private readonly priceService: PriceService,
-    ) { }
+    ) {}
 
     async getMarketSnapshot(): Promise<MarketResponseDto> {
         const assets = await this.tokensRepository.findLoanTokens();

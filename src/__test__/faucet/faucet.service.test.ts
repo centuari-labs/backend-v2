@@ -332,11 +332,7 @@ describe("FaucetService", () => {
             setupConfig();
             viemService.readContract
                 .mockResolvedValueOnce([false, 0n, 0n]) // disabled
-                .mockResolvedValueOnce([
-                    true,
-                    MAX_PER_REQUEST,
-                    BigInt(3600),
-                ]);
+                .mockResolvedValueOnce([true, MAX_PER_REQUEST, BigInt(3600)]);
             viemService.writeContract.mockResolvedValue(
                 makeTxReceipt("0xbatch2") as any,
             );
@@ -348,9 +344,7 @@ describe("FaucetService", () => {
             );
 
             expect(result.results[0].amount).toBe("0");
-            expect(result.results[1].amount).toBe(
-                MAX_PER_REQUEST.toString(),
-            );
+            expect(result.results[1].amount).toBe(MAX_PER_REQUEST.toString());
         });
     });
 

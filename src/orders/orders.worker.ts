@@ -85,7 +85,7 @@ export class OrdersWorker implements OnModuleInit {
         private readonly portfolioRepository: PortfolioRepository,
         private readonly tokensService: TokensService,
         private readonly priceService: PriceService,
-    ) { }
+    ) {}
 
     private initialized = false;
     private cycleInProgress = false;

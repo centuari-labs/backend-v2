@@ -54,6 +54,6 @@ import { EventsGateway } from "./core/websocket/websocket.gateway";
         ChainIndexerModule,
     ],
     controllers: [],
-    providers: [EventsGateway],
+    providers: [],
 })
 export class AppModule {}

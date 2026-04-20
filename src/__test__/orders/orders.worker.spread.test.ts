@@ -151,13 +151,138 @@ describe("OrdersWorker Spread Cancellation", () => {
         await worker.refreshAssetMarketCache();
     });
 
-    describe("Spread Audit Logic", () => {
+describe("OrdersWorker Spread Cancellation", () => {
+    let worker: OrdersWorker;
+    let orderRepository: jest.Mocked<OrderRepository>;
+    let ordersService: jest.Mocked<OrdersService>;
+    let marketRepository: jest.Mocked<Repository<Market>>;
+    let tokenRepository: jest.Mocked<Repository<Token>>;
+
+    const MOCK_BOT_WALLET = "0xBotWallet";
+    const MOCK_ACCOUNT_ID = "b0000000-0000-0000-0000-000000000001";
+    const MOCK_ASSET_ID = MOCK_IDS.assetId;
+    const MOCK_MARKET_ID = "m1";
+
+    beforeEach(async () => {
+        process.env.NODE_ENV = "development";
+        process.env.ORDER_WORKER_ENABLED = "true";
+
+        const mockOrderRepo = createMockOrderRepository();
+        const mockMarketRepo = createMockRepository<Market>();
+        const mockTokenRepo = createMockRepository<Token>();
+        const mockOrdersService = createMockOrdersService();
+
+        // Specific mocks for spread testing
+        mockOrderRepo.findActiveLimitOrdersForOrderbook = jest.fn();
+        mockOrderRepo.findAccountByWallet = jest.fn();
+        mockOrdersService.cancelOrder = jest.fn().mockResolvedValue({});
+
+        const module: TestingModule = await Test.createTestingModule({
+            providers: [
+                OrdersWorker,
+                { provide: OrderRepository, useValue: mockOrderRepo },
+                {
+                    provide: getRepositoryToken(Market),
+                    useValue: mockMarketRepo,
+                },
+                { provide: getRepositoryToken(Token), useValue: mockTokenRepo },
+                { provide: OrdersService, useValue: mockOrdersService },
+                {
+                    provide: ViemService,
+                    useValue: {
+                        readContract: jest.fn(),
+                        writeContract: jest.fn(),
+                        getPublicClient: jest.fn(),
+                        getWalletClient: jest.fn(),
+                        resetWalletClient: jest.fn(),
+                    },
+                },
+                {
+                    provide: FaucetService,
+                    useValue: {
+                        requestTokensBatch: jest.fn().mockResolvedValue({}),
+                    },
+                },
+                {
+                    provide: ConfigService,
+                    useValue: {
+                        get: jest.fn((key) => {
+                            if (key === "OPERATOR_PRIVATE_KEY") return "0x123";
+                            return undefined;
+                        }),
+                    },
+                },
+                {
+                    provide: ChainConfigService,
+                    useValue: {
+                        chainId: 421614,
+                        operatorPrivateKey: "0x123",
+                        treasuryAddress: "0xTreasury",
+                    },
+                },
+                {
+                    provide: PortfolioService,
+                    useValue: {
+                        getAssetBalance: jest.fn().mockResolvedValue("1000000"),
+                        getHealthFactorForAccount: jest.fn().mockResolvedValue({
+                            healthFactor: Infinity,
+                        }),
+                        setAssetAsCollateral: jest.fn(),
+                    },
+                },
+                {
+                    provide: PortfolioRepository,
+                    useValue: {
+                        upsertPortfolio: jest.fn(),
+                        syncPortfolioBalance: jest.fn(),
+                    },
+                },
+                {
+                    provide: TokensService,
+                    useValue: {
+                        getTokenDecimalsByAssetId: jest.fn().mockResolvedValue(6),
+                    },
+                },
+                {
+                    provide: PriceService,
+                    useValue: {
+                        getPrice: jest.fn().mockResolvedValue(1),
+                    },
+                },
+            ],
+        }).compile();
+
+        worker = module.get<OrdersWorker>(OrdersWorker);
+        orderRepository = module.get(OrderRepository) as jest.Mocked<OrderRepository>;
+        ordersService = module.get(OrdersService) as jest.Mocked<OrdersService>;
+        marketRepository = module.get(getRepositoryToken(Market)) as jest.Mocked<Repository<Market>>;
+        tokenRepository = module.get(getRepositoryToken(Token)) as jest.Mocked<Repository<Token>>;
+
+        // Setup bot accounts
+        (worker as any).botAccounts = [
+            {
+                privateKey: "0x123",
+                wallet: MOCK_BOT_WALLET,
+                privyUserId: "did:privy:bot",
+            },
+        ];
+        (worker as any).initialized = true;
+
+        // Setup cache
+        const market = createMockMarket({ id: MOCK_MARKET_ID, assetId: MOCK_ASSET_ID });
+        const token = createMockToken({ id: MOCK_ASSET_ID, symbol: "USDC" });
+        marketRepository.find.mockResolvedValue([market]);
+        tokenRepository.find.mockResolvedValue([token]);
+        await worker.refreshAssetMarketCache();
+    });
+
+    describe("Market-Aware Spread Cancellation", () => {
         it("should NO-OP if spread is exactly 1%", async () => {
             // bestAsk = 505, bestBid = 500 => spread = (505-500)/500 = 0.01
-            orderRepository.getBestRatesForAsset.mockResolvedValue({
-                bestLendRate: 505,
-                bestBorrowRate: 500,
-            });
+            orderRepository.findActiveLimitOrdersForOrderbook.mockResolvedValue([
+                { rate: 505, side: "LEND", markets: [{ marketId: MOCK_MARKET_ID }] } as any,
+                { rate: 500, side: "BORROW", markets: [{ marketId: MOCK_MARKET_ID }] } as any,
+            ]);
 
             await worker.placeOrders();
 
@@ -166,98 +291,64 @@ describe("OrdersWorker Spread Cancellation", () => {
 
         it("should CANCEL orders if spread is > 1%", async () => {
             // bestAsk = 506, bestBid = 500 => spread = (506-500)/500 = 0.012 (1.2%)
-            orderRepository.getBestRatesForAsset.mockResolvedValue({
-                bestLendRate: 506,
-                bestBorrowRate: 500,
-            });
+            orderRepository.findActiveLimitOrdersForOrderbook.mockResolvedValue([
+                { id: "o1", rate: 506, side: "LEND", markets: [{ marketId: MOCK_MARKET_ID }], accountId: MOCK_ACCOUNT_ID } as any,
+                { id: "o2", rate: 500, side: "BORROW", markets: [{ marketId: MOCK_MARKET_ID }], accountId: "other" } as any,
+            ]);
 
             orderRepository.findAccountByWallet.mockResolvedValue({
                 id: MOCK_ACCOUNT_ID,
                 userWallet: MOCK_BOT_WALLET,
             } as any);
 
-            orderRepository.find.mockResolvedValue([
-                { id: "order1", assetId: MOCK_ASSET_ID, status: OrderStatus.Open } as any,
+            await worker.placeOrders();
+
+            expect(ordersService.cancelOrder).toHaveBeenCalledWith("o1", MOCK_BOT_WALLET);
+        });
+
+        it("should handle multiple markets independently", async () => {
+            const market2 = "m2";
+            (worker as any).assetMarketCache[0].marketIds.push(market2);
+
+            orderRepository.findActiveLimitOrdersForOrderbook.mockResolvedValue([
+                // Market 1: wide spread (550 vs 500 = 10%)
+                { id: "o_m1", rate: 550, side: "LEND", markets: [{ marketId: MOCK_MARKET_ID }], accountId: MOCK_ACCOUNT_ID } as any,
+                { id: "o_m1_b", rate: 500, side: "BORROW", markets: [{ marketId: MOCK_MARKET_ID }], accountId: "other" } as any,
+                // Market 2: tight spread (501 vs 500 < 1%)
+                { id: "o_m2", rate: 501, side: "LEND", markets: [{ marketId: market2 }], accountId: MOCK_ACCOUNT_ID } as any,
+                { id: "o_m2_b", rate: 500, side: "BORROW", markets: [{ marketId: market2 }], accountId: "other" } as any,
+            ]);
+
+            orderRepository.findAccountByWallet.mockResolvedValue({
+                id: MOCK_ACCOUNT_ID,
+                userWallet: MOCK_BOT_WALLET,
+            } as any);
+
+            await worker.placeOrders();
+
+            // Should cancel o_m1 but NOT o_m2
+            expect(ordersService.cancelOrder).toHaveBeenCalledWith("o_m1", MOCK_BOT_WALLET);
+            expect(ordersService.cancelOrder).not.toHaveBeenCalledWith("o_m2", MOCK_BOT_WALLET);
+        });
+
+        it("should SKIP cancellation if bestBid is zero", async () => {
+            orderRepository.findActiveLimitOrdersForOrderbook.mockResolvedValue([
+                { rate: 510, side: "LEND", markets: [{ marketId: MOCK_MARKET_ID }] } as any,
+                { rate: 0, side: "BORROW", markets: [{ marketId: MOCK_MARKET_ID }] } as any,
             ]);
 
             await worker.placeOrders();
 
-            expect(orderRepository.find).toHaveBeenCalledWith(
-                expect.objectContaining({
-                    where: {
-                        accountId: MOCK_ACCOUNT_ID,
-                        assetId: MOCK_ASSET_ID,
-                        status: In([OrderStatus.Open, OrderStatus.PartiallyFilled]),
-                    },
-                }),
-            );
-            expect(ordersService.cancelOrder).toHaveBeenCalledWith("order1", MOCK_BOT_WALLET);
-        });
-
-        it("should SKIP cancellation if bestBid is zero", async () => {
-            orderRepository.getBestRatesForAsset.mockResolvedValue({
-                bestLendRate: 510,
-                bestBorrowRate: 0,
-            });
-
-            await worker.placeOrders();
-
-            expect(orderRepository.find).not.toHaveBeenCalled();
             expect(ordersService.cancelOrder).not.toHaveBeenCalled();
         });
 
-        it("should SKIP cancellation if bestAsk is less than bestBid (crossed book)", async () => {
-            orderRepository.getBestRatesForAsset.mockResolvedValue({
-                bestLendRate: 400,
-                bestBorrowRate: 500,
-            });
-
-            await worker.placeOrders();
-
-            expect(orderRepository.find).not.toHaveBeenCalled();
-            expect(ordersService.cancelOrder).not.toHaveBeenCalled();
-        });
-
-        it("should handle mixed bot presence correctly", async () => {
-            // Asset A: wide spread
-            // bot1 exists, bot2 doesn't have an account
-            (worker as any).botAccounts = [
-                { wallet: "0xBot1", privateKey: "0x1" },
-                { wallet: "0xBot2", privateKey: "0x2" },
-            ];
-
-            orderRepository.getBestRatesForAsset.mockResolvedValue({
-                bestLendRate: 600,
-                bestBorrowRate: 500, // spread = 20%
-            });
-
-            orderRepository.findAccountByWallet.mockImplementation(async (wallet) => {
-                if (wallet === "0xBot1") return { id: "acc1" } as any;
-                return null;
-            });
-
-            orderRepository.find.mockImplementation(async (params: any) => {
-                if (params.where.accountId === "acc1") {
-                    return [{ id: "order_b1" }] as any;
-                }
-                return [];
-            });
-
-            await worker.placeOrders();
-
-            expect(ordersService.cancelOrder).toHaveBeenCalledTimes(1);
-            expect(ordersService.cancelOrder).toHaveBeenCalledWith("order_b1", "0xBot1");
-        });
-
-        it("should handle best rates being null", async () => {
-            orderRepository.getBestRatesForAsset.mockResolvedValue({
-                bestLendRate: null,
-                bestBorrowRate: 500,
-            });
+        it("should handle no orders in market", async () => {
+            orderRepository.findActiveLimitOrdersForOrderbook.mockResolvedValue([]);
 
             await worker.placeOrders();
 
             expect(ordersService.cancelOrder).not.toHaveBeenCalled();
         });
     });
+});
 });

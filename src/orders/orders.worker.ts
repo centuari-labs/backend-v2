@@ -106,6 +106,7 @@ export class OrdersWorker implements OnModuleInit {
             throw new Error("TREASURY_ADDRESS is not configured");
         }
 
+        if (this.initialized || this.cycleInProgress) return;
         this.botAccounts = this.deriveBotAccounts();
 
         // Run heavy init in background so the HTTP server starts immediately
@@ -114,12 +115,13 @@ export class OrdersWorker implements OnModuleInit {
 
     private initializeInBackground(): void {
         (async () => {
+            if (this.initialized) return;
             try {
                 await this.ensureAccountsExist();
                 await this.refreshAssetMarketCache();
                 await this.seedBotFunding();
                 this.initialized = true;
-                this.logger.log("OrdersWorker initialized — placing orders.");
+                this.logger.log("[OrdersWorker] Background initialization complete — placeOrders cycle started.");
             } catch (e) {
                 this.logger.error(
                     `OrdersWorker background initialization failed: ${(e as Error).message}`,
@@ -362,15 +364,29 @@ export class OrdersWorker implements OnModuleInit {
 
         for (const spec of supportedSpecs) {
             try {
-                const walletBalance =
-                    await this.viemService.readContract<bigint>(
+                // Wait for balance to be non-zero (max 5 retries, 1s apart) to handle RPC lag
+                let walletBalance = 0n;
+                for (let i = 0; i < 5; i++) {
+                    walletBalance = await this.viemService.readContract<bigint>(
                         this.chainConfig.chainId,
                         spec.tokenAddress,
                         erc20Abi,
                         "balanceOf",
                         [bot.wallet],
                     );
-                if (walletBalance === 0n) continue;
+                    if (walletBalance > 0n) break;
+                    if (i < 4) {
+                        this.logger.debug(`[OrdersWorker] Waiting for balance of ${spec.tokenAddress} for bot ${bot.wallet} (attempt ${i + 1}/5)...`);
+                        await new Promise((r) => setTimeout(r, 1000));
+                    }
+                }
+
+                if (walletBalance === 0n) {
+                    this.logger.warn(`[OrdersWorker] Skip deposit: zero balance for bot ${bot.wallet} token ${spec.tokenAddress} after faucet.`);
+                    continue;
+                }
+
+                this.logger.debug(`[OrdersWorker] Depositing ${walletBalance.toString()} of ${spec.tokenAddress} for bot ${bot.wallet}`);
 
                 const receipt = await this.writeContractWithNonceRetry(
                     bot.privateKey,
@@ -688,70 +704,72 @@ export class OrdersWorker implements OnModuleInit {
                 // Refresh paired rates once per asset per cycle
                 this.refreshRatesForAsset(entry.assetId);
 
-                // Audit spread: cancel active bot orders if spread > 1%
-                const { bestLendRate: bestAsk, bestBorrowRate: bestBid } =
-                    await this.orderRepository.getBestRatesForAsset(
-                        entry.assetId,
-                    );
+                // Fetch all active orders for this asset to calculate per-market spreads
+                const activeOrders = await this.orderRepository.findActiveLimitOrdersForOrderbook(entry.assetId);
+                
+                // Group orders by marketId
+                const ordersByMarket = new Map<string, typeof activeOrders>();
+                for (const order of activeOrders) {
+                    for (const market of order.markets) {
+                        const arr = ordersByMarket.get(market.marketId) ?? [];
+                        arr.push(order);
+                        ordersByMarket.set(market.marketId, arr);
+                    }
+                }
 
-                if (
-                    bestAsk !== null &&
-                    bestBid !== null &&
-                    bestBid > 0 &&
-                    bestAsk > 0 &&
-                    bestAsk >= bestBid
-                ) {
-                    const spread = (bestAsk - bestBid) / bestBid;
-                    if (spread > 0.01) {
-                        this.logger.warn(
-                            `[OrdersWorker] Spread for ${entry.symbol} is too wide (${(spread * 100).toFixed(2)}% > 1%). Cancelling active bot orders.`,
-                        );
-                        for (const bot of this.botAccounts) {
-                            const account =
-                                await this.orderRepository.findAccountByWallet(
-                                    bot.wallet,
-                                );
-                            if (!account) continue;
+                // Check spread per market
+                for (const marketId of entry.marketIds) {
+                    const marketOrders = ordersByMarket.get(marketId) ?? [];
+                    const lendOrders = marketOrders.filter(o => o.side === OrderSide.Lend);
+                    const borrowOrders = marketOrders.filter(o => o.side === OrderSide.Borrow);
 
-                            const openOrders = await this.orderRepository.find({
-                                where: {
-                                    accountId: account.id,
-                                    assetId: entry.assetId,
-                                    status: In([
-                                        OrderStatus.Open,
-                                        OrderStatus.PartiallyFilled,
-                                    ]),
-                                },
-                            });
+                    const bestAsk = lendOrders.length > 0 ? Math.min(...lendOrders.map(o => o.rate)) : null;
+                    const bestBid = borrowOrders.length > 0 ? Math.max(...borrowOrders.map(o => o.rate)) : null;
 
-                            for (const ord of openOrders) {
-                                try {
-                                    await this.ordersService.cancelOrder(
-                                        ord.id,
-                                        bot.wallet,
-                                    );
-                                } catch (e) {
-                                    this.logger.error(
-                                        `[OrdersWorker] Failed to cancel bot order ${ord.id}: ${(e as Error).message}`,
-                                    );
+                    if (bestAsk !== null && bestBid !== null && bestBid > 0) {
+                        const spread = (bestAsk - bestBid) / bestBid;
+                        if (spread > 0.01) {
+                            this.logger.warn(
+                                `[OrdersWorker] Market ${marketId} spread for ${entry.symbol} is too wide (${(spread * 100).toFixed(2)}% > 1%). Cancelling bot orders in this market.`,
+                            );
+
+                            for (const bot of this.botAccounts) {
+                                const account = await this.orderRepository.findAccountByWallet(bot.wallet);
+                                if (!account) continue;
+
+                                const botOrdersInMarket = marketOrders.filter(o => o.accountId === account.id);
+                                for (const ord of botOrdersInMarket) {
+                                    try {
+                                        await this.ordersService.cancelOrder(ord.id, bot.wallet);
+                                        this.logger.log(`[OrdersWorker] Cancelled bot order ${ord.id} in market ${marketId} due to spread > 1%`);
+                                    } catch (e) {
+                                        this.logger.error(`[OrdersWorker] Failed to cancel bot order ${ord.id}: ${(e as Error).message}`);
+                                    }
                                 }
                             }
                         }
                     }
                 }
 
+                // Global best rates for the asset (across all tracked markets) for clamping
+                const assetBestAsk = activeOrders.filter(o => o.side === OrderSide.Lend).length > 0
+                    ? Math.min(...activeOrders.filter(o => o.side === OrderSide.Lend).map(o => o.rate))
+                    : null;
+                const assetBestBid = activeOrders.filter(o => o.side === OrderSide.Borrow).length > 0
+                    ? Math.max(...activeOrders.filter(o => o.side === OrderSide.Borrow).map(o => o.rate))
+                    : null;
 
                 for (const bot of this.botAccounts) {
                     if (Math.random() < MATCH_PROBABILITY) {
                         // ~25%: place both sides — may match
-                        await this.placeLendOrderWithRetry(bot, entry);
-                        await this.placeBorrowOrderWithRetry(bot, entry);
+                        await this.placeLendOrderWithRetry(bot, entry, assetBestAsk, assetBestBid);
+                        await this.placeBorrowOrderWithRetry(bot, entry, assetBestAsk, assetBestBid);
                     } else {
                         // ~75%: place only one side — won't self-match
                         if (Math.random() < 0.5) {
-                            await this.placeLendOrderWithRetry(bot, entry);
+                            await this.placeLendOrderWithRetry(bot, entry, assetBestAsk, assetBestBid);
                         } else {
-                            await this.placeBorrowOrderWithRetry(bot, entry);
+                            await this.placeBorrowOrderWithRetry(bot, entry, assetBestAsk, assetBestBid);
                         }
                     }
                 }
@@ -770,6 +788,8 @@ export class OrdersWorker implements OnModuleInit {
     private async placeLendOrderWithRetry(
         bot: BotAccount,
         entry: { assetId: string; marketIds: string[]; symbol: string },
+        bestAsk: number | null,
+        bestBid: number | null,
     ): Promise<void> {
         const { assetId, marketIds, symbol } = entry;
         const decimals =
@@ -791,10 +811,12 @@ export class OrdersWorker implements OnModuleInit {
         );
         const amount = this.randomQuantity(lendMin, lendMax);
         const rawRate = this.getLendRate(assetId);
-        const rate = await this.clampRateToSpread(
+        const rate = this.clampRateToSpread(
             assetId,
             OrderSide.Lend,
             rawRate,
+            bestAsk,
+            bestBid,
         );
 
         // Attempt 1: try directly
@@ -871,6 +893,8 @@ export class OrdersWorker implements OnModuleInit {
     private async placeBorrowOrderWithRetry(
         bot: BotAccount,
         entry: { assetId: string; marketIds: string[]; symbol: string },
+        bestAsk: number | null,
+        bestBid: number | null,
     ): Promise<void> {
         const { assetId, marketIds, symbol } = entry;
 
@@ -889,10 +913,12 @@ export class OrdersWorker implements OnModuleInit {
         );
         const amount = this.randomQuantity(borrowMin, borrowMax);
         const rawRate = this.getBorrowRate(assetId);
-        const rate = await this.clampRateToSpread(
+        const rate = this.clampRateToSpread(
             assetId,
             OrderSide.Borrow,
             rawRate,
+            bestAsk,
+            bestBid,
         );
 
         // Attempt 1: try directly
@@ -1161,14 +1187,13 @@ export class OrdersWorker implements OnModuleInit {
      * For LEND: ensures rate ≤ bestBorrowRate + MAX_SPREAD_BPS
      * For BORROW: ensures rate ≥ bestLendRate - MAX_SPREAD_BPS
      */
-    private async clampRateToSpread(
+    private clampRateToSpread(
         assetId: string,
         side: OrderSide,
         rate: number,
-    ): Promise<number> {
-        const { bestLendRate, bestBorrowRate } =
-            await this.orderRepository.getBestRatesForAsset(assetId);
-
+        bestLendRate: number | null,
+        bestBorrowRate: number | null,
+    ): number {
         let clamped = rate;
 
         if (side === OrderSide.Lend && bestBorrowRate != null) {

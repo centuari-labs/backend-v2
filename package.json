@@ -25,6 +25,7 @@
         "db": "ts-node src/core/database/scripts/db.ts"
     },
     "dependencies": {
+        "@centuari/indexer-v3": "workspace:*",
         "@nestjs/common": "^11.0.1",
         "@nestjs/config": "^4.0.3",
         "@nestjs/core": "^11.0.1",

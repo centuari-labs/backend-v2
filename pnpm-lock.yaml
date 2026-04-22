@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@centuari-labs/on-chain-effects':
+        specifier: ^0.1.0
+        version: 0.1.0(pg@8.16.3)(viem@2.38.6(bufferutil@4.0.9)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76))
       '@nestjs/common':
         specifier: ^11.0.1
         version: 11.1.8(class-transformer@0.5.1)(class-validator@0.14.3)(reflect-metadata@0.2.2)(rxjs@7.8.2)
@@ -415,6 +418,13 @@ packages:
 
   '@borewit/text-codec@0.1.1':
     resolution: {integrity: sha512-5L/uBxmjaCIX5h8Z+uu+kA9BQLkc/Wl06UGR5ajNRxu+/XjonB5i8JpgFMrPj3LXTCPA0pv8yxUvbUi+QthGGA==}
+
+  '@centuari-labs/on-chain-effects@0.1.0':
+    resolution: {integrity: sha512-hzoRSK5JlCUeLFyBfBv+yjE6pIIAxZsfmE3CkJW9NCdr3YklrasuJMz7yKnZkdfREeO+2ECUAuhDLW0aWIgRvA==, tarball: https://npm.pkg.github.com/download/@centuari-labs/on-chain-effects/0.1.0/6784c86160fcf05a8046aee17ae601b854aef0ab}
+    engines: {node: '>=22'}
+    peerDependencies:
+      pg: ^8.13.0
+      viem: ^2.21.0
 
   '@colors/colors@1.5.0':
     resolution: {integrity: sha512-ooWCrlZP11i8GImSjTHYHLkvFDP48nS4+204nGb1RiX/WXYHmJA2III9/e2DWVabCESdW7hBAEzHRqUn9OUVvQ==}
@@ -3843,6 +3853,11 @@ snapshots:
     optional: true
 
   '@borewit/text-codec@0.1.1': {}
+
+  '@centuari-labs/on-chain-effects@0.1.0(pg@8.16.3)(viem@2.38.6(bufferutil@4.0.9)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76))':
+    dependencies:
+      pg: 8.16.3
+      viem: 2.38.6(bufferutil@4.0.9)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76)
 
   '@colors/colors@1.5.0':
     optional: true

@@ -2,7 +2,7 @@ import { Injectable } from "@nestjs/common";
 import type { PoolClient } from "pg";
 import type { Hex } from "viem";
 import type { CollateralFlagSetArgs } from "../constants";
-import type { IdempotencyStamp } from "@centuari/indexer-v3/shared/apply-on-chain-effect";
+import type { IdempotencyStamp } from "@centuari-labs/on-chain-effects";
 
 /**
  * Raw SQL against the indexer-v3 shared schema. The mutation mirrors

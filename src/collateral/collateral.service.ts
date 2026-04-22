@@ -1,5 +1,5 @@
 import { Injectable, Logger } from "@nestjs/common";
-import { applyOnChainEffect } from "@centuari/indexer-v3/shared/apply-on-chain-effect";
+import { applyOnChainEffect } from "@centuari-labs/on-chain-effects";
 import type { Hex } from "viem";
 import { ChainConfigService } from "../core/chain-config/chain-config.service";
 import { DatabaseService } from "../core/database/database.service";

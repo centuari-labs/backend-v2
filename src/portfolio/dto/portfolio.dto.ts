@@ -104,7 +104,18 @@ export class MyPositionQueryDto {
 }
 
 export class MyPositionItemDto {
+    /**
+     * Synthetic identifier `${marketId}:${side}`. Stable per user + market
+     * + side since the shared on-chain-state schema aggregates rows per
+     * `(marketId, lender|borrower)`. Frontend uses it as a React key only.
+     */
     id: string;
+    /**
+     * Market UUID, for backward compatibility with the frontend. The
+     * indexer-v3 schema stores this as a 32-byte hex; `bytes32ToUuid` in
+     * `common/utils/uuid.utils.ts` round-trips it back to the UUID form
+     * that `uuidToBytes32` originally produced for the on-chain call.
+     */
     marketId: string;
     symbol: string;
     name: string;
@@ -114,6 +125,7 @@ export class MyPositionItemDto {
     isCollateral: boolean;
     imageUrl?: string | null;
     side: "LEND" | "BORROW";
+    /** Unix seconds — surfaced from `market.maturity` on the shared schema. */
     maturity?: number | null;
     apr: number;
 }

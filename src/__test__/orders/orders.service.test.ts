@@ -7,7 +7,7 @@ import {
 } from "@nestjs/common";
 import { OrdersService } from "../../orders/orders.service";
 import { Order } from "../../orders/entities/order.entity";
-import { Market } from "../../market/entities/market.entity";
+import { LegacyMarket as Market } from "../../market/entities/legacy-market.entity";
 import { MarketRepositories } from "../../market/repository/market.repository";
 import { PriceService } from "../../price/price.service";
 import { TokensService } from "../../tokens/tokens.service";

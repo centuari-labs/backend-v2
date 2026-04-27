@@ -1,9 +1,15 @@
 import { Injectable } from "@nestjs/common";
-import { Portfolio } from "../entities/portfolio.entity";
+import { InjectRepository } from "@nestjs/typeorm";
 import { DataSource, EntityManager, In, Repository } from "typeorm";
+import { BYTEA_HEX } from "../../common/transformers/bytea-hex.transformer";
 import { OrderSide, OrderStatus } from "../../orders/constants/order.constants";
 import { Token } from "../../tokens/entities/token.entity";
+import { Market } from "../../market/entities/market.entity";
 import type { RawOpenOrderRow } from "../dto/open-orders.dto";
+import { BorrowPosition } from "../entities/borrow-position.entity";
+import { LegacyPortfolio } from "../entities/legacy-portfolio.entity";
+import { LendPosition } from "../entities/lend-position.entity";
+import { UserBalance } from "../entities/user-balance.entity";
 
 export interface RawPosition {
     position_id: string;
@@ -73,9 +79,17 @@ export interface LendPositionForApr {
 }
 
 @Injectable()
-export class PortfolioRepository extends Repository<Portfolio> {
-    constructor(private dataSource: DataSource) {
-        super(Portfolio, dataSource.createEntityManager());
+export class PortfolioRepository extends Repository<LegacyPortfolio> {
+    constructor(
+        private dataSource: DataSource,
+        @InjectRepository(UserBalance)
+        private readonly userBalanceRepo: Repository<UserBalance>,
+        @InjectRepository(LendPosition)
+        private readonly lendRepo: Repository<LendPosition>,
+        @InjectRepository(BorrowPosition)
+        private readonly borrowRepo: Repository<BorrowPosition>,
+    ) {
+        super(LegacyPortfolio, dataSource.createEntityManager());
     }
 
     async getUserTotalBalances(
@@ -96,258 +110,6 @@ export class PortfolioRepository extends Repository<Portfolio> {
             .getRawMany();
     }
 
-    async getUserLendPositionsForApr(
-        accountId: string,
-    ): Promise<LendPositionForApr[]> {
-        return this.dataSource
-            .createQueryBuilder()
-            .select("lp.asset_id", "asset_id")
-            .addSelect("lp.shares", "shares")
-            .addSelect("lp.original_shares", "original_shares")
-            .addSelect("lp.amount", "amount")
-            .addSelect("lp.apr", "apr")
-            .addSelect("lp.created_at", "created_at")
-            .from("lend_positions", "lp")
-            .where("lp.account_id = :accountId", { accountId })
-            .andWhere("lp.shares > 0")
-            .getRawMany();
-    }
-
-    async getAllLendPositions(
-        accountId: string,
-    ): Promise<LendPositionForApr[]> {
-        return this.dataSource
-            .createQueryBuilder()
-            .select("lp.asset_id", "asset_id")
-            .addSelect("lp.shares", "shares")
-            .addSelect("lp.original_shares", "original_shares")
-            .addSelect("lp.amount", "amount")
-            .addSelect("lp.apr", "apr")
-            .addSelect("lp.created_at", "created_at")
-            .from("lend_positions", "lp")
-            .where("lp.account_id = :accountId", { accountId })
-            .getRawMany();
-    }
-
-    async getUserSuppliedAssets(
-        accountId: string,
-    ): Promise<{ asset_id: string; amount: string }[]> {
-        return this.dataSource
-            .createQueryBuilder()
-            .select("lp.asset_id", "asset_id")
-            .addSelect("SUM(lp.shares)", "amount")
-            .from("lend_positions", "lp")
-            .where("lp.account_id = :accountId", { accountId })
-            .andWhere("lp.shares > 0")
-            .groupBy("lp.asset_id")
-            .getRawMany();
-    }
-
-    async getUserBorrowedAssets(
-        accountId: string,
-    ): Promise<{ asset_id: string; amount: string }[]> {
-        return this.dataSource
-            .createQueryBuilder()
-            .select("bp.asset_id", "asset_id")
-            .addSelect("SUM(bp.debt)", "amount")
-            .from("borrow_positions", "bp")
-            .where("bp.account_id = :accountId", { accountId })
-            .andWhere("bp.debt > 0")
-            .groupBy("bp.asset_id")
-            .getRawMany();
-    }
-
-    /** Collateral-only positions: portfolio rows where is_collateral = true, amounts in base units. */
-    async getUserCollateralAssets(
-        accountId: string,
-    ): Promise<{ asset_id: string; amount: string }[]> {
-        return this.createQueryBuilder("portfolio")
-            .select("portfolio.asset_id", "asset_id")
-            .addSelect("SUM(portfolio.amount)", "amount")
-            .where("portfolio.account_id = :accountId", { accountId })
-            .andWhere("portfolio.is_collateral = :isCollateral", {
-                isCollateral: true,
-            })
-            .andWhere("portfolio.amount > 0")
-            .groupBy("portfolio.asset_id")
-            .getRawMany();
-    }
-
-    async getUserAssets(
-        accountId: string,
-        page = 1,
-        limit = 10,
-    ): Promise<{ data: any[]; total: number }> {
-        const skip = (page - 1) * limit;
-
-        const queryBuilder = this.createQueryBuilder("portfolio")
-            .select([
-                "portfolio.asset_id AS asset_id",
-                "portfolio.amount AS amount",
-                "portfolio.locked_amount AS locked_amount",
-                "portfolio.is_collateral AS is_collateral",
-            ])
-            .where("portfolio.account_id = :accountId", { accountId })
-            .andWhere("portfolio.amount > 0")
-            .skip(skip)
-            .take(limit);
-
-        const data = await queryBuilder.getRawMany();
-        const total = await queryBuilder.getCount();
-
-        return { data, total };
-    }
-
-    async getUserPositions(
-        accountId: string,
-        positionType?: "LEND" | "BORROW",
-        page = 1,
-        limit = 10,
-        assetId?: string,
-    ): Promise<{ data: RawPosition[]; total: number }> {
-        const includeLend = !positionType || positionType === "LEND";
-        const includeBorrow = !positionType || positionType === "BORROW";
-
-        const lendResults: RawPosition[] = [];
-        const borrowResults: RawPosition[] = [];
-        let lendCount = 0;
-        let borrowCount = 0;
-
-        if (includeLend) {
-            const lendQuery = this.dataSource
-                .createQueryBuilder()
-                .select("lp.market_id", "position_id")
-                .addSelect("lp.market_id", "market_id")
-                .addSelect("lp.asset_id", "asset_id")
-                .addSelect("'LEND'", "side")
-                .addSelect(
-                    "CASE WHEN SUM(lp.amount) > 0 THEN SUM(COALESCE(lp.apr, 0)::numeric * lp.amount::numeric) / SUM(lp.amount::numeric) / 100.0 ELSE 0 END",
-                    "rate",
-                )
-                .addSelect("SUM(lp.shares)", "quantity")
-                .addSelect("t.symbol", "symbol")
-                .addSelect("t.name", "name")
-                .addSelect("t.token_address", "token_address")
-                .addSelect("t.image_url", "image_url")
-                .addSelect("COALESCE(t.decimals, 0)", "decimals")
-                .addSelect("SUM(lp.amount)", "base_amount")
-                .addSelect("m.maturity", "maturity")
-                .addSelect("MIN(lp.created_at)", "created_at")
-                .from("lend_positions", "lp")
-                .innerJoin("assets", "t", "lp.asset_id = t.id")
-                .leftJoin("markets", "m", "lp.market_id = m.id")
-                .where("lp.account_id = :accountId", { accountId })
-                .andWhere("lp.shares > 0")
-                .groupBy("lp.market_id")
-                .addGroupBy("lp.asset_id")
-                .addGroupBy("t.symbol")
-                .addGroupBy("t.name")
-                .addGroupBy("t.token_address")
-                .addGroupBy("t.image_url")
-                .addGroupBy("t.decimals")
-                .addGroupBy("m.maturity");
-
-            if (assetId) {
-                lendQuery.andWhere("lp.asset_id = :assetId", { assetId });
-            }
-
-            const countQuery = this.dataSource
-                .createQueryBuilder()
-                .select(
-                    "COUNT(DISTINCT (lp.asset_id, lp.market_id))",
-                    "count",
-                )
-                .from("lend_positions", "lp")
-                .where("lp.account_id = :accountId", { accountId })
-                .andWhere("lp.shares > 0");
-
-            if (assetId) {
-                countQuery.andWhere("lp.asset_id = :assetId", { assetId });
-            }
-
-            const [rows, countResult] = await Promise.all([
-                lendQuery.getRawMany(),
-                countQuery.getRawOne(),
-            ]);
-
-            lendResults.push(...rows);
-            lendCount = Number.parseInt(countResult?.count || "0", 10);
-        }
-
-        if (includeBorrow) {
-            const borrowQuery = this.dataSource
-                .createQueryBuilder()
-                .select("bp.market_id", "position_id")
-                .addSelect("bp.market_id", "market_id")
-                .addSelect("bp.asset_id", "asset_id")
-                .addSelect("'BORROW'", "side")
-                .addSelect(
-                    "CASE WHEN SUM(bp.amount) > 0 THEN SUM(COALESCE(bp.apr, 0)::numeric * bp.amount::numeric) / SUM(bp.amount::numeric) / 100.0 ELSE 0 END",
-                    "rate",
-                )
-                .addSelect("SUM(bp.debt)", "quantity")
-                .addSelect("t.symbol", "symbol")
-                .addSelect("t.name", "name")
-                .addSelect("t.token_address", "token_address")
-                .addSelect("t.image_url", "image_url")
-                .addSelect("COALESCE(t.decimals, 0)", "decimals")
-                .addSelect("SUM(bp.amount)", "base_amount")
-                .addSelect("m.maturity", "maturity")
-                .addSelect("MIN(bp.created_at)", "created_at")
-                .from("borrow_positions", "bp")
-                .innerJoin("assets", "t", "bp.asset_id = t.id")
-                .leftJoin("markets", "m", "bp.market_id = m.id")
-                .where("bp.account_id = :accountId", { accountId })
-                .andWhere("bp.debt > 0")
-                .groupBy("bp.market_id")
-                .addGroupBy("bp.asset_id")
-                .addGroupBy("t.symbol")
-                .addGroupBy("t.name")
-                .addGroupBy("t.token_address")
-                .addGroupBy("t.image_url")
-                .addGroupBy("t.decimals")
-                .addGroupBy("m.maturity");
-
-            if (assetId) {
-                borrowQuery.andWhere("bp.asset_id = :assetId", { assetId });
-            }
-
-            const countQuery = this.dataSource
-                .createQueryBuilder()
-                .select(
-                    "COUNT(DISTINCT (bp.asset_id, bp.market_id))",
-                    "count",
-                )
-                .from("borrow_positions", "bp")
-                .where("bp.account_id = :accountId", { accountId })
-                .andWhere("bp.debt > 0");
-
-            if (assetId) {
-                countQuery.andWhere("bp.asset_id = :assetId", { assetId });
-            }
-
-            const [rows, countResult] = await Promise.all([
-                borrowQuery.getRawMany(),
-                countQuery.getRawOne(),
-            ]);
-
-            borrowResults.push(...rows);
-            borrowCount = Number.parseInt(countResult?.count || "0", 10);
-        }
-
-        const combined = [...lendResults, ...borrowResults].sort(
-            (a, b) =>
-                new Date(b.created_at).getTime() -
-                new Date(a.created_at).getTime(),
-        );
-
-        const total = lendCount + borrowCount;
-        const offset = (page - 1) * limit;
-        const data = combined.slice(offset, offset + limit);
-
-        return { data, total };
-    }
-
     async getTokensByAssetIds(assetIds: string[]): Promise<Token[]> {
         return this.dataSource.getRepository(Token).find({
             where: { id: In(assetIds) },
@@ -365,6 +127,304 @@ export class PortfolioRepository extends Repository<Portfolio> {
             [assetIds],
         );
     }
+
+    // ──────────────────────────────────────────────────────────────
+    // Shared on-chain-state reads (A5)
+    //
+    // These methods query `user_balance`, `lend_position`,
+    // `borrow_position`, `market` — the canonical tables every service
+    // shares via the same Postgres. Mapped by normal TypeORM entities
+    // (see `entities/user-balance.entity.ts` etc.); BYTEA columns use
+    // the `BYTEA_HEX` transformer so hex strings round-trip cleanly.
+    //
+    // JOIN conditions that bridge bytea ↔ text (shared schema's bytea
+    // columns vs backend `tokens.token_address` text) stay as raw
+    // string fragments — TypeORM can't type-check across that boundary
+    // on either side. Param values for raw-string `.where()` fragments
+    // are wrapped with `BYTEA_HEX.to(...)` explicitly.
+    // ──────────────────────────────────────────────────────────────
+
+    async getUserBalances(wallet: string): Promise<
+        {
+            asset_id: string;
+            symbol: string;
+            name: string;
+            image_url: string | null;
+            decimals: number;
+            amount: string;
+            is_collateral: boolean;
+        }[]
+    > {
+        return this.userBalanceRepo
+            .createQueryBuilder("ub")
+            .innerJoin(
+                Token,
+                "t",
+                "LOWER(t.token_address) = '0x' || encode(ub.asset, 'hex')",
+            )
+            .select("t.id", "asset_id")
+            .addSelect("t.symbol", "symbol")
+            .addSelect("t.name", "name")
+            .addSelect("t.image_url", "image_url")
+            .addSelect("COALESCE(t.decimals, 0)", "decimals")
+            .addSelect("ub.available::text", "amount")
+            .addSelect("ub.used_as_collateral", "is_collateral")
+            .where("ub.user_address = :u", { u: BYTEA_HEX.to(wallet) })
+            .orderBy("t.symbol")
+            .getRawMany();
+    }
+
+    async getUserSuppliedAssets(
+        wallet: string,
+    ): Promise<{ asset_id: string; amount: string; decimals: number }[]> {
+        return this.lendRepo
+            .createQueryBuilder("lp")
+            .innerJoin(Market, "m", "m.market_id = lp.market_id")
+            .innerJoin(
+                Token,
+                "t",
+                "LOWER(t.token_address) = '0x' || encode(m.loan_token, 'hex')",
+            )
+            .select("t.id", "asset_id")
+            .addSelect("COALESCE(SUM(lp.principal), 0)::text", "amount")
+            .addSelect("COALESCE(t.decimals, 0)", "decimals")
+            .where("lp.lender = :w", { w: BYTEA_HEX.to(wallet) })
+            .andWhere("lp.cbt_balance > 0")
+            .groupBy("t.id")
+            .addGroupBy("t.decimals")
+            .getRawMany();
+    }
+
+    async getUserBorrowedAssets(
+        wallet: string,
+    ): Promise<{ asset_id: string; amount: string; decimals: number }[]> {
+        return this.borrowRepo
+            .createQueryBuilder("bp")
+            .innerJoin(Market, "m", "m.market_id = bp.market_id")
+            .innerJoin(
+                Token,
+                "t",
+                "LOWER(t.token_address) = '0x' || encode(m.loan_token, 'hex')",
+            )
+            .select("t.id", "asset_id")
+            .addSelect("COALESCE(SUM(bp.debt), 0)::text", "amount")
+            .addSelect("COALESCE(t.decimals, 0)", "decimals")
+            .where("bp.borrower = :w", { w: BYTEA_HEX.to(wallet) })
+            .andWhere("bp.debt > 0")
+            .groupBy("t.id")
+            .addGroupBy("t.decimals")
+            .getRawMany();
+    }
+
+    async getUserLendPositionsForApr(wallet: string): Promise<
+        {
+            asset_id: string;
+            amount: string;
+            apr: string;
+            decimals: number;
+        }[]
+    > {
+        return this.lendRepo
+            .createQueryBuilder("lp")
+            .innerJoin(Market, "m", "m.market_id = lp.market_id")
+            .innerJoin(
+                Token,
+                "t",
+                "LOWER(t.token_address) = '0x' || encode(m.loan_token, 'hex')",
+            )
+            .select("t.id", "asset_id")
+            .addSelect("lp.principal::text", "amount")
+            .addSelect("lp.rate::text", "apr")
+            .addSelect("COALESCE(t.decimals, 0)", "decimals")
+            .where("lp.lender = :w", { w: BYTEA_HEX.to(wallet) })
+            .andWhere("lp.cbt_balance > 0")
+            .getRawMany();
+    }
+
+    async getUserCollateralAssets(
+        wallet: string,
+    ): Promise<{ asset_id: string; amount: string; decimals: number }[]> {
+        return this.userBalanceRepo
+            .createQueryBuilder("ub")
+            .innerJoin(
+                Token,
+                "t",
+                "LOWER(t.token_address) = '0x' || encode(ub.asset, 'hex')",
+            )
+            .select("t.id", "asset_id")
+            .addSelect("ub.available::text", "amount")
+            .addSelect("COALESCE(t.decimals, 0)", "decimals")
+            .where("ub.user_address = :w", { w: BYTEA_HEX.to(wallet) })
+            .andWhere("ub.used_as_collateral = true")
+            .andWhere("ub.available > 0")
+            .getRawMany();
+    }
+
+    async getUserAssets(
+        wallet: string,
+        page = 1,
+        limit = 10,
+    ): Promise<{
+        data: {
+            asset_id: string;
+            symbol: string;
+            name: string;
+            image_url: string | null;
+            decimals: number;
+            amount: string;
+            is_collateral: boolean;
+        }[];
+        total: number;
+    }> {
+        const offset = (page - 1) * limit;
+        const rows = await this.userBalanceRepo
+            .createQueryBuilder("ub")
+            .innerJoin(
+                Token,
+                "t",
+                "LOWER(t.token_address) = '0x' || encode(ub.asset, 'hex')",
+            )
+            .select("t.id", "asset_id")
+            .addSelect("t.symbol", "symbol")
+            .addSelect("t.name", "name")
+            .addSelect("t.image_url", "image_url")
+            .addSelect("COALESCE(t.decimals, 0)", "decimals")
+            .addSelect("ub.available::text", "amount")
+            .addSelect("ub.used_as_collateral", "is_collateral")
+            .addSelect("COUNT(*) OVER ()", "total_count")
+            .where("ub.user_address = :w", { w: BYTEA_HEX.to(wallet) })
+            .andWhere("ub.available > 0")
+            .orderBy("t.symbol")
+            .limit(limit)
+            .offset(offset)
+            .getRawMany<{
+                asset_id: string;
+                symbol: string;
+                name: string;
+                image_url: string | null;
+                decimals: number;
+                amount: string;
+                is_collateral: boolean;
+                total_count: string;
+            }>();
+
+        const total = rows[0]?.total_count ? Number(rows[0].total_count) : 0;
+        // Drop the per-row `total_count` from the caller-facing shape.
+        const data = rows.map(({ total_count: _drop, ...row }) => row);
+        return { data, total };
+    }
+
+    async getUserPositions(
+        wallet: string,
+        positionType?: "LEND" | "BORROW",
+        page = 1,
+        limit = 10,
+        assetId?: string,
+    ): Promise<{ data: RawPosition[]; total: number }> {
+        const includeLend = !positionType || positionType === "LEND";
+        const includeBorrow = !positionType || positionType === "BORROW";
+        const walletBuf = BYTEA_HEX.to(wallet);
+
+        const lendRows: RawPosition[] = includeLend
+            ? await this.lendRepo
+                  .createQueryBuilder("lp")
+                  .innerJoin(Market, "m", "m.market_id = lp.market_id")
+                  .innerJoin(
+                      Token,
+                      "t",
+                      "LOWER(t.token_address) = '0x' || encode(m.loan_token, 'hex')",
+                  )
+                  .select("encode(lp.market_id, 'hex')", "market_id")
+                  .addSelect("encode(lp.market_id, 'hex')", "position_id")
+                  .addSelect("t.id", "asset_id")
+                  .addSelect("'LEND'", "side")
+                  .addSelect("lp.rate::text", "rate")
+                  .addSelect("lp.cbt_balance::text", "quantity")
+                  .addSelect("lp.principal::text", "base_amount")
+                  .addSelect("t.symbol", "symbol")
+                  .addSelect("t.name", "name")
+                  .addSelect("t.token_address", "token_address")
+                  .addSelect("t.image_url", "image_url")
+                  .addSelect("COALESCE(t.decimals, 0)", "decimals")
+                  .addSelect("to_timestamp(m.maturity)", "maturity")
+                  .addSelect("lp.updated_at", "created_at")
+                  .addSelect("'OPEN'", "status")
+                  .where("lp.lender = :w", { w: walletBuf })
+                  .andWhere("lp.cbt_balance > 0")
+                  .andWhere("(CAST(:assetId AS uuid) IS NULL OR t.id = :assetId)", {
+                      assetId: assetId ?? null,
+                  })
+                  .getRawMany()
+            : [];
+
+        const borrowRows: RawPosition[] = includeBorrow
+            ? await this.borrowRepo
+                  .createQueryBuilder("bp")
+                  .innerJoin(Market, "m", "m.market_id = bp.market_id")
+                  .innerJoin(
+                      Token,
+                      "t",
+                      "LOWER(t.token_address) = '0x' || encode(m.loan_token, 'hex')",
+                  )
+                  .select("encode(bp.market_id, 'hex')", "market_id")
+                  .addSelect("encode(bp.market_id, 'hex')", "position_id")
+                  .addSelect("t.id", "asset_id")
+                  .addSelect("'BORROW'", "side")
+                  .addSelect("bp.rate::text", "rate")
+                  .addSelect("bp.debt::text", "quantity")
+                  .addSelect("bp.principal::text", "base_amount")
+                  .addSelect("t.symbol", "symbol")
+                  .addSelect("t.name", "name")
+                  .addSelect("t.token_address", "token_address")
+                  .addSelect("t.image_url", "image_url")
+                  .addSelect("COALESCE(t.decimals, 0)", "decimals")
+                  .addSelect("to_timestamp(m.maturity)", "maturity")
+                  .addSelect("bp.updated_at", "created_at")
+                  .addSelect("'OPEN'", "status")
+                  .where("bp.borrower = :w", { w: walletBuf })
+                  .andWhere("bp.debt > 0")
+                  .andWhere("(CAST(:assetId AS uuid) IS NULL OR t.id = :assetId)", {
+                      assetId: assetId ?? null,
+                  })
+                  .getRawMany()
+            : [];
+
+        const combined = [...lendRows, ...borrowRows].sort(
+            (a, b) =>
+                new Date(b.created_at).getTime() -
+                new Date(a.created_at).getTime(),
+        );
+        const total = combined.length;
+        const offset = (page - 1) * limit;
+        const data = combined.slice(offset, offset + limit);
+        return { data, total };
+    }
+
+    async getLendPosition(
+        marketIdHex: string,
+        lender: string,
+    ): Promise<{ cbt_balance: string; principal: string } | null> {
+        const row = await this.lendRepo.findOne({
+            where: { marketId: marketIdHex, lender },
+            select: { cbtBalance: true, principal: true },
+        });
+        return row
+            ? { cbt_balance: row.cbtBalance, principal: row.principal }
+            : null;
+    }
+
+    async getBorrowPosition(
+        marketIdHex: string,
+        borrower: string,
+    ): Promise<{ principal: string; debt: string } | null> {
+        const row = await this.borrowRepo.findOne({
+            where: { marketId: marketIdHex, borrower },
+            select: { principal: true, debt: true },
+        });
+        return row ? { principal: row.principal, debt: row.debt } : null;
+    }
+
+    // End shared on-chain-state reads ────────────────────────────────
 
     async getUserDailyLendBorrow(
         accountId: string,
@@ -672,43 +732,6 @@ export class PortfolioRepository extends Repository<Portfolio> {
         }
 
         return qb.getRawOne();
-    }
-
-    async getLendPositions(
-        accountId: string,
-        marketId: string,
-        manager?: EntityManager,
-    ): Promise<any[]> {
-        const queryRunner = manager
-            ? manager.createQueryBuilder()
-            : this.dataSource.createQueryBuilder();
-
-        let qb = queryRunner
-            .select("lp")
-            .from("lend_positions", "lp")
-            .where("lp.account_id = :accountId", { accountId })
-            .andWhere("lp.market_id = :marketId", { marketId })
-            .andWhere("lp.shares > 0")
-            .orderBy("lp.created_at", "ASC");
-
-        if (manager) {
-            qb = qb.setLock("pessimistic_write");
-        }
-
-        return qb.getRawMany();
-    }
-
-    async updateLendPositionShares(
-        manager: EntityManager,
-        positionId: string,
-        shares: string,
-    ): Promise<void> {
-        await manager
-            .createQueryBuilder()
-            .update("lend_positions")
-            .set({ shares })
-            .where("id = :id", { id: positionId })
-            .execute();
     }
 
     async getTransactionHistory(

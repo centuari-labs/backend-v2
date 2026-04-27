@@ -15,7 +15,7 @@ import { OrderRepository } from "./repositories/order.repository";
 import { PortfolioRepository } from "../portfolio/repositories/portfolio.repository";
 import { portfolioUuidFor } from "../common/utils/uuid.utils";
 import { OrdersService } from "./orders.service";
-import { Market } from "../market/entities/market.entity";
+import { LegacyMarket } from "../market/entities/legacy-market.entity";
 import { Token } from "../tokens/entities/token.entity";
 import { PortfolioService } from "../portfolio/portfolio.service";
 import { TokensService } from "../tokens/tokens.service";
@@ -72,8 +72,8 @@ export class OrdersWorker implements OnModuleInit {
 
     constructor(
         private readonly orderRepository: OrderRepository,
-        @InjectRepository(Market)
-        private readonly marketRepository: Repository<Market>,
+        @InjectRepository(LegacyMarket)
+        private readonly marketRepository: Repository<LegacyMarket>,
         @InjectRepository(Token)
         private readonly tokenRepository: Repository<Token>,
         private readonly ordersService: OrdersService,

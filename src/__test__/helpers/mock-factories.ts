@@ -1,6 +1,6 @@
 import { Order } from "../../orders/entities/order.entity";
 import { Account } from "../../orders/entities/account.entity";
-import { Market } from "../../market/entities/market.entity";
+import { LegacyMarket } from "../../market/entities/legacy-market.entity";
 import { Token } from "../../tokens/entities/token.entity";
 import { OrderMarket } from "../../orders/entities/order-market.entity";
 import {
@@ -51,7 +51,9 @@ export function createMockAccount(overrides: Partial<Account> = {}): Account {
     };
 }
 
-export function createMockMarket(overrides: Partial<Market> = {}): Market {
+export function createMockMarket(
+    overrides: Partial<LegacyMarket> = {},
+): LegacyMarket {
     return {
         id: MOCK_IDS.marketId,
         assetId: MOCK_IDS.assetId,

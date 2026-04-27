@@ -6,13 +6,15 @@ import {
     NotFoundException,
 } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { DataSource, Repository } from "typeorm";
+import { Repository } from "typeorm";
 import type { TransactionReceipt } from "viem";
 import { Token } from "../tokens/entities/token.entity";
 import { PriceService } from "../price/price.service";
 import { TokensService } from "../tokens/tokens.service";
 import { ViemService } from "../core/viem/viem.service";
 import { ChainConfigService } from "../core/chain-config/chain-config.service";
+import { DatabaseService } from "../core/database/database.service";
+import { applyWithdrawLendEffects } from "../core/on-chain-state/apply-withdraw-lend";
 import { centuariAbi } from "../../abis/centuari";
 import {
     WithdrawLendPositionDto,
@@ -38,7 +40,7 @@ import {
 import { PortfolioRepository } from "./repositories/portfolio.repository";
 import { OrderRepository } from "../orders/repositories/order.repository";
 import { MarketRepositories } from "../market/repository/market.repository";
-import { portfolioUuidFor, uuidToBytes32 } from "../common/utils/uuid.utils";
+import { bytes32ToUuid, uuidToBytes32 } from "../common/utils/uuid.utils";
 import { parseContractError } from "../common/utils/contract-errors.utils";
 import {
     calculateUsdAmount,
@@ -49,7 +51,6 @@ import {
     safeBigInt,
     toPercentage,
 } from "../common/utils/number.utils";
-import { getFirstEventFromReceipt } from "../common/utils/event.utils";
 import {
     computeHealthFactor,
     formatHealthFactorResponse,
@@ -75,161 +76,63 @@ export class PortfolioService {
         private readonly marketRepository: MarketRepositories,
         private readonly viemService: ViemService,
         private readonly chainConfig: ChainConfigService,
-        private readonly dataSource: DataSource,
+        private readonly databaseService: DatabaseService,
     ) {}
 
     async getMyPortfolio(wallet: string): Promise<MyPortfolioResponseDto> {
-        const account = await this.orderRepository.findAccountByWallet(wallet);
-        if (!account) {
-            throw new NotFoundException("Account not found");
-        }
+        const [balances, suppliedAssets, borrowedAssets, lendForApr] =
+            await Promise.all([
+                this.portfolioRepository.getUserBalances(wallet),
+                this.portfolioRepository.getUserSuppliedAssets(wallet),
+                this.portfolioRepository.getUserBorrowedAssets(wallet),
+                this.portfolioRepository.getUserLendPositionsForApr(wallet),
+            ]);
 
         const allPrices = this.priceService.getPrices();
 
-        let totalBalanceUsd = 0;
+        const totalBalanceUsd = sumUsd(balances, allPrices);
+        const suppliedAssetsUsd = sumUsd(suppliedAssets, allPrices);
+        const borrowedAssetsUsd = sumUsd(borrowedAssets, allPrices);
 
-        const [
-            portfolio,
-            allLendPositions,
-            activeLendPositions,
-            suppliedAssets,
-            borrowedAssets,
-        ] = await Promise.all([
-            this.portfolioRepository.getUserTotalBalances(account.id),
-            this.portfolioRepository.getAllLendPositions(account.id),
-            this.portfolioRepository.getUserLendPositionsForApr(account.id),
-            this.portfolioRepository.getUserSuppliedAssets(account.id),
-            this.portfolioRepository.getUserBorrowedAssets(account.id),
-        ]);
-
-        for (const deposit of portfolio) {
-            const decimals = await this.tokensService.getTokenDecimalsByAssetId(
-                deposit.asset_id,
+        // Weighted APR: `rate` is indexer-v3's RATE_PRECISION=10000 bps,
+        // weighted by the principal on each lend_position row.
+        let weightedRate = 0;
+        let weightSum = 0;
+        for (const row of lendForApr) {
+            const principalHuman = Number(
+                baseUnitsToHuman(row.amount, row.decimals),
             );
-            if (decimals == null) continue;
-            const amountHuman = Number(
-                baseUnitsToHuman(deposit.total_amount ?? "0", decimals),
-            );
-            const price = allPrices[deposit.asset_id.toLowerCase()];
-            if (price !== undefined) {
-                totalBalanceUsd += amountHuman * price;
-            }
+            if (principalHuman <= 0) continue;
+            const apr = Number(row.apr) / 10000;
+            weightedRate += apr * principalHuman;
+            weightSum += principalHuman;
         }
+        const netAPR = weightSum > 0 ? weightedRate / weightSum : 0;
 
-        let allTimeReturnUsd = 0;
-        for (const position of allLendPositions) {
-            const decimals = await this.tokensService.getTokenDecimalsByAssetId(
-                position.asset_id,
-            );
-            if (decimals == null) continue;
-
-            const amountHuman = Number(
-                baseUnitsToHuman(position.amount ?? "0", decimals),
-            );
-            const originalSharesHuman = Number(
-                baseUnitsToHuman(position.original_shares ?? "0", decimals),
-            );
-
-            if (amountHuman <= 0) continue;
-
-            const price = allPrices[position.asset_id.toLowerCase()];
-            if (price !== undefined) {
-                const gainHuman = originalSharesHuman - amountHuman;
-                allTimeReturnUsd += gainHuman * price;
-            }
-        }
-
-        let netAPR = 0;
-        if (activeLendPositions.length > 0) {
-            let totalWeightedAPR = 0;
-            let totalAmount = 0;
-
-            for (const position of activeLendPositions) {
-                const decimals =
-                    await this.tokensService.getTokenDecimalsByAssetId(
-                        position.asset_id,
-                    );
-                if (decimals == null) continue;
-
-                const amountHuman = Number(
-                    baseUnitsToHuman(position.amount ?? "0", decimals),
-                );
-
-                if (amountHuman <= 0) continue;
-
-                const positionApr = Number(position.apr) / 10000;
-                totalWeightedAPR += positionApr * amountHuman;
-                totalAmount += amountHuman;
-            }
-
-            if (totalAmount > 0) {
-                netAPR = totalWeightedAPR / totalAmount;
-            }
-        }
-
-        let suppliedAssetsUsd = 0;
-        for (const position of suppliedAssets) {
-            const decimals = await this.tokensService.getTokenDecimalsByAssetId(
-                position.asset_id,
-            );
-            if (decimals == null) continue;
-            const amountHuman = Number(
-                baseUnitsToHuman(position.amount ?? "0", decimals),
-            );
-            if (amountHuman <= 0) continue;
-
-            const price = allPrices[position.asset_id.toLowerCase()];
-            if (price === undefined) continue;
-
-            suppliedAssetsUsd += amountHuman * price;
-        }
-
-        let borrowedAssetsUsd = 0;
-        for (const position of borrowedAssets) {
-            const decimals = await this.tokensService.getTokenDecimalsByAssetId(
-                position.asset_id,
-            );
-            if (decimals == null) continue;
-            const amountHuman = Number(
-                baseUnitsToHuman(position.amount ?? "0", decimals),
-            );
-            if (amountHuman <= 0) continue;
-
-            const price = allPrices[position.asset_id.toLowerCase()];
-            if (price === undefined) continue;
-
-            borrowedAssetsUsd += amountHuman * price;
-        }
-
-        const availableBalanceUsdRaw = totalBalanceUsd - suppliedAssetsUsd;
-        const availableBalanceUsd =
-            availableBalanceUsdRaw > 0 ? availableBalanceUsdRaw : 0;
-
-        const allocationTotalUsd =
+        const availableBalanceUsd = Math.max(
+            0,
+            totalBalanceUsd - suppliedAssetsUsd,
+        );
+        const total =
             availableBalanceUsd + suppliedAssetsUsd + borrowedAssetsUsd;
+        const pct = (v: number): number => (total > 0 ? (v / total) * 100 : 0);
 
-        let availableBalancePct = 0;
-        let suppliedAssetsPct = 0;
-        let borrowedAssetsPct = 0;
-
-        if (allocationTotalUsd > 0) {
-            availableBalancePct =
-                (availableBalanceUsd / allocationTotalUsd) * 100;
-            suppliedAssetsPct = (suppliedAssetsUsd / allocationTotalUsd) * 100;
-            borrowedAssetsPct = (borrowedAssetsUsd / allocationTotalUsd) * 100;
-        }
-
+        // allTimeReturn needs original-principal history, which the shared
+        // current-state schema does not retain. Returning 0 in A5; Phase B
+        // can reconstruct from match history or on-chain events.
         return {
             totalDeposit: Number(totalBalanceUsd.toFixed(2)),
-            allTimeReturn: Number(allTimeReturnUsd.toFixed(2)),
+            allTimeReturn: 0,
             netAPY: Number((netAPR * 100).toFixed(2)),
             allocation: {
                 availableBalanceUsd: Number(availableBalanceUsd.toFixed(2)),
                 suppliedAssetsUsd: Number(suppliedAssetsUsd.toFixed(2)),
                 borrowedAssetsUsd: Number(borrowedAssetsUsd.toFixed(2)),
-                availableBalancePct: Number(availableBalancePct.toFixed(2)),
-                suppliedAssetsPct: Number(suppliedAssetsPct.toFixed(2)),
-                borrowedAssetsPct: Number(borrowedAssetsPct.toFixed(2)),
+                availableBalancePct: Number(
+                    pct(availableBalanceUsd).toFixed(2),
+                ),
+                suppliedAssetsPct: Number(pct(suppliedAssetsUsd).toFixed(2)),
+                borrowedAssetsPct: Number(pct(borrowedAssetsUsd).toFixed(2)),
             },
         };
     }
@@ -252,42 +155,15 @@ export class PortfolioService {
         }
 
         const [result, suppliedAssets, borrowedAssets] = await Promise.all([
-            this.getHealthFactorForAccount(account.id),
-            this.portfolioRepository.getUserSuppliedAssets(account.id),
-            this.portfolioRepository.getUserBorrowedAssets(account.id),
+            this.getHealthFactorForWallet(wallet),
+            this.portfolioRepository.getUserSuppliedAssets(wallet),
+            this.portfolioRepository.getUserBorrowedAssets(wallet),
         ]);
         const formatted = formatHealthFactorResponse(result);
         const allPrices = this.priceService.getPrices();
 
-        let suppliedAssetsUsd = 0;
-        for (const position of suppliedAssets) {
-            const decimals = await this.tokensService.getTokenDecimalsByAssetId(
-                position.asset_id,
-            );
-            if (decimals == null) continue;
-            const amountHuman = Number(
-                baseUnitsToHuman(position.amount, decimals),
-            );
-            if (amountHuman <= 0) continue;
-            const price = allPrices[position.asset_id.toLowerCase()];
-            if (price === undefined) continue;
-            suppliedAssetsUsd += amountHuman * price;
-        }
-
-        let borrowedAssetsUsd = 0;
-        for (const position of borrowedAssets) {
-            const decimals = await this.tokensService.getTokenDecimalsByAssetId(
-                position.asset_id,
-            );
-            if (decimals == null) continue;
-            const amountHuman = Number(
-                baseUnitsToHuman(position.amount, decimals),
-            );
-            if (amountHuman <= 0) continue;
-            const price = allPrices[position.asset_id.toLowerCase()];
-            if (price === undefined) continue;
-            borrowedAssetsUsd += amountHuman * price;
-        }
+        const suppliedAssetsUsd = sumUsd(suppliedAssets, allPrices);
+        const borrowedAssetsUsd = sumUsd(borrowedAssets, allPrices);
 
         const chartRows = await this.portfolioRepository.getUserDailyLendBorrow(
             account.id,
@@ -369,15 +245,26 @@ export class PortfolioService {
     }
 
     /**
-     * Returns health factor for the given account, optionally including a prospective extra debt position and open orders.
-     * Used by GET my-health-factor and by borrow order validation.
+     * Returns health factor for the given account. Accepts an `accountId`
+     * (UUID) for backward compatibility with orders.service / orders.worker
+     * callers that still carry UUIDs; internally resolves the wallet and
+     * reads collateral/debt from the shared on-chain-state schema.
      */
     async getHealthFactorForAccount(
         accountId: string,
         options?: HealthFactorOptions,
     ): Promise<HealthFactorResult> {
+        const wallet = await this.resolveWallet(accountId);
+        return this.getHealthFactorForWallet(wallet, accountId, options);
+    }
+
+    async getHealthFactorForWallet(
+        wallet: string,
+        accountId?: string,
+        options?: HealthFactorOptions,
+    ): Promise<HealthFactorResult> {
         const { collateralPositions, debtPositions, additionalDebtPositions } =
-            await this.buildHealthFactorInputs(accountId, options);
+            await this.buildHealthFactorInputs(wallet, accountId, options);
         return computeHealthFactor(
             collateralPositions,
             debtPositions,
@@ -391,8 +278,9 @@ export class PortfolioService {
         assetId: string,
         collateralReductionBaseUnits: string,
     ): Promise<HealthFactorResult> {
+        const wallet = await this.resolveWallet(accountId);
         const { collateralPositions, debtPositions } =
-            await this.buildHealthFactorInputs(accountId);
+            await this.buildHealthFactorInputs(wallet, accountId);
 
         const adjusted = collateralPositions.map((pos) => {
             if (pos.assetId !== assetId) return pos;
@@ -411,112 +299,96 @@ export class PortfolioService {
     async getMyHealthFactor(
         wallet: string,
     ): Promise<MyHealthFactorResponseDto> {
-        const account = await this.orderRepository.findAccountByWallet(wallet);
-        if (!account) {
-            throw new NotFoundException("Account not found");
-        }
-
-        const result = await this.getHealthFactorForAccount(account.id);
+        const result = await this.getHealthFactorForWallet(wallet);
         return formatHealthFactorResponse(result);
     }
 
+    /**
+     * Builds the inputs for `computeHealthFactor`: collateral from
+     * `user_balance` rows flagged `used_as_collateral`; debt from
+     * `borrow_position` rolled up per `market.loan_token`. Accepts an
+     * `accountId` only to honour the legacy `options.includeOpenOrders`
+     * path (matching-engine state, Phase B).
+     */
     private async buildHealthFactorInputs(
-        accountId: string,
+        wallet: string,
+        accountId?: string,
         options?: HealthFactorOptions,
     ): Promise<{
         collateralPositions: CollateralPositionInput[];
         debtPositions: DebtPositionInput[];
         additionalDebtPositions?: DebtPositionInput[];
     }> {
-        const [collateralRows, debtRows, tokens, allPrices] = await Promise.all(
-            [
-                this.portfolioRepository.getUserCollateralAssets(accountId),
-                this.portfolioRepository.getUserBorrowedAssets(accountId),
-                this.tokenRepository.find(),
-                Promise.resolve(this.priceService.getPrices()),
-            ],
-        );
+        const [collateralRows, debtRows] = await Promise.all([
+            this.portfolioRepository.getUserCollateralAssets(wallet),
+            this.portfolioRepository.getUserBorrowedAssets(wallet),
+        ]);
 
-        const tokenMap = new Map(tokens.map((t) => [t.id, t]));
-        const priceMap = new Map<string, number>();
-        for (const t of tokens) {
-            const p = allPrices[t.id.toLowerCase()];
-            if (p !== undefined) priceMap.set(t.id, p);
-        }
-
-        // Fetch LTV from risk table for collateral tokens (token.averageLTV is only set for loan tokens)
-        const collateralAssetIds = collateralRows.map((r) => r.asset_id);
+        const allPrices = this.priceService.getPrices();
         const riskParams =
-            collateralAssetIds.length > 0
+            collateralRows.length > 0
                 ? await this.portfolioRepository.getRiskParamsByCollateralTokenIds(
-                      collateralAssetIds,
+                      collateralRows.map((r) => r.asset_id),
                   )
                 : [];
         const riskLtvMap = new Map(
             riskParams.map((r) => [r.asset_id, Number(r.avg_ltv)]),
         );
+        const tokenLtvFallback = await this.loadTokenLtvFallback(
+            collateralRows.map((r) => r.asset_id),
+        );
 
-        const collateralPositions: CollateralPositionInput[] = [];
-        for (const row of collateralRows) {
-            const token = tokenMap.get(row.asset_id);
-            const decimals = token?.decimals ?? 0;
-            const priceUsd = priceMap.get(row.asset_id) ?? 0;
-            const ltvBps =
-                riskLtvMap.get(row.asset_id) ??
-                (token?.averageLTV != null ? Number(token.averageLTV) : 0);
-            collateralPositions.push({
+        const collateralPositions: CollateralPositionInput[] =
+            collateralRows.map((row) => ({
                 assetId: row.asset_id,
                 amountBaseUnits: row.amount,
-                decimals,
-                priceUsd,
-                ltvBps,
-            });
-        }
+                decimals: row.decimals,
+                priceUsd: allPrices[row.asset_id.toLowerCase()] ?? 0,
+                ltvBps:
+                    riskLtvMap.get(row.asset_id) ??
+                    tokenLtvFallback.get(row.asset_id) ??
+                    0,
+            }));
 
-        const debtPositions: DebtPositionInput[] = [];
-        for (const row of debtRows) {
-            const token = tokenMap.get(row.asset_id);
-            const decimals = token?.decimals ?? 0;
-            const priceUsd = priceMap.get(row.asset_id) ?? 0;
-            debtPositions.push({
-                assetId: row.asset_id,
-                amountBaseUnits: row.amount,
-                decimals,
-                priceUsd,
-            });
-        }
+        const debtPositions: DebtPositionInput[] = debtRows.map((row) => ({
+            assetId: row.asset_id,
+            amountBaseUnits: row.amount,
+            decimals: row.decimals,
+            priceUsd: allPrices[row.asset_id.toLowerCase()] ?? 0,
+        }));
 
         const additionalDebtPositions: DebtPositionInput[] = [];
-
         if (options?.additionalDebt) {
-            const token = tokenMap.get(options.additionalDebt.assetId);
-            const decimals = token?.decimals ?? 0;
-            const priceUsd = priceMap.get(options.additionalDebt.assetId) ?? 0;
+            const decimals =
+                (await this.tokensService.getTokenDecimalsByAssetId(
+                    options.additionalDebt.assetId,
+                )) ?? 0;
             additionalDebtPositions.push({
                 assetId: options.additionalDebt.assetId,
                 amountBaseUnits: options.additionalDebt.amountBaseUnits,
                 decimals,
-                priceUsd,
+                priceUsd:
+                    allPrices[
+                        options.additionalDebt.assetId.toLowerCase()
+                    ] ?? 0,
             });
         }
 
-        if (options?.includeOpenOrders) {
+        if (options?.includeOpenOrders && accountId) {
             const openOrders =
                 await this.orderRepository.getOpenBorrowOrders(accountId);
             for (const order of openOrders) {
-                const token = tokenMap.get(order.assetId);
-                const decimals = token?.decimals ?? 0;
-                const priceUsd = priceMap.get(order.assetId) ?? 0;
-
-                const remainingAmountBaseUnits = (
-                    BigInt(order.quantity) - BigInt(order.filledQuantity)
-                ).toString();
-
+                const decimals =
+                    (await this.tokensService.getTokenDecimalsByAssetId(
+                        order.assetId,
+                    )) ?? 0;
                 additionalDebtPositions.push({
                     assetId: order.assetId,
-                    amountBaseUnits: remainingAmountBaseUnits,
+                    amountBaseUnits: (
+                        BigInt(order.quantity) - BigInt(order.filledQuantity)
+                    ).toString(),
                     decimals,
-                    priceUsd,
+                    priceUsd: allPrices[order.assetId.toLowerCase()] ?? 0,
                 });
             }
         }
@@ -529,6 +401,43 @@ export class PortfolioService {
                     ? additionalDebtPositions
                     : undefined,
         };
+    }
+
+    /**
+     * Token-entity LTV fallback for collateral assets whose `risk` row is
+     * missing. Keeps the legacy behaviour where `token.averageLTV` seeded
+     * loan tokens could still contribute.
+     */
+    private async loadTokenLtvFallback(
+        assetIds: string[],
+    ): Promise<Map<string, number>> {
+        if (assetIds.length === 0) return new Map();
+        const tokens = await this.tokenRepository.find({
+            select: ["id", "averageLTV"],
+        });
+        const out = new Map<string, number>();
+        for (const t of tokens) {
+            if (!assetIds.includes(t.id)) continue;
+            if (t.averageLTV != null) out.set(t.id, Number(t.averageLTV));
+        }
+        return out;
+    }
+
+    /**
+     * Resolves a backend `account.id` UUID to the wallet address stored on
+     * that account. Throws when the account is unknown — callers that pass
+     * an accountId are required to have created it earlier in the request
+     * flow (matching-engine order submission path).
+     */
+    private async resolveWallet(accountId: string): Promise<`0x${string}`> {
+        const wallet =
+            await this.orderRepository.findWalletByAccountId(accountId);
+        if (!wallet) {
+            throw new NotFoundException(
+                `Account ${accountId} has no wallet address`,
+            );
+        }
+        return wallet.toLowerCase() as `0x${string}`;
     }
 
     async calculateOpenBorrowOrdersUsd(accountId: string): Promise<number> {
@@ -633,72 +542,38 @@ export class PortfolioService {
     ): Promise<MyAssetsResponseDto> {
         const { page = 1, limit = 10 } = query;
 
-        const account = await this.orderRepository.findAccountByWallet(wallet);
-        if (!account) {
-            return createPaginatedResponse([], 0, page, limit);
-        }
+        const { data: rows, total } =
+            await this.portfolioRepository.getUserAssets(wallet, page, limit);
 
-        const { data: userAssets, total } =
-            await this.portfolioRepository.getUserAssets(
-                account.id,
-                page,
-                limit,
-            );
-
-        if (userAssets.length === 0) {
+        if (rows.length === 0) {
             return createPaginatedResponse([], total, page, limit);
         }
 
-        const assetIds = userAssets.map((ua) => ua.asset_id);
-        const [tokens, riskParams, openLendAmounts] = await Promise.all([
-            this.portfolioRepository.getTokensByAssetIds(assetIds),
-            this.portfolioRepository.getRiskParamsByCollateralTokenIds(
-                assetIds,
-            ),
-            this.orderRepository.getOpenLendAmountsByAccount(account.id),
-        ]);
-
-        const tokenMap = new Map(tokens.map((t) => [t.id, t]));
-        const riskMap = new Map(riskParams.map((r) => [r.asset_id, r]));
-        const openLendMap = new Map<string, string>();
-        for (const row of openLendAmounts) {
-            openLendMap.set(row.assetId, row.lockedAmount);
-        }
         const allPrices = this.priceService.getPrices();
-
-        const data = userAssets.map((ua) => {
-            const token = tokenMap.get(ua.asset_id);
-            const risk = riskMap.get(ua.asset_id);
-            const price = allPrices[ua.asset_id.toLowerCase()];
-            const decimals = token?.decimals ?? 0;
-
-            const totalAmountHuman = Number(
-                baseUnitsToHuman(ua.amount ?? "0", decimals),
+        const riskParams =
+            await this.portfolioRepository.getRiskParamsByCollateralTokenIds(
+                rows.map((r) => r.asset_id),
             );
+        const riskMap = new Map(riskParams.map((r) => [r.asset_id, r]));
 
-            const openLendBaseUnits = openLendMap.get(ua.asset_id) ?? "0";
-            const lockedBaseUnits = ua.locked_amount ?? "0";
-            const totalLockedBaseUnits =
-                safeBigInt(openLendBaseUnits) + safeBigInt(lockedBaseUnits);
-            const lockedHuman = Number(
-                baseUnitsToHuman(totalLockedBaseUnits.toString(), decimals),
+        const data = rows.map((row) => {
+            const walletBalance = Number(
+                baseUnitsToHuman(row.amount, row.decimals),
             );
-
-            const walletBalance = Math.max(0, totalAmountHuman - lockedHuman);
-
-            // risk table stores basis points (e.g. 7500 = 75%)
-            const ltv = risk ? Number(risk.avg_ltv) / 10000 : 0;
-            const liquidationThreshold = risk ? Number(risk.avg_lt) / 10000 : 0;
+            const price = allPrices[row.asset_id.toLowerCase()] ?? 0;
+            const risk = riskMap.get(row.asset_id);
             return {
-                assetId: ua.asset_id,
-                symbol: token?.symbol || "UNKNOWN",
-                name: token?.name || "Unknown Token",
+                assetId: row.asset_id,
+                symbol: row.symbol || "UNKNOWN",
+                name: row.name || "Unknown Token",
+                // `lockedInOrders` = 0 in A5; Phase B sources the
+                // matching-engine reservation counter from Redis.
                 walletBalance,
-                amountInUsd: calculateUsdAmount(walletBalance, price ?? 0),
-                isCollateral: !!ua.is_collateral,
-                imageUrl: token?.imageUrl ?? null,
-                ltv,
-                liquidationThreshold,
+                amountInUsd: calculateUsdAmount(walletBalance, price),
+                isCollateral: row.is_collateral,
+                imageUrl: row.image_url,
+                ltv: risk ? Number(risk.avg_ltv) / 10000 : 0,
+                liquidationThreshold: risk ? Number(risk.avg_lt) / 10000 : 0,
             };
         });
 
@@ -711,52 +586,46 @@ export class PortfolioService {
     ): Promise<GetMyPositionResponseDto> {
         const { page = 1, limit = 10, type, assetId } = query;
 
-        const account = await this.orderRepository.findAccountByWallet(wallet);
-        if (!account) {
-            throw new NotFoundException("Account not found");
-        }
-
-        const { data: positions, total } =
+        const { data: rows, total } =
             await this.portfolioRepository.getUserPositions(
-                account.id,
+                wallet,
                 type,
                 page,
                 limit,
                 assetId,
             );
 
-        if (positions.length === 0) {
+        if (rows.length === 0) {
             return createPaginatedResponse([], total, page, limit);
         }
 
         const allPrices = this.priceService.getPrices();
 
-        const data = positions.map((position) => {
-            const price = allPrices[position.asset_id.toLowerCase()];
-            const decimals = Number(position.decimals) || 0;
-            const quantityHuman = Number(
-                baseUnitsToHuman(position.quantity, decimals),
+        const data = rows.map((row) => {
+            const decimals = Number(row.decimals) || 0;
+            const sharesHuman = Number(
+                baseUnitsToHuman(row.quantity, decimals),
             );
             const baseAmountHuman = Number(
-                baseUnitsToHuman(position.base_amount ?? "0", decimals),
+                baseUnitsToHuman(row.base_amount ?? "0", decimals),
             );
-
+            const price = allPrices[row.asset_id.toLowerCase()];
+            const marketIdUuid = bytes32ToUuid(row.market_id);
             return {
-                id: position.position_id,
-                assetId: position.asset_id,
-                marketId: position.market_id,
-                symbol: position.symbol,
-                name: position.name,
-                shares: quantityHuman,
+                id: `${marketIdUuid}:${row.side}`,
+                marketId: marketIdUuid,
+                symbol: row.symbol,
+                name: row.name,
+                shares: sharesHuman,
                 baseAmount: baseAmountHuman,
-                amountInUsd: calculateUsdAmount(quantityHuman, price ?? 0),
+                amountInUsd: calculateUsdAmount(sharesHuman, price ?? 0),
                 isCollateral: false,
-                imageUrl: position.image_url ?? null,
-                side: position.side as "LEND" | "BORROW",
-                maturity: position.maturity
-                    ? new Date(position.maturity).getTime() / 1000
+                imageUrl: row.image_url ?? null,
+                side: row.side as "LEND" | "BORROW",
+                maturity: row.maturity
+                    ? Math.floor(new Date(row.maturity).getTime() / 1000)
                     : null,
-                apr: Number(position.rate) || 0,
+                apr: Number(row.rate) || 0,
             };
         });
 
@@ -783,7 +652,10 @@ export class PortfolioService {
 
         if (!body.isCollateral) {
             const { collateralPositions, debtPositions } =
-                await this.buildHealthFactorInputs(account.id);
+                await this.buildHealthFactorInputs(
+                    wallet.toLowerCase() as `0x${string}`,
+                    account.id,
+                );
 
             if (debtPositions.length > 0) {
                 const assetIdSet = new Set(body.assetIds);
@@ -952,22 +824,9 @@ export class PortfolioService {
     async withdrawLendPosition(
         dto: WithdrawLendPositionDto,
         walletAddress: string,
-        privyUserId: string,
+        _privyUserId: string,
     ): Promise<WithdrawLendPositionResponseDto> {
         const { marketId } = dto;
-
-        const accountId = await this.orderRepository
-            .getOrCreateAccount(walletAddress, privyUserId)
-            .then((a) => a.id);
-
-        // Fetch all lend positions for this (account, market)
-        const positions = await this.portfolioRepository.getLendPositions(
-            accountId,
-            marketId,
-        );
-        if (!positions || positions.length === 0) {
-            throw new NotFoundException("No active lend positions found");
-        }
 
         const market = await this.marketRepository.getMarketWithAsset(marketId);
         if (!market) {
@@ -985,19 +844,19 @@ export class PortfolioService {
             throw new BadRequestException("Position has not matured yet");
         }
 
-        // Sum total shares across all positions for the on-chain call
-        let totalShares = 0n;
-        for (const pos of positions) {
-            const sharesStr = pos.lp_shares.toString().split(".")[0];
-            totalShares += BigInt(sharesStr);
-        }
-
-        if (totalShares <= 0n) {
-            throw new BadRequestException("No shares available for withdrawal");
-        }
-
-        // Convert DB market UUID to on-chain bytes32 (matches settlement engine encoding)
+        // Convert backend UUID → bytes32 for on-chain call + shared-schema
+        // lookup (matching-engine / settlement-engine use the same encoding,
+        // so indexer-v3's `market_id` stores this bytes32 as well).
         const marketIdBytes32 = uuidToBytes32(marketId);
+
+        const position = await this.portfolioRepository.getLendPosition(
+            marketIdBytes32,
+            walletAddress,
+        );
+        if (!position || BigInt(position.cbt_balance) <= 0n) {
+            throw new NotFoundException("No active lend positions found");
+        }
+        const totalShares = BigInt(position.cbt_balance);
 
         this.logger.log(
             `Executing withdrawLendPosition: marketId=${marketId}, marketIdBytes32=${marketIdBytes32}, token=${market.tokenAddress}, maturity=${maturityUnix}, cbtAmount=${totalShares}`,
@@ -1010,17 +869,27 @@ export class PortfolioService {
             totalShares,
         );
 
-        const { amountWithdrawn } = this.parseWithdrawEvent(receipt);
-
-        await this.updateWithdrawDatabaseState(
-            receipt,
-            accountId,
-            marketId,
-            market.assetId,
-            walletAddress,
-            market.tokenAddress,
-            amountWithdrawn,
-        );
+        try {
+            await applyWithdrawLendEffects({
+                pool: this.databaseService.getPool(),
+                client: this.viemService.getPublicClient(
+                    this.chainConfig.chainId,
+                ),
+                receipt,
+                expectedLender: walletAddress as `0x${string}`,
+            });
+            this.logger.log(
+                `Withdraw lend position applied to shared schema for tx ${receipt.transactionHash}`,
+            );
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            this.logger.error(
+                `CRITICAL: withdrawLendPosition on-chain success (${receipt.transactionHash}) but applyOnChainEffect failed: ${msg}`,
+            );
+            throw new InternalServerErrorException(
+                "Withdraw finalized on-chain but failed local state update.",
+            );
+        }
 
         return {
             txHash: receipt.transactionHash,
@@ -1055,186 +924,67 @@ export class PortfolioService {
         }
     }
 
-    private parseWithdrawEvent(receipt: TransactionReceipt): {
-        cbtBurned: bigint;
-        amountWithdrawn: bigint;
-    } {
-        try {
-            const event = getFirstEventFromReceipt<{
-                cbtBurned: bigint;
-                amountWithdrawn: bigint;
-            }>(receipt, centuariAbi, "LendPositionWithdrawn");
-            return event.args;
-        } catch {
-            throw new InternalServerErrorException(
-                "No LendPositionWithdrawn event found in transaction receipt",
-            );
-        }
-    }
-
-    /**
-     * Zero out all lend positions for the (account, market) after successful on-chain withdraw.
-     */
-    private async updateWithdrawDatabaseState(
-        receipt: TransactionReceipt,
-        accountId: string,
-        marketId: string,
-        assetId: string,
-        walletAddress: string,
-        tokenAddress: string,
-        amountWithdrawn: bigint,
-    ): Promise<void> {
-        const txHash = receipt.transactionHash;
-        try {
-            await this.dataSource.transaction(async (manager) => {
-                const positions =
-                    await this.portfolioRepository.getLendPositions(
-                        accountId,
-                        marketId,
-                        manager,
-                    );
-
-                for (const pos of positions) {
-                    await this.portfolioRepository.updateLendPositionShares(
-                        manager,
-                        pos.lp_id,
-                        "0",
-                    );
-                }
-            });
-
-            const portfolioId = portfolioUuidFor(
-                walletAddress.toLowerCase(),
-                tokenAddress.toLowerCase(),
-            );
-            await this.portfolioRepository.upsertPortfolio(
-                portfolioId,
-                accountId,
-                assetId,
-                amountWithdrawn.toString(),
-            );
-
-            this.logger.log(
-                `Withdraw lend position DB state updated for tx: ${txHash}, portfolio credited: ${amountWithdrawn}`,
-            );
-        } catch (error: any) {
-            this.logger.error(
-                `CRITICAL: Blockchain tx succeeded (${txHash}) but DB update failed: ${error.message}`,
-            );
-            throw new InternalServerErrorException(
-                "Withdraw finalized on-chain but failed local state update.",
-            );
-        }
-    }
-
     async getUserDetails(wallet: string): Promise<UserDetailsResponseDto> {
         const account = await this.orderRepository.findAccountByWallet(wallet);
-        if (!account) {
-            throw new NotFoundException("Account not found");
-        }
 
-        const [
-            portfolioBalances,
-            openLendAmounts,
-            borrowedAssets,
-            openBorrowOrders,
-            userAssets,
-            tokens,
-            healthFactorResult,
-        ] = await Promise.all([
-            this.portfolioRepository.getUserTotalBalances(account.id),
-            this.orderRepository.getOpenLendAmountsByAccount(account.id),
-            this.portfolioRepository.getUserBorrowedAssets(account.id),
-            this.orderRepository.getOpenBorrowOrders(account.id),
-            this.portfolioRepository.getUserAssets(account.id, 1, 1000),
-            this.tokenRepository.find(),
-            this.getHealthFactorForAccount(account.id),
+        const [balanceRows, debtRows, openBorrowOrders] = await Promise.all([
+            this.portfolioRepository.getUserBalances(wallet),
+            this.portfolioRepository.getUserBorrowedAssets(wallet),
+            account
+                ? this.orderRepository.getOpenBorrowOrders(account.id)
+                : Promise.resolve([]),
         ]);
 
+        const hfResult = await this.getHealthFactorForWallet(
+            wallet,
+            account?.id,
+        );
+
         const allPrices = this.priceService.getPrices();
-        const tokenMap = new Map(tokens.map((t) => [t.id, t]));
-
-        // Build locked lend amounts map: assetId -> locked base units
-        const lockedMap = new Map<string, string>();
-        for (const row of openLendAmounts) {
-            lockedMap.set(row.assetId, row.lockedAmount);
-        }
-
-        // Build collateral status map from user assets
-        const collateralMap = new Map<string, boolean>();
-        for (const ua of userAssets.data) {
-            collateralMap.set(ua.asset_id, !!ua.is_collateral);
-        }
-
-        // Get risk params for all portfolio asset IDs
-        const assetIds = portfolioBalances.map((b) => b.asset_id);
         const riskParams =
-            assetIds.length > 0
+            balanceRows.length > 0
                 ? await this.portfolioRepository.getRiskParamsByCollateralTokenIds(
-                      assetIds,
+                      balanceRows.map((r) => r.asset_id),
                   )
                 : [];
         const riskMap = new Map(riskParams.map((r) => [r.asset_id, r]));
 
-        // Build asset details
-        const assets = portfolioBalances.map((balance) => {
-            const token = tokenMap.get(balance.asset_id);
-            const decimals = token?.decimals ?? 0;
-            const risk = riskMap.get(balance.asset_id);
-            const price = allPrices[balance.asset_id.toLowerCase()] ?? 0;
-
-            const totalBalanceHuman = Number(
-                baseUnitsToHuman(balance.total_amount ?? "0", decimals),
+        const assets = balanceRows.map((row) => {
+            const price = allPrices[row.asset_id.toLowerCase()] ?? 0;
+            const availableHuman = Number(
+                baseUnitsToHuman(row.amount, row.decimals),
             );
-
-            const lockedInOrdersBaseUnits =
-                lockedMap.get(balance.asset_id) ?? "0";
-            const lockedInSettlementBaseUnits =
-                balance.total_locked_amount ?? "0";
-            const totalLockedBaseUnits =
-                safeBigInt(lockedInOrdersBaseUnits) +
-                safeBigInt(lockedInSettlementBaseUnits);
-            const lockedHuman = Number(
-                baseUnitsToHuman(totalLockedBaseUnits.toString(), decimals),
-            );
-
-            const availableBalance = Math.max(
-                0,
-                totalBalanceHuman - lockedHuman,
-            );
-            const availableBalanceUsd = availableBalance * price;
-
-            const ltv = risk ? Number(risk.avg_ltv) / 10000 : 0;
-            const liquidationThreshold = risk ? Number(risk.avg_lt) / 10000 : 0;
-
+            const risk = riskMap.get(row.asset_id);
+            // `lockedInOrders` = 0 in A5 (Phase B sources matching-engine
+            // reservations). `totalBalance === availableBalance` here.
             return {
-                assetId: balance.asset_id,
-                symbol: token?.symbol || "UNKNOWN",
-                name: token?.name || "Unknown Token",
-                imageUrl: token?.imageUrl ?? null,
-                totalBalance: totalBalanceHuman,
-                lockedInOrders: lockedHuman,
-                availableBalance,
-                availableBalanceUsd: Number(availableBalanceUsd.toFixed(2)),
-                isCollateral: collateralMap.get(balance.asset_id) ?? false,
-                ltv,
-                liquidationThreshold,
+                assetId: row.asset_id,
+                symbol: row.symbol || "UNKNOWN",
+                name: row.name || "Unknown Token",
+                imageUrl: row.image_url,
+                totalBalance: availableHuman,
+                lockedInOrders: 0,
+                availableBalance: availableHuman,
+                availableBalanceUsd: Number(
+                    (availableHuman * price).toFixed(2),
+                ),
+                isCollateral: row.is_collateral,
+                ltv: risk ? Number(risk.avg_ltv) / 10000 : 0,
+                liquidationThreshold: risk ? Number(risk.avg_lt) / 10000 : 0,
             };
         });
 
-        // Compute settled debt
+        // Settled debt — aggregated per loan-token by the repository.
         let settledDebtUsd = 0;
         const debts: {
             assetId: string;
             debtAmount: number;
             debtAmountUsd: number;
         }[] = [];
-        for (const row of borrowedAssets) {
-            const token = tokenMap.get(row.asset_id);
-            const decimals = token?.decimals ?? 0;
+        for (const row of debtRows) {
             const price = allPrices[row.asset_id.toLowerCase()] ?? 0;
             const debtHuman = Number(
-                baseUnitsToHuman(row.amount ?? "0", decimals),
+                baseUnitsToHuman(row.amount, row.decimals),
             );
             const debtUsd = debtHuman * price;
             settledDebtUsd += debtUsd;
@@ -1245,28 +995,28 @@ export class PortfolioService {
             });
         }
 
-        // Compute pending debt from open borrow orders
+        // Pending debt from open borrow orders — matching-engine state,
+        // still on the legacy schema until Phase B.
         let pendingDebtUsd = 0;
         for (const order of openBorrowOrders) {
-            const token = tokenMap.get(order.assetId);
-            const decimals = token?.decimals ?? 0;
+            const decimals =
+                (await this.tokensService.getTokenDecimalsByAssetId(
+                    order.assetId,
+                )) ?? 0;
             const price = allPrices[order.assetId.toLowerCase()] ?? 0;
             const remainingBaseUnits = (
                 BigInt(order.quantity) - BigInt(order.filledQuantity)
             ).toString();
-            const remainingHuman = Number(
-                baseUnitsToHuman(remainingBaseUnits, decimals),
-            );
-            pendingDebtUsd += remainingHuman * price;
+            pendingDebtUsd +=
+                Number(baseUnitsToHuman(remainingBaseUnits, decimals)) *
+                price;
         }
 
-        const totalDebtUsd = settledDebtUsd + pendingDebtUsd;
-
-        const formattedHf = formatHealthFactorResponse(healthFactorResult);
+        const formattedHf = formatHealthFactorResponse(hfResult);
 
         return {
             assets,
-            totalDebtUsd: Number(totalDebtUsd.toFixed(2)),
+            totalDebtUsd: Number((settledDebtUsd + pendingDebtUsd).toFixed(2)),
             settledDebtUsd: Number(settledDebtUsd.toFixed(2)),
             pendingDebtUsd: Number(pendingDebtUsd.toFixed(2)),
             debts,
@@ -1348,4 +1098,26 @@ export class PortfolioService {
             query.limit ?? 10,
         );
     }
+}
+
+/**
+ * Sum USD across row sets shaped `{ asset_id, amount, decimals }`. Prices
+ * are looked up by backend `tokens.id` UUID (already lowercased by
+ * `PriceService.getPrices`). Rows with no price are skipped silently —
+ * aggregate totals degrade gracefully rather than throw.
+ */
+function sumUsd(
+    rows: Array<{ asset_id: string; amount: string; decimals: number }>,
+    prices: Record<string, number>,
+): number {
+    let total = 0;
+    for (const row of rows) {
+        const price = prices[row.asset_id.toLowerCase()];
+        if (price === undefined) continue;
+        const amountHuman = Number(
+            baseUnitsToHuman(row.amount, row.decimals),
+        );
+        total += amountHuman * price;
+    }
+    return total;
 }

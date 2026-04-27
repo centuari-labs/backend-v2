@@ -4,7 +4,7 @@ jest.mock("../../core/privy/privy.service");
 import { Test, TestingModule } from "@nestjs/testing";
 import { getRepositoryToken } from "@nestjs/typeorm";
 import { MarketWorker } from "../../market/market.worker";
-import { Market } from "../../market/entities/market.entity";
+import { LegacyMarket as Market } from "../../market/entities/legacy-market.entity";
 import { Token } from "../../tokens/entities/token.entity";
 import { createMockRepository } from "../helpers/mock-services";
 import { createMockToken } from "../helpers/mock-factories";

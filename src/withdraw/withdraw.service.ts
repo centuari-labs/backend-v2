@@ -14,7 +14,7 @@ import { TokensService } from "../tokens/tokens.service";
 import { PortfolioRepository } from "../portfolio/repositories/portfolio.repository";
 import { PortfolioService } from "../portfolio/portfolio.service";
 import { OrderRepository } from "../orders/repositories/order.repository";
-import { Portfolio } from "../portfolio/entities/portfolio.entity";
+import { LegacyPortfolio } from "../portfolio/entities/legacy-portfolio.entity";
 import { HEALTH_FACTOR_NO_DEBT } from "../portfolio/helpers/health-factor.helpers";
 import { treasuryAbi } from "../../abis/treasury";
 import { humanToBaseUnits } from "../common/utils/number.utils";
@@ -72,7 +72,7 @@ export class WithdrawService {
             return await withTransaction(this.dataSource, async (manager) => {
                 // Lock all portfolio rows for this account + asset (both collateral and non-collateral)
                 const portfolioRows = await manager
-                    .createQueryBuilder(Portfolio, "p")
+                    .createQueryBuilder(LegacyPortfolio, "p")
                     .setLock("pessimistic_write")
                     .where("p.accountId = :accountId", {
                         accountId: account.id,

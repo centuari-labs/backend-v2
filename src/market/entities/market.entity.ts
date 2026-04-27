@@ -1,30 +1,28 @@
 import {
-    Entity,
-    PrimaryColumn,
     Column,
     CreateDateColumn,
-    ManyToOne,
-    JoinColumn,
-    Unique,
+    Entity,
+    PrimaryColumn,
 } from "typeorm";
-import { Token } from "../../tokens/entities/token.entity";
+import { BYTEA_HEX } from "../../common/transformers/bytea-hex.transformer";
 
-@Entity("markets")
-@Unique(["assetId", "maturity"])
+/**
+ * Mirrors the shared `market` table — the canonical market registry
+ * written by `Centuari.MarketCreated` event, indexed by 32-byte
+ * `marketId = keccak256(abi.encode(loanToken, maturity))`. Read-only
+ * from backend.
+ */
+@Entity({ name: "market", synchronize: false })
 export class Market {
-    @PrimaryColumn("uuid")
-    id: string;
+    @PrimaryColumn({ name: "market_id", type: "bytea", transformer: BYTEA_HEX })
+    marketId: string;
 
-    @Column({ name: "asset_id", type: "uuid" })
-    assetId: string;
+    @Column({ name: "loan_token", type: "bytea", transformer: BYTEA_HEX })
+    loanToken: string;
 
-    @ManyToOne(() => Token)
-    @JoinColumn({ name: "asset_id" })
-    asset: Token;
+    @Column({ type: "bigint" })
+    maturity: string;
 
-    @Column({ type: "timestamptz", nullable: true })
-    maturity: Date;
-
-    @CreateDateColumn({ name: "created_at" })
+    @CreateDateColumn({ name: "created_at", type: "timestamptz" })
     createdAt: Date;
 }

@@ -2,7 +2,7 @@ import { Injectable, Logger, OnModuleInit } from "@nestjs/common";
 import { Interval } from "@nestjs/schedule";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
-import { Market } from "./entities/market.entity";
+import { LegacyMarket as Market } from "./entities/legacy-market.entity";
 import { Token } from "../tokens/entities/token.entity";
 import { getAllowedMaturitiesUtcSeconds } from "../orders/utils/maturity.utils";
 import { computeMarketId } from "./utils/market-id.utils";

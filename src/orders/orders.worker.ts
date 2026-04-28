@@ -34,8 +34,12 @@ const RATE_MIN = 500;
 const RATE_MAX = 1500;
 const MAX_SPREAD_BPS = 100; // 1% maximum spread in the order book
 const HALF_SPREAD = MAX_SPREAD_BPS / 2; // 50 bp
-const MATCH_PROBABILITY = 0.25;
-const MID_RATE_DRIFT = 20; // max drift per cycle
+const SPREAD_PERCENT_LIMIT = 0.01; // (bestAsk - bestBid) / bestBid threshold
+// Bot natural quote offsets are relative to mid: lend = mid * (1+pct),
+// borrow = mid * (1-pct). At 0.4%, total spread is 0.8% — safely under the
+// 1% cancel threshold so the bot's own quotes never trigger a cancel.
+const HALF_SPREAD_PCT = 0.004;
+const MID_RATE_DRIFT = 2; // bp drift per cycle (small so old orders stay in-band)
 const LEND_QUANTITY_USD_MIN = 10;
 const LEND_QUANTITY_USD_MAX = 500;
 const BORROW_QUANTITY_USD_MIN = 10;
@@ -689,18 +693,10 @@ export class OrdersWorker implements OnModuleInit {
                 this.refreshRatesForAsset(entry.assetId);
 
                 for (const bot of this.botAccounts) {
-                    if (Math.random() < MATCH_PROBABILITY) {
-                        // ~25%: place both sides — may match
-                        await this.placeLendOrderWithRetry(bot, entry);
-                        await this.placeBorrowOrderWithRetry(bot, entry);
-                    } else {
-                        // ~75%: place only one side — won't self-match
-                        if (Math.random() < 0.5) {
-                            await this.placeLendOrderWithRetry(bot, entry);
-                        } else {
-                            await this.placeBorrowOrderWithRetry(bot, entry);
-                        }
-                    }
+                    // Reverse-direction natural rates (lend > borrow) prevent
+                    // bot from self-crossing, so we always place both sides.
+                    await this.placeLendOrderWithRetry(bot, entry);
+                    await this.placeBorrowOrderWithRetry(bot, entry);
                 }
             }
         } finally {
@@ -746,13 +742,19 @@ export class OrdersWorker implements OnModuleInit {
 
         // Attempt 1: try directly
         try {
-            await this.ordersService.createLendLimitOrder(
+            const response = await this.ordersService.createLendLimitOrder(
                 { assetId, amount, marketIds, rate },
                 bot.wallet,
                 account.privyUserId,
             );
             this.logger.debug(
                 `[LEND] bot=${bot.wallet.slice(0, 8)} ${symbol} amount=${amount} rate=${rate}bp`,
+            );
+            await this.cancelIfSpreadExceeded(
+                response.orderId,
+                bot.wallet,
+                assetId,
+                symbol,
             );
             return;
         } catch (e) {
@@ -765,13 +767,19 @@ export class OrdersWorker implements OnModuleInit {
         await this.topUpLoanTokenForBot(bot, assetId);
 
         try {
-            await this.ordersService.createLendLimitOrder(
+            const response = await this.ordersService.createLendLimitOrder(
                 { assetId, amount, marketIds, rate },
                 bot.wallet,
                 account.privyUserId,
             );
             this.logger.debug(
                 `[LEND] bot=${bot.wallet.slice(0, 8)} ${symbol} amount=${amount} rate=${rate}bp (retry)`,
+            );
+            await this.cancelIfSpreadExceeded(
+                response.orderId,
+                bot.wallet,
+                assetId,
+                symbol,
             );
             return;
         } catch (e) {
@@ -794,13 +802,19 @@ export class OrdersWorker implements OnModuleInit {
         }
 
         try {
-            await this.ordersService.createLendLimitOrder(
+            const response = await this.ordersService.createLendLimitOrder(
                 { assetId, amount: maxAmount, marketIds, rate },
                 bot.wallet,
                 account.privyUserId,
             );
             this.logger.debug(
                 `[LEND] bot=${bot.wallet.slice(0, 8)} ${symbol} amount=${maxAmount} rate=${rate}bp (reduced)`,
+            );
+            await this.cancelIfSpreadExceeded(
+                response.orderId,
+                bot.wallet,
+                assetId,
+                symbol,
             );
         } catch (e) {
             this.logger.error(
@@ -844,13 +858,19 @@ export class OrdersWorker implements OnModuleInit {
 
         // Attempt 1: try directly
         try {
-            await this.ordersService.createBorrowLimitOrder(
+            const response = await this.ordersService.createBorrowLimitOrder(
                 { assetId, amount, marketIds, rate },
                 bot.wallet,
                 account.privyUserId,
             );
             this.logger.debug(
                 `[BORROW] bot=${bot.wallet.slice(0, 8)} ${symbol} amount=${amount} rate=${rate}bp`,
+            );
+            await this.cancelIfSpreadExceeded(
+                response.orderId,
+                bot.wallet,
+                assetId,
+                symbol,
             );
             return;
         } catch (e) {
@@ -863,13 +883,19 @@ export class OrdersWorker implements OnModuleInit {
         await this.topUpCollateralForBot(bot);
 
         try {
-            await this.ordersService.createBorrowLimitOrder(
+            const response = await this.ordersService.createBorrowLimitOrder(
                 { assetId, amount, marketIds, rate },
                 bot.wallet,
                 account.privyUserId,
             );
             this.logger.debug(
                 `[BORROW] bot=${bot.wallet.slice(0, 8)} ${symbol} amount=${amount} rate=${rate}bp (retry)`,
+            );
+            await this.cancelIfSpreadExceeded(
+                response.orderId,
+                bot.wallet,
+                assetId,
+                symbol,
             );
             return;
         } catch (e) {
@@ -892,13 +918,19 @@ export class OrdersWorker implements OnModuleInit {
         }
 
         try {
-            await this.ordersService.createBorrowLimitOrder(
+            const response = await this.ordersService.createBorrowLimitOrder(
                 { assetId, amount: halvedAmount, marketIds, rate },
                 bot.wallet,
                 account.privyUserId,
             );
             this.logger.debug(
                 `[BORROW] bot=${bot.wallet.slice(0, 8)} ${symbol} amount=${halvedAmount} rate=${rate}bp (reduced)`,
+            );
+            await this.cancelIfSpreadExceeded(
+                response.orderId,
+                bot.wallet,
+                assetId,
+                symbol,
             );
         } catch (e) {
             this.logger.error(
@@ -1056,8 +1088,12 @@ export class OrdersWorker implements OnModuleInit {
 
     /**
      * Generates a paired lend/borrow rate from a shared mid-rate per asset.
-     * Both rates are produced together so the spread is always ≤ MAX_SPREAD_BPS.
-     * The mid-rate drifts once per call to simulate market movement.
+     *
+     * Convention: lend = mid * (1 + HALF_SPREAD_PCT), borrow = mid * (1 - HALF_SPREAD_PCT)
+     * → lend > borrow, so the bot's own quotes do not auto-cross with each other
+     * across cycles. Total spread is 2 * HALF_SPREAD_PCT (0.8%), under the 1%
+     * cancel threshold. Mid drifts ±MID_RATE_DRIFT bp per cycle, small enough
+     * that older orders remain inside the active band of newer ones.
      */
     private refreshRatesForAsset(assetId: string): {
         lend: number;
@@ -1083,10 +1119,9 @@ export class OrdersWorker implements OnModuleInit {
             );
         }
 
-        const lendOffset = HALF_SPREAD;
-        const borrowOffset = HALF_SPREAD;
-        const lend = Math.max(RATE_MIN, mid - lendOffset);
-        const borrow = Math.min(RATE_MAX, mid + borrowOffset);
+        const offset = Math.max(1, Math.round(mid * HALF_SPREAD_PCT));
+        const lend = Math.min(RATE_MAX, mid + offset);
+        const borrow = Math.max(RATE_MIN, mid - offset);
 
         this.ratesByAsset.set(assetId, { lend, borrow, mid });
         return { lend, borrow };
@@ -1139,5 +1174,42 @@ export class OrdersWorker implements OnModuleInit {
 
     private randomQuantity(min: number, max: number): string {
         return (min + Math.random() * (max - min)).toFixed(2);
+    }
+
+    /**
+     * Called immediately after a bot order is placed. If the resulting order
+     * book spread (bestAsk - bestBid) / bestBid exceeds 1%, cancel the order
+     * we just placed.
+     */
+    private async cancelIfSpreadExceeded(
+        orderId: string,
+        walletAddress: string,
+        assetId: string,
+        symbol: string,
+    ): Promise<void> {
+        try {
+            const { bestLendRate, bestBorrowRate } =
+                await this.orderRepository.getBestRatesForAsset(assetId);
+
+            if (
+                bestLendRate == null ||
+                bestBorrowRate == null ||
+                bestBorrowRate <= 0
+            ) {
+                return;
+            }
+
+            const spread = (bestLendRate - bestBorrowRate) / bestBorrowRate;
+            if (spread <= SPREAD_PERCENT_LIMIT) return;
+
+            await this.ordersService.cancelOrder(orderId, walletAddress);
+            this.logger.log(
+                `[SpreadCheck] ${symbol}: cancelled ${orderId} (spread=${(spread * 100).toFixed(2)}%)`,
+            );
+        } catch (e) {
+            this.logger.warn(
+                `[SpreadCheck] Failed for ${orderId}: ${(e as Error).message}`,
+            );
+        }
     }
 }

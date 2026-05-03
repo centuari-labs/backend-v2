@@ -402,3 +402,42 @@ All endpoints require:
 }
 ```
 
+## Deposit / Token Catalog
+
+### GET `/deposit/tokens`
+
+- **Description**: Canonical token catalog for the frontend. The FE
+  caches this response in `localStorage` for 6 hours (see
+  `centuari-revamp/frontend-revamp/src/lib/token-cache.ts`) and uses
+  it as the single source of truth for token metadata — symbol, name,
+  image URL, decimals, address, and chain id. Other endpoints
+  (`/portfolio/*`, `/market/*`, etc.) reference tokens by `id` /
+  `symbol` and the FE joins back to this catalog on the client.
+- **Authentication**: Public. No `Authorization` required.
+- **Stability contract** (enforced by
+  `src/__test__/integration/deposit-tokens-contract.integration.test.ts`):
+  - Response shape matches the FE-side `DepositToken` schema.
+  - Tokens listed in `DEPOSIT_TOKEN_PRIORITY` (`USDC`, `USDT`, `IDRX`,
+    `XSGD`) appear first and in declared order; remaining tokens are
+    sorted alphabetically by symbol.
+  - Two consecutive requests return identical bodies.
+
+- **Response 200** (JSON):
+
+```json
+{
+  "statusCode": 200,
+  "data": [
+    {
+      "id": "c9b79b46-b11d-40e4-9b7d-9f46b8d757b9",
+      "symbol": "USDC",
+      "name": "USD Coin",
+      "tokenAddress": "0x26970F990252306AFa328B2c91225605c0862498",
+      "decimals": 6,
+      "imageUrl": "/tokens/usdc-icon.webp",
+      "chainId": 421614
+    }
+  ]
+}
+```
+

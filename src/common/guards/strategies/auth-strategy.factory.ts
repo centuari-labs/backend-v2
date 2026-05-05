@@ -21,11 +21,7 @@ export class AuthStrategyFactory {
     }
 
     getStrategy(token?: string): IAuthStrategy {
-        if (
-            this.devStrategy &&
-            token &&
-            DevAuthStrategy.isDevToken(token)
-        ) {
+        if (this.devStrategy && token && DevAuthStrategy.isDevToken(token)) {
             return this.devStrategy;
         }
         return this.privyStrategy;

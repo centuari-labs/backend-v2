@@ -8,10 +8,13 @@ import {
     WebSocketGateway,
     WebSocketServer,
 } from "@nestjs/websockets";
-import { Logger } from "@nestjs/common";
+import { Inject, Logger, OnModuleDestroy, forwardRef } from "@nestjs/common";
 import { Server, Socket } from "socket.io";
-import { DataSource } from "typeorm";
 import { NatsService } from "../nats/nats.service";
+import {
+    OrderRepository,
+    type OrderForTracking,
+} from "src/orders/repositories/order.repository";
 import { type UserPositionsDto } from "./dto/user.dto";
 import {
     OrderSide,
@@ -90,7 +93,11 @@ const websocketCorsOrigin =
     },
 })
 export class EventsGateway
-    implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect
+    implements
+        OnGatewayInit,
+        OnGatewayConnection,
+        OnGatewayDisconnect,
+        OnModuleDestroy
 {
     @WebSocketServer()
     server: Server;
@@ -111,18 +118,40 @@ export class EventsGateway
     /** Cached latest prices keyed by assetId */
     private pricesCache: PricesDto["prices"] = {};
 
+    /** Short-lived cache for active order IDs to reduce DB hits */
+    private activeIdsCache = new Map<
+        string,
+        { ids: Set<string>; expiresAt: number }
+    >();
+    private static readonly ACTIVE_IDS_TTL_MS = 5_000;
+
+    /** Periodic cleanup interval handle */
+    private cleanupInterval: ReturnType<typeof setInterval>;
+    private static readonly CLEANUP_INTERVAL_MS = 60_000;
+
     constructor(
         private readonly natsService: NatsService,
-        private readonly dataSource: DataSource,
+        @Inject(forwardRef(() => OrderRepository))
+        private readonly orderRepository: OrderRepository,
     ) {}
 
     afterInit(_server: Server) {
         this.logger.log("WebSocket Gateway initialized");
+        this.cleanupInterval = setInterval(
+            () => this.cleanupTerminalOrders(),
+            EventsGateway.CLEANUP_INTERVAL_MS,
+        );
         return this.setupNatsSubscriptions().catch((err) =>
             this.logger.error(
                 `Failed to set up NATS subscriptions: ${(err as Error).message}`,
             ),
         );
+    }
+
+    onModuleDestroy() {
+        if (this.cleanupInterval) {
+            clearInterval(this.cleanupInterval);
+        }
     }
 
     handleConnection(client: Socket) {
@@ -195,11 +224,10 @@ export class EventsGateway
                 ),
             );
         } else if (subject === "orders.cancel") {
-            this.handleCancelMessage(data as OrderCancelMessage).catch(
-                (err) =>
-                    this.logger.error(
-                        `Error in handleCancelMessage: ${(err as Error).message}`,
-                    ),
+            this.handleCancelMessage(data as OrderCancelMessage).catch((err) =>
+                this.logger.error(
+                    `Error in handleCancelMessage: ${(err as Error).message}`,
+                ),
             );
         } else if (
             subject.startsWith("orders.lend.") ||
@@ -216,7 +244,10 @@ export class EventsGateway
         }
     }
 
-    private async handleOrderCreation(msg: OrderCreationMessage, subject: string) {
+    private async handleOrderCreation(
+        msg: OrderCreationMessage,
+        subject: string,
+    ) {
         const assetId = msg.assetId ?? msg.loanToken;
 
         const tracked: TrackedOrder = {
@@ -257,6 +288,14 @@ export class EventsGateway
 
         await this.aggregateAndBroadcastOrderbook(tracked.assetId);
         this.emitUserPosition(tracked, "orders.status");
+
+        // Eagerly remove terminal orders from memory
+        if (
+            tracked.status === OrderStatus.Filled ||
+            tracked.status === OrderStatus.Cancelled
+        ) {
+            this.orderState.delete(msg.orderId);
+        }
     }
 
     private async handleCancelMessage(msg: OrderCancelMessage) {
@@ -271,6 +310,9 @@ export class EventsGateway
 
         await this.aggregateAndBroadcastOrderbook(tracked.assetId);
         this.emitUserPosition(tracked, "orders.cancel");
+
+        // Eagerly remove cancelled order from memory
+        this.orderState.delete(orderId);
     }
 
     // ─── Prices ────────────────────────────────────────────────────────────
@@ -334,56 +376,28 @@ export class EventsGateway
 
     private async loadOrdersFromDb(assetId: string): Promise<void> {
         try {
-            const rows: Array<{
-                id: string;
-                asset_id: string;
-                side: OrderSide;
-                type: OrderType;
-                rate: string;
-                quantity: string;
-                filled_quantity: string;
-                settlement_fee: string;
-                account_id: string;
-                status: OrderStatus;
-                user_wallet: string;
-                markets: Array<{ marketId: string; maturity: number }> | null;
-            }> = await this.dataSource.query(
-                `SELECT o.id, o.asset_id, o.side, o.type, o.rate,
-                        o.quantity, o.filled_quantity, o.settlement_fee,
-                        o.account_id, o.status,
-                        a.user_wallet,
-                        json_agg(json_build_object(
-                            'marketId', om.market_id,
-                            'maturity', COALESCE(EXTRACT(EPOCH FROM m.maturity)::int, 0)
-                        )) FILTER (WHERE om.market_id IS NOT NULL) as markets
-                 FROM orders o
-                 JOIN accounts a ON a.id = o.account_id
-                 LEFT JOIN order_markets om ON om.order_id = o.id
-                 LEFT JOIN markets m ON m.id = om.market_id
-                 WHERE o.asset_id = $1
-                   AND o.type = 'LIMIT'
-                   AND o.status IN ('OPEN', 'PARTIALLY_FILLED')
-                 GROUP BY o.id, a.user_wallet`,
-                [assetId],
-            );
+            const rows =
+                await this.orderRepository.findActiveLimitOrdersForOrderbook(
+                    assetId,
+                );
 
             for (const row of rows) {
                 const remaining =
-                    BigInt(row.quantity) - BigInt(row.filled_quantity || "0");
+                    BigInt(row.quantity) - BigInt(row.filledQuantity || "0");
                 this.orderState.set(row.id, {
                     orderId: row.id,
-                    assetId: row.asset_id,
+                    assetId: row.assetId,
                     side: row.side,
                     type: row.type,
-                    rate: Number(row.rate),
+                    rate: row.rate,
                     remainingAmount:
                         remaining >= 0n ? remaining.toString() : "0",
                     originalAmount: row.quantity,
-                    accountId: row.account_id,
+                    accountId: row.accountId,
                     status: row.status,
-                    walletAddress: row.user_wallet,
-                    markets: row.markets ?? [],
-                    settlementFeeAmount: row.settlement_fee,
+                    walletAddress: row.userWallet,
+                    markets: row.markets,
+                    settlementFeeAmount: row.settlementFee,
                 });
             }
 
@@ -399,55 +413,26 @@ export class EventsGateway
 
     private async loadSingleOrderFromDb(orderId: string): Promise<void> {
         try {
-            const rows: Array<{
-                id: string;
-                asset_id: string;
-                side: OrderSide;
-                type: OrderType;
-                rate: string;
-                quantity: string;
-                filled_quantity: string;
-                settlement_fee: string;
-                account_id: string;
-                status: OrderStatus;
-                user_wallet: string;
-                markets: Array<{ marketId: string; maturity: number }> | null;
-            }> = await this.dataSource.query(
-                `SELECT o.id, o.asset_id, o.side, o.type, o.rate,
-                        o.quantity, o.filled_quantity, o.settlement_fee,
-                        o.account_id, o.status,
-                        a.user_wallet,
-                        json_agg(json_build_object(
-                            'marketId', om.market_id,
-                            'maturity', COALESCE(EXTRACT(EPOCH FROM m.maturity)::int, 0)
-                        )) FILTER (WHERE om.market_id IS NOT NULL) as markets
-                 FROM orders o
-                 JOIN accounts a ON a.id = o.account_id
-                 LEFT JOIN order_markets om ON om.order_id = o.id
-                 LEFT JOIN markets m ON m.id = om.market_id
-                 WHERE o.id = $1
-                 GROUP BY o.id, a.user_wallet`,
-                [orderId],
-            );
+            const row =
+                await this.orderRepository.findOrderForTracking(orderId);
 
-            if (rows.length === 0) return;
+            if (!row) return;
 
-            const row = rows[0];
             const remaining =
-                BigInt(row.quantity) - BigInt(row.filled_quantity || "0");
+                BigInt(row.quantity) - BigInt(row.filledQuantity || "0");
             this.orderState.set(row.id, {
                 orderId: row.id,
-                assetId: row.asset_id,
+                assetId: row.assetId,
                 side: row.side,
                 type: row.type,
-                rate: Number(row.rate),
+                rate: row.rate,
                 remainingAmount: remaining >= 0n ? remaining.toString() : "0",
                 originalAmount: row.quantity,
-                accountId: row.account_id,
+                accountId: row.accountId,
                 status: row.status,
-                walletAddress: row.user_wallet,
-                markets: row.markets ?? [],
-                settlementFeeAmount: row.settlement_fee,
+                walletAddress: row.userWallet,
+                markets: row.markets,
+                settlementFeeAmount: row.settlementFee,
             });
         } catch (err) {
             this.logger.error(
@@ -470,9 +455,7 @@ export class EventsGateway
 
         // DB validation: fetch valid order IDs and discard phantoms
         const validIds = await this.fetchActiveOrderIds(assetId);
-        const validOrders = activeOrders.filter((o) =>
-            validIds.has(o.orderId),
-        );
+        const validOrders = activeOrders.filter((o) => validIds.has(o.orderId));
 
         // Clean up phantoms from orderState so they don't accumulate
         for (const order of activeOrders) {
@@ -502,23 +485,46 @@ export class EventsGateway
         this.server.to(room).emit("orderbook-update", update);
     }
 
-    private async fetchActiveOrderIds(
-        assetId: string,
-    ): Promise<Set<string>> {
+    private async fetchActiveOrderIds(assetId: string): Promise<Set<string>> {
+        const now = Date.now();
+        const cached = this.activeIdsCache.get(assetId);
+        if (cached && cached.expiresAt > now) {
+            return cached.ids;
+        }
+
         try {
-            const rows: Array<{ id: string }> = await this.dataSource.query(
-                `SELECT id FROM orders
-                 WHERE asset_id = $1
-                   AND type = 'LIMIT'
-                   AND status IN ('OPEN', 'PARTIALLY_FILLED')`,
-                [assetId],
-            );
-            return new Set(rows.map((r) => r.id));
+            const ids =
+                await this.orderRepository.findActiveOrderIdsByAsset(assetId);
+            const idSet = new Set(ids);
+            this.activeIdsCache.set(assetId, {
+                ids: idSet,
+                expiresAt: now + EventsGateway.ACTIVE_IDS_TTL_MS,
+            });
+            return idSet;
         } catch (err) {
             this.logger.error(
                 `Failed to fetch active order IDs for asset ${assetId}: ${(err as Error).message}`,
             );
-            return new Set();
+            return cached?.ids ?? new Set();
+        }
+    }
+
+    /** Periodic sweep to remove filled/cancelled orders that may linger in memory */
+    private cleanupTerminalOrders() {
+        let removed = 0;
+        for (const [orderId, order] of this.orderState) {
+            if (
+                order.status === OrderStatus.Filled ||
+                order.status === OrderStatus.Cancelled
+            ) {
+                this.orderState.delete(orderId);
+                removed++;
+            }
+        }
+        if (removed > 0) {
+            this.logger.debug(
+                `Cleaned up ${removed} terminal orders from orderState`,
+            );
         }
     }
 

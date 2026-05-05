@@ -171,5 +171,152 @@ describe("RepayService", () => {
                 service.repay(dto, walletAddress, privyUserId),
             ).rejects.toThrow(BadRequestException);
         });
+
+        it("should throw BadRequestException for NaN amount", async () => {
+            orderRepository.getOrCreateAccount.mockResolvedValue(
+                account as any,
+            );
+            repayRepository.getMarketWithAsset.mockResolvedValue(market as any);
+            repayRepository.getUserTotalDebt.mockResolvedValue(
+                parseUnits("200", 18).toString(),
+            );
+            viemService.readContract.mockResolvedValue(parseUnits("200", 18));
+
+            await expect(
+                service.repay(
+                    { marketId, amount: "notanumber" },
+                    walletAddress,
+                    privyUserId,
+                ),
+            ).rejects.toThrow(BadRequestException);
+        });
+
+        it("should throw BadRequestException for amount <= 0", async () => {
+            orderRepository.getOrCreateAccount.mockResolvedValue(
+                account as any,
+            );
+            repayRepository.getMarketWithAsset.mockResolvedValue(market as any);
+            repayRepository.getUserTotalDebt.mockResolvedValue(
+                parseUnits("200", 18).toString(),
+            );
+            viemService.readContract.mockResolvedValue(parseUnits("200", 18));
+
+            await expect(
+                service.repay(
+                    { marketId, amount: "-5" },
+                    walletAddress,
+                    privyUserId,
+                ),
+            ).rejects.toThrow(BadRequestException);
+        });
+
+        it("should handle contract revert errors in executeBlockchainRepay", async () => {
+            orderRepository.getOrCreateAccount.mockResolvedValue(
+                account as any,
+            );
+            repayRepository.getMarketWithAsset.mockResolvedValue(market as any);
+            repayRepository.getUserTotalDebt.mockResolvedValue(
+                parseUnits("200", 18).toString(),
+            );
+            viemService.readContract.mockResolvedValue(parseUnits("200", 18));
+            viemService.writeContract.mockRejectedValue(
+                new Error("execution reverted: InsufficientFunds()"),
+            );
+
+            await expect(
+                service.repay(dto, walletAddress, privyUserId),
+            ).rejects.toThrow(BadRequestException);
+        });
+
+        it("should sync all positions to zero when on-chain debt is 0 but DB has debt", async () => {
+            const positions = [
+                { id: "pos-1", debt: parseUnits("60", 18).toString() },
+                { id: "pos-2", debt: parseUnits("40", 18).toString() },
+            ];
+
+            orderRepository.getOrCreateAccount.mockResolvedValue(
+                account as any,
+            );
+            repayRepository.getMarketWithAsset.mockResolvedValue(market as any);
+            repayRepository.getUserTotalDebt.mockResolvedValue(
+                parseUnits("100", 18).toString(),
+            );
+            // On-chain debt is 0
+            viemService.readContract.mockResolvedValue(0n);
+            repayRepository.getBorrowPositions.mockResolvedValue(
+                positions as any,
+            );
+
+            await expect(
+                service.repay(dto, walletAddress, privyUserId),
+            ).rejects.toThrow(BadRequestException);
+
+            // Both positions should be set to zero
+            expect(
+                repayRepository.updateBorrowPositionDebt,
+            ).toHaveBeenCalledWith(manager, "pos-1", "0");
+            expect(
+                repayRepository.updateBorrowPositionDebt,
+            ).toHaveBeenCalledWith(manager, "pos-2", "0");
+            // Portfolio should be deducted
+            expect(portfolioRepository.upsertPortfolio).toHaveBeenCalled();
+        });
+
+        it("should handle no positions gracefully in syncAllPositionsToZero", async () => {
+            orderRepository.getOrCreateAccount.mockResolvedValue(
+                account as any,
+            );
+            repayRepository.getMarketWithAsset.mockResolvedValue(market as any);
+            repayRepository.getUserTotalDebt.mockResolvedValue(
+                parseUnits("100", 18).toString(),
+            );
+            viemService.readContract.mockResolvedValue(0n);
+            repayRepository.getBorrowPositions.mockResolvedValue([]);
+
+            await expect(
+                service.repay(dto, walletAddress, privyUserId),
+            ).rejects.toThrow(BadRequestException);
+
+            // No positions to zero out — upsertPortfolio should NOT be called
+            expect(
+                repayRepository.updateBorrowPositionDebt,
+            ).not.toHaveBeenCalled();
+            expect(portfolioRepository.upsertPortfolio).not.toHaveBeenCalled();
+        });
+
+        it("should throw NotFoundException when market not found", async () => {
+            orderRepository.getOrCreateAccount.mockResolvedValue(
+                account as any,
+            );
+            repayRepository.getMarketWithAsset.mockResolvedValue(null);
+
+            await expect(
+                service.repay(dto, walletAddress, privyUserId),
+            ).rejects.toThrow(NotFoundException);
+        });
+
+        it("should throw InternalServerErrorException when DB update fails after blockchain tx", async () => {
+            const positions = [
+                { id: "pos-1", debt: parseUnits("200", 18).toString() },
+            ];
+
+            orderRepository.getOrCreateAccount.mockResolvedValue(
+                account as any,
+            );
+            repayRepository.getMarketWithAsset.mockResolvedValue(market as any);
+            repayRepository.getUserTotalDebt.mockResolvedValue(
+                parseUnits("200", 18).toString(),
+            );
+            viemService.readContract.mockResolvedValue(parseUnits("200", 18));
+            viemService.writeContract.mockResolvedValue({
+                transactionHash: "0xtx",
+            } as any);
+            // DB transaction fails
+            dataSource.transaction.mockRejectedValue(new Error("DB error"));
+
+            await expect(
+                service.repay(dto, walletAddress, privyUserId),
+            ).rejects.toThrow(InternalServerErrorException);
+        });
     });
 });

@@ -19,14 +19,24 @@ import { MarketModule } from "../market/market.module";
     imports: [
         TypeOrmModule.forFeature([Portfolio, Token, LendPosition]),
         ConfigModule,
-        CoreModule,
+        forwardRef(() => CoreModule),
         forwardRef(() => OrdersModule),
         PriceModule,
         TokensModule,
         MarketModule,
     ],
     controllers: [PortfolioController],
-    providers: [PortfolioService, PortfolioRepository, RepayService, RepayRepository],
-    exports: [PortfolioService, PortfolioRepository, RepayService, RepayRepository],
+    providers: [
+        PortfolioService,
+        PortfolioRepository,
+        RepayService,
+        RepayRepository,
+    ],
+    exports: [
+        PortfolioService,
+        PortfolioRepository,
+        RepayService,
+        RepayRepository,
+    ],
 })
 export class PortfolioModule {}

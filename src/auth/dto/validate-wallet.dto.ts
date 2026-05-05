@@ -3,7 +3,9 @@ import { IsNotEmpty, IsString, Matches } from "class-validator";
 export class ValidateWalletDto {
     @IsString()
     @IsNotEmpty()
-    @Matches(/^0x[a-fA-F0-9]{40}$/, { message: "Invalid wallet address format" })
+    @Matches(/^0x[a-fA-F0-9]{40}$/, {
+        message: "Invalid wallet address format",
+    })
     wallet_address: string;
 }
 

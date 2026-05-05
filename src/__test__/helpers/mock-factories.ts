@@ -91,3 +91,16 @@ export function createMockOrderMarket(
         ...overrides,
     };
 }
+
+export function createMockAccessCode(overrides: Record<string, any> = {}) {
+    return {
+        id: "ac-uuid-001",
+        code: "CENTUARI-ABCDE",
+        max_uses: 10,
+        current_uses: 0,
+        is_active: true,
+        expires_at: null,
+        created_at: new Date("2025-01-01T00:00:00.000Z"),
+        ...overrides,
+    };
+}

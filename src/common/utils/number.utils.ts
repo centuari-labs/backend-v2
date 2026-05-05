@@ -196,15 +196,8 @@ export function calculateSettlementFee(
  * @param amountHuman - Order amount in human-readable token units
  * @param feeBps - Fee rate in basis points (e.g. 10 = 0.1%)
  */
-export function calculateTradeFee(
-    amountHuman: number,
-    feeBps: number,
-): number {
-    if (
-        !Number.isFinite(amountHuman) ||
-        amountHuman <= 0 ||
-        feeBps <= 0
-    ) {
+export function calculateTradeFee(amountHuman: number, feeBps: number): number {
+    if (!Number.isFinite(amountHuman) || amountHuman <= 0 || feeBps <= 0) {
         return 0;
     }
 

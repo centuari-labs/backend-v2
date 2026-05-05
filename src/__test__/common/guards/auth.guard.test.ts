@@ -4,7 +4,8 @@ import { AuthGuard } from "../../../common/guards/auth.guard";
 import { AuthStrategyFactory } from "../../../common/guards/strategies/auth-strategy.factory";
 import type { IAuthStrategy } from "../../../common/guards/strategies/auth-strategy.interface";
 
-// Mock PrivyService to avoid jose ESM import issues
+// Mock jose and PrivyService to avoid jose ESM import issues
+jest.mock("jose", () => ({}));
 jest.mock("../../../core/privy/privy.service");
 
 describe("AuthGuard", () => {

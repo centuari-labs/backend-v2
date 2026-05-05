@@ -55,6 +55,23 @@ Request → AuthGuard → Controller → Service → Repository/NATS/Viem → Re
 AuthGuard → AuthStrategyFactory → PrivyAuthStrategy → sets request.user { userId, walletAddress }
 ```
 
+## Design Patterns
+
+### Order Creation
+- **Unified Method**: Use a single `createOrder()` method that accepts parameters for `side` and `type`.
+- **No Per-Variant Methods**: Avoid creating separate methods like `createLendMarketOrder()` or `createBorrowLimitOrder()`. Handle variance via parameters or DTOs.
+
+### DTO Composition
+- **Class Inheritance**: Use base class inheritance for shared fields across DTOs.
+- **Utility Types**: Leverage NestJS `@nestjs/mapped-types` or `@nestjs/swagger` utilities like `OmitType`, `PickType`, and `IntersectionType` for derived DTOs to ensure type safety and DRY code.
+
+### Repository Pattern
+- **Centralized Access**: All database access must go through repository classes.
+- **No Raw SQL**: Never write raw SQL strings in services or WebSocket gateways. Use TypeORM QueryBuilder or repository methods.
+
+### Transaction Management
+- **Transaction Helper**: Use the `withTransaction(dataSource, manager => { ... })` utility for operations requiring atomicity. Do not manage transactions manually via QueryRunners in services.
+
 ## Code Standards
 
 ### Naming
@@ -76,14 +93,19 @@ Always use the appropriate suffix: `.module.ts`, `.controller.ts`, `.service.ts`
 
 1. **One module per domain** — never mix concerns across modules. If a service needs another module's data, import the module and inject the service.
 2. **DTOs for all input** — every controller endpoint receives a class-validator DTO. Never pass raw `body` objects to services.
-3. **Repository pattern** — extend `Repository<Entity>` for custom queries. Use QueryBuilder for dynamic SQL. Never write raw SQL in services.
-4. **No business logic in controllers** — controllers only validate input (via DTOs/pipes), call service methods, and return results.
-5. **Thin services** — services orchestrate. Extract complex calculations to `utils/`. Extract DB queries to repositories.
-6. **Custom decorators over repetition** — use `@Wallet()`, `@CurrentUser()`, `@BearerToken()` instead of extracting from `request` manually.
-7. **Explicit module exports** — only export what other modules actually need. Don't export everything by default.
-8. **Use NestJS exceptions** — throw `BadRequestException`, `ForbiddenException`, `NotFoundException` etc. The global `AllExceptionsFilter` formats them consistently.
-9. **Async/await everywhere** — all service methods that touch DB, NATS, or external APIs must be async and return `Promise<T>`.
-10. **No circular dependencies** — if unavoidable, use `forwardRef()` and document why.
+3. **Repository pattern** — All DB access must go through repositories. Never write raw SQL in services or WebSocket gateways.
+4. **No business logic in controllers** — controllers only validate input, call service methods, and return results.
+5. **Thin services** — services orchestrate logic. Extract complex calculations to `utils/`. Use repositories for DB queries.
+6. **Custom decorators over repetition** — use `@Wallet()`, `@CurrentUser()` instead of manual extraction from `request`.
+7. **Explicit module exports** — only export what other modules need.
+8. **Use NestJS exceptions** — throw specific exceptions (e.g., `BadRequestException`).
+9. **Async/await everywhere** — all service methods touching external systems must be async.
+10. **No circular dependencies** — use `forwardRef()` only when strictly necessary.
+11. **Global Validation** — Validation is handled globally via `ValidationPipe` in `main.ts`. Do not add `@UsePipes(new ValidationPipe())` to controllers.
+12. **Plain Object Returns** — Services should return plain JavaScript objects. The global `ResponseInterceptor` handles wrapping them into the standard response format.
+13. **WebSocket Memory Safety** — All in-memory caches used in gateways or real-time services must implement eviction policies and maximum size caps to prevent memory leaks.
+14. **Config Centralization** — Shared chain, operator, or protocol configuration must live in `ChainConfigService`. Do not repeat config logic or environment lookups in constructors.
+15. **Consistent Error Typing** — Always treat errors as untyped. Use `error instanceof Error ? error.message : String(error)` when converting to strings. Never assume `error.message` exists.
 
 ### Entity Rules
 
@@ -98,7 +120,7 @@ Always use the appropriate suffix: `.module.ts`, `.controller.ts`, `.service.ts`
 - Use `class-validator` decorators for all fields
 - Use `class-transformer` for type conversion (`@Transform`, `@Type`)
 - Group related validations (e.g., `@IsPositiveNumericString()` custom validator)
-- Use `PartialType()` / `PickType()` / `OmitType()` for derived DTOs — don't duplicate fields
+- **Inheritance & Utilities**: Use `PartialType()`, `PickType()`, or `OmitType()` for derived DTOs (e.g., `UpdateOrderDto` extending `CreateOrderDto`) to avoid field duplication.
 
 ### Testing Rules
 

@@ -6,19 +6,22 @@ import {
     Param,
     ParseUUIDPipe,
     Post,
+    Put,
     UseGuards,
 } from "@nestjs/common";
 import { Wallet, CurrentUser } from "../common/decorators/wallet.decorator";
 import { AuthGuard } from "../common/guards/auth.guard";
+import { WalletThrottlerGuard } from "../common/guards/wallet-throttler.guard";
 import {
     CreateLimitOrderDto,
     CreateMarketOrderDto,
 } from "./dto/create-order.dto";
 import { OrdersService } from "./orders.service";
 import { OrderResponse } from "./dto/order-response.dto";
+import { UpdateOrderDto } from "./dto/update-order.dto";
 
 @Controller("orders")
-@UseGuards(AuthGuard)
+@UseGuards(AuthGuard, WalletThrottlerGuard)
 export class OrdersController {
     constructor(private readonly ordersService: OrdersService) {}
 
@@ -84,5 +87,14 @@ export class OrdersController {
         @Wallet() walletAddress: string,
     ) {
         return this.ordersService.cancelOrder(id, walletAddress);
+    }
+
+    @Put(":id/update")
+    async updateOrder(
+        @Param("id", ParseUUIDPipe) id: string,
+        @Wallet() walletAddress: string,
+        @Body() dto: UpdateOrderDto,
+    ) {
+        return this.ordersService.updateOrder(id, walletAddress, dto);
     }
 }

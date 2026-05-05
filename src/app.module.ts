@@ -1,6 +1,7 @@
 import { Module } from "@nestjs/common";
 import { ConfigModule } from "@nestjs/config";
 import { ScheduleModule } from "@nestjs/schedule";
+import { ThrottlerModule } from "@nestjs/throttler";
 import { TypeOrmModule } from "@nestjs/typeorm";
 import { AuthModule } from "./auth/auth.module";
 import { CoreModule } from "./core/core.module";
@@ -21,6 +22,18 @@ import { EventsGateway } from "./core/websocket/websocket.gateway";
             isGlobal: true,
         }),
         ScheduleModule.forRoot(),
+        ThrottlerModule.forRoot([
+            {
+                name: "short",
+                ttl: 1000,
+                limit: 5,
+            },
+            {
+                name: "long",
+                ttl: 60000,
+                limit: 60,
+            },
+        ]),
         TypeOrmModule.forRoot({
             type: "postgres",
             url: process.env.DATABASE_URL,
@@ -41,6 +54,6 @@ import { EventsGateway } from "./core/websocket/websocket.gateway";
         ChainIndexerModule,
     ],
     controllers: [],
-    providers: [EventsGateway],
+    providers: [],
 })
 export class AppModule {}

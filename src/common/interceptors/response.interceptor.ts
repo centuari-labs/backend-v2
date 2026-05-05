@@ -1,17 +1,28 @@
-/** biome-ignore-all lint/suspicious/noExplicitAny: any format data */
-
 import {
-    CallHandler,
-    ExecutionContext,
+    type CallHandler,
+    type ExecutionContext,
     Injectable,
-    NestInterceptor,
+    type NestInterceptor,
 } from "@nestjs/common";
-import { Observable } from "rxjs";
+import type { Observable } from "rxjs";
 import { map } from "rxjs/operators";
 
+export interface ResponseEnvelope<T> {
+    statusCode: number;
+    data: T;
+    meta?: Record<string, unknown>;
+}
+
+type ExtractData<T> = T extends { data: infer D; page: number } ? D : T;
+
 @Injectable()
-export class ResponseInterceptor implements NestInterceptor {
-    intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
+export class ResponseInterceptor<T>
+    implements NestInterceptor<T, ResponseEnvelope<ExtractData<T>>>
+{
+    intercept(
+        context: ExecutionContext,
+        next: CallHandler<T>,
+    ): Observable<ResponseEnvelope<ExtractData<T>>> {
         return next.handle().pipe(
             map((result) => {
                 const statusCode = context
@@ -25,17 +36,20 @@ export class ResponseInterceptor implements NestInterceptor {
                     "data" in result &&
                     "page" in result
                 ) {
-                    const { data, ...meta } = result;
+                    const { data, ...meta } = result as unknown as {
+                        data: ExtractData<T>;
+                        [key: string]: unknown;
+                    };
                     return {
                         statusCode,
                         data,
-                        meta,
+                        meta: meta as Record<string, unknown>,
                     };
                 }
 
                 return {
                     statusCode,
-                    data: result,
+                    data: result as ExtractData<T>,
                 };
             }),
         );

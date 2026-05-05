@@ -242,4 +242,127 @@ describe("FaucetService", () => {
             expect(viemService.writeContract).not.toHaveBeenCalled();
         });
     });
+
+    describe("resolveTokenAddresses", () => {
+        it("should parse CSV from config and validate requested tokens", async () => {
+            setupConfig();
+
+            // requestTokens calls resolveTokenAddresses internally
+            viemService.readContract.mockResolvedValue([
+                true,
+                MAX_PER_REQUEST,
+                BigInt(3600),
+            ]);
+            viemService.writeContract.mockResolvedValue(
+                makeTxReceipt("0xaaa") as any,
+            );
+
+            const result = await service.requestTokens(
+                CHAIN_ID,
+                RECIPIENT_ADDRESS,
+                TOKEN_ADDRESS_A,
+            );
+
+            expect(result.results).toHaveLength(1);
+            expect(result.results[0].tokenAddress).toBe(TOKEN_ADDRESS_A);
+        });
+
+        it("should throw BadRequestException for unsupported token address", async () => {
+            setupConfig();
+
+            await expect(
+                service.requestTokens(
+                    CHAIN_ID,
+                    RECIPIENT_ADDRESS,
+                    "0xUnsupportedToken",
+                ),
+            ).rejects.toThrow(BadRequestException);
+        });
+    });
+
+    describe("requestTokensBatch", () => {
+        it("should return empty results when no token addresses provided", async () => {
+            setupConfig();
+
+            const result = await service.requestTokensBatch(
+                CHAIN_ID,
+                RECIPIENT_ADDRESS,
+                [],
+            );
+
+            expect(result.results).toHaveLength(0);
+            expect(result.status).toBe("success");
+        });
+
+        it("should fall back to mock when operator key missing", async () => {
+            setupConfig({ OPERATOR_PRIVATE_KEY: undefined });
+
+            const result = await service.requestTokensBatch(
+                CHAIN_ID,
+                RECIPIENT_ADDRESS,
+                [TOKEN_ADDRESS_A],
+            );
+
+            expect(result.status).toBe("success");
+            expect(viemService.readContract).not.toHaveBeenCalled();
+        });
+
+        it("should process batch with configOf data", async () => {
+            setupConfig();
+            viemService.readContract.mockResolvedValue([
+                true,
+                MAX_PER_REQUEST,
+                BigInt(3600),
+            ]);
+            viemService.writeContract.mockResolvedValue(
+                makeTxReceipt("0xbatch1") as any,
+            );
+
+            const result = await service.requestTokensBatch(
+                CHAIN_ID,
+                RECIPIENT_ADDRESS,
+                [TOKEN_ADDRESS_A, TOKEN_ADDRESS_B],
+            );
+
+            expect(result.transactionHash).toBe("0xbatch1");
+            expect(result.results).toHaveLength(2);
+        });
+
+        it("should skip disabled tokens in batch", async () => {
+            setupConfig();
+            viemService.readContract
+                .mockResolvedValueOnce([false, 0n, 0n]) // disabled
+                .mockResolvedValueOnce([true, MAX_PER_REQUEST, BigInt(3600)]);
+            viemService.writeContract.mockResolvedValue(
+                makeTxReceipt("0xbatch2") as any,
+            );
+
+            const result = await service.requestTokensBatch(
+                CHAIN_ID,
+                RECIPIENT_ADDRESS,
+                [TOKEN_ADDRESS_A, TOKEN_ADDRESS_B],
+            );
+
+            expect(result.results[0].amount).toBe("0");
+            expect(result.results[1].amount).toBe(MAX_PER_REQUEST.toString());
+        });
+    });
+
+    describe("getTokens", () => {
+        it("should return all configured token addresses for a chain", async () => {
+            setupConfig();
+
+            const tokens = await service.getTokens(CHAIN_ID);
+
+            expect(tokens).toEqual([TOKEN_ADDRESS_A, TOKEN_ADDRESS_B]);
+        });
+
+        it("should throw when no tokens configured for chain", async () => {
+            setupConfig({ [`FAUCET_TOKENS_${CHAIN_ID}`]: undefined });
+
+            await expect(service.getTokens(CHAIN_ID)).rejects.toThrow(
+                BadRequestException,
+            );
+        });
+    });
 });

@@ -78,9 +78,7 @@ export class PortfolioRepository extends Repository<Portfolio> {
         super(Portfolio, dataSource.createEntityManager());
     }
 
-    async getUserTotalBalances(
-        accountId: string,
-    ): Promise<
+    async getUserTotalBalances(accountId: string): Promise<
         {
             asset_id: string;
             total_amount: string;
@@ -253,10 +251,7 @@ export class PortfolioRepository extends Repository<Portfolio> {
 
             const countQuery = this.dataSource
                 .createQueryBuilder()
-                .select(
-                    "COUNT(DISTINCT (lp.asset_id, lp.market_id))",
-                    "count",
-                )
+                .select("COUNT(DISTINCT (lp.asset_id, lp.market_id))", "count")
                 .from("lend_positions", "lp")
                 .where("lp.account_id = :accountId", { accountId })
                 .andWhere("lp.shares > 0");
@@ -314,10 +309,7 @@ export class PortfolioRepository extends Repository<Portfolio> {
 
             const countQuery = this.dataSource
                 .createQueryBuilder()
-                .select(
-                    "COUNT(DISTINCT (bp.asset_id, bp.market_id))",
-                    "count",
-                )
+                .select("COUNT(DISTINCT (bp.asset_id, bp.market_id))", "count")
                 .from("borrow_positions", "bp")
                 .where("bp.account_id = :accountId", { accountId })
                 .andWhere("bp.debt > 0");
@@ -776,10 +768,7 @@ export class PortfolioRepository extends Repository<Portfolio> {
 
         const [rows, countResult] = await Promise.all([
             this.dataSource.query(dataQuery, params),
-            this.dataSource.query(
-                countQuery,
-                params.slice(0, paramIndex - 1),
-            ),
+            this.dataSource.query(countQuery, params.slice(0, paramIndex - 1)),
         ]);
 
         return {

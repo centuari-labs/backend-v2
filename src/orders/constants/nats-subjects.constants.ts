@@ -5,4 +5,5 @@ export const NATS_SUBJECTS = {
     BORROW_LIMIT: "orders.borrow.limit",
     CANCEL: "orders.cancel",
     MATCH_CREATED: "matches.created",
+    UPDATE: "orders.update",
 } as const;

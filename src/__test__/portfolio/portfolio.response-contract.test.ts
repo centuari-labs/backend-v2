@@ -93,7 +93,7 @@ describe("MyAssetsResponseDto contract", () => {
     });
 
     describe("interceptor transform for paginated response", () => {
-        let interceptor: ResponseInterceptor;
+        let interceptor: ResponseInterceptor<MyAssetsResponseDto>;
 
         beforeEach(() => {
             interceptor = new ResponseInterceptor();

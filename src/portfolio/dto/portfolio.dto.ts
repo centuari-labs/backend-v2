@@ -1,4 +1,12 @@
-import { IsOptional, IsUUID } from "class-validator";
+import {
+    IsArray,
+    IsBoolean,
+    IsEnum,
+    IsOptional,
+    IsString,
+    IsUUID,
+} from "class-validator";
+import { Transform } from "class-transformer";
 
 export class TotalBalanceDto {
     totalDeposit: number;
@@ -54,8 +62,12 @@ export class MyAssetDto {
 }
 
 export class GetMyAssetsQueryDto {
+    @IsOptional()
+    @Transform(({ value }) => Number(value) || 1)
     page?: number = 1;
 
+    @IsOptional()
+    @Transform(({ value }) => Number(value) || 10)
     limit?: number = 10;
 }
 
@@ -92,10 +104,16 @@ export class MyPositionAmountInUsdDto {
 }
 
 export class MyPositionQueryDto {
+    @IsOptional()
+    @Transform(({ value }) => Number(value) || 1)
     page?: number = 1;
 
+    @IsOptional()
+    @Transform(({ value }) => Number(value) || 10)
     limit?: number = 10;
 
+    @IsOptional()
+    @IsEnum(["LEND", "BORROW"])
     type?: "LEND" | "BORROW";
 
     @IsOptional()
@@ -127,7 +145,11 @@ export class GetMyPositionResponseDto {
 }
 
 export class SetAssetAsCollateralDto {
+    @IsArray()
+    @IsString({ each: true })
     assetIds: string[];
+
+    @IsBoolean()
     isCollateral: boolean;
 }
 

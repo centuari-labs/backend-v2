@@ -2,6 +2,7 @@ import { Test, TestingModule } from "@nestjs/testing";
 import { INestApplication } from "@nestjs/common";
 import { EventsGateway } from "../src/core/websocket/websocket.gateway";
 import { NatsService } from "../src/core/nats/nats.service";
+import { OrderRepository } from "../src/orders/repositories/order.repository";
 import {
     OrderSide,
     OrderStatus,
@@ -43,10 +44,19 @@ describe("WebSocket E2E", () => {
             isConnected: jest.fn().mockReturnValue(true),
         };
 
+        const mockOrderRepo = {
+            findActiveLimitOrdersForOrderbook: jest.fn().mockResolvedValue([]),
+            findOrderForTracking: jest.fn().mockResolvedValue(null),
+            findActiveOrderIdsByAsset: jest
+                .fn()
+                .mockResolvedValue(["order-e2e-1"]),
+        };
+
         const moduleFixture: TestingModule = await Test.createTestingModule({
             providers: [
                 EventsGateway,
                 { provide: NatsService, useValue: mockNatsService },
+                { provide: OrderRepository, useValue: mockOrderRepo },
             ],
         }).compile();
 
@@ -103,8 +113,8 @@ describe("WebSocket E2E", () => {
             (gateway as any).server = mockServer;
         });
 
-        it("should subscribe client to orderbook room", () => {
-            const result = gateway.handleSubscribeOrderbook(mockClient, {
+        it("should subscribe client to orderbook room", async () => {
+            const result = await gateway.handleSubscribeOrderbook(mockClient, {
                 assetId: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
             });
 
@@ -131,7 +141,7 @@ describe("WebSocket E2E", () => {
             });
         });
 
-        it("should aggregate and broadcast orderbook on order creation", () => {
+        it("should aggregate and broadcast orderbook on order creation", async () => {
             const ordersCallback = natsCallbacks.get("orders.>");
             if (!ordersCallback) return; // Skip if NATS not set up
 
@@ -151,6 +161,7 @@ describe("WebSocket E2E", () => {
                 },
                 "orders.lend.limit",
             );
+            await new Promise((r) => setTimeout(r, 10));
 
             expect(mockServer.to).toHaveBeenCalledWith(
                 "orderbook:a1b2c3d4-e5f6-7890-abcd-ef1234567890",

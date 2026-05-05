@@ -1,3 +1,4 @@
+import "dotenv/config";
 import { Test, TestingModule } from "@nestjs/testing";
 import { TypeOrmModule } from "@nestjs/typeorm";
 import { DataSource } from "typeorm";
@@ -10,7 +11,8 @@ import { CoinGeckoProvider } from "../../../price/providers/coingecko.provider";
  * Requires: DATABASE_URL set, DB seeded, network access.
  * Run: pnpm test:integration:price
  */
-describe("CoinGeckoProvider with DB tokens (integration)", () => {
+const describeIfDb = process.env.DATABASE_URL ? describe : describe.skip;
+describeIfDb("CoinGeckoProvider with DB tokens (integration)", () => {
     let module: TestingModule;
     let tokensRepository: TokensRepository;
     let provider: CoinGeckoProvider;
@@ -18,7 +20,6 @@ describe("CoinGeckoProvider with DB tokens (integration)", () => {
     beforeAll(async () => {
         module = await Test.createTestingModule({
             imports: [
-                //@todo : fix error connecting to database
                 TypeOrmModule.forRoot({
                     type: "postgres",
                     url: process.env.DATABASE_URL,
@@ -36,8 +37,10 @@ describe("CoinGeckoProvider with DB tokens (integration)", () => {
     });
 
     afterAll(async () => {
-        const dataSource = module.get(DataSource);
-        await dataSource.destroy();
+        if (module) {
+            const dataSource = module.get(DataSource);
+            await dataSource.destroy();
+        }
     });
 
     it("should fetch prices for all tokens with coingeckoId in DB", async () => {

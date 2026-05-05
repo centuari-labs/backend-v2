@@ -259,8 +259,7 @@ export class ViemService implements OnModuleInit {
 
             const baseFee = block.baseFeePerGas ?? 0n;
             const maxPriorityFeePerGas = 1_500_000n;
-            const maxFeePerGas =
-                (baseFee * 3n) / 2n + maxPriorityFeePerGas;
+            const maxFeePerGas = (baseFee * 3n) / 2n + maxPriorityFeePerGas;
 
             const hash = await walletClient.writeContract({
                 address: address as `0x${string}`,

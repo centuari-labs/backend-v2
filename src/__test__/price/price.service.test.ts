@@ -4,6 +4,7 @@ import { PriceService } from "../../price/price.service";
 import { PRICE_PROVIDER } from "../../price/interfaces/price-provider.interface";
 import type { Token } from "../../tokens/entities/token.entity";
 import { TokensRepository } from "../../tokens/repositories/tokens.repository";
+import { EventsGateway } from "../../core/websocket/websocket.gateway";
 
 describe("PriceService", () => {
     let service: PriceService;
@@ -72,11 +73,16 @@ describe("PriceService", () => {
             fetchPrices: jest.fn(),
         };
 
+        const mockEventsGateway = {
+            broadcastPrices: jest.fn(),
+        };
+
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 PriceService,
                 { provide: TokensRepository, useValue: mockTokensRepository },
                 { provide: PRICE_PROVIDER, useValue: mockPriceProvider },
+                { provide: EventsGateway, useValue: mockEventsGateway },
             ],
         }).compile();
 

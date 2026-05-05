@@ -1,28 +1,21 @@
-import { Test, TestingModule } from "@nestjs/testing";
 import { UnauthorizedException } from "@nestjs/common";
 import { PrivyAuthStrategy } from "../../../../common/guards/strategies/privy-auth.strategy";
 
-// Mock PrivyService to avoid jose ESM import issues
+// Mock jose and PrivyService to avoid jose ESM import issues
+jest.mock("jose", () => ({}));
 jest.mock("../../../../core/privy/privy.service");
 
 describe("PrivyAuthStrategy", () => {
     let strategy: PrivyAuthStrategy;
     let mockPrivyService: any;
 
-    beforeEach(async () => {
+    beforeEach(() => {
         mockPrivyService = {
             verify: jest.fn(),
+            getUser: jest.fn().mockResolvedValue({
+                linkedAccounts: [],
+            }),
         };
-
-        const module: TestingModule = await Test.createTestingModule({
-            providers: [
-                PrivyAuthStrategy,
-                {
-                    provide: "PrivyService",
-                    useValue: mockPrivyService,
-                },
-            ],
-        }).compile();
 
         strategy = new PrivyAuthStrategy(mockPrivyService);
     });

@@ -69,13 +69,49 @@ describe("Orders Flow Integration", () => {
             createQueryBuilder: jest.fn(),
         };
 
+        const mockMetadata = {
+            columns: [],
+            relations: [],
+            primaryColumns: [],
+            target: Order,
+            tableName: "orders",
+            ownColumns: [],
+            ownRelations: [],
+            eagerRelations: [],
+            lazyRelations: [],
+            createValueMap: jest.fn(),
+        };
+
+        const mockQueryBuilder = {
+            innerJoin: jest.fn().mockReturnThis(),
+            leftJoin: jest.fn().mockReturnThis(),
+            where: jest.fn().mockReturnThis(),
+            andWhere: jest.fn().mockReturnThis(),
+            orderBy: jest.fn().mockReturnThis(),
+            select: jest.fn().mockReturnThis(),
+            addSelect: jest.fn().mockReturnThis(),
+            limit: jest.fn().mockReturnThis(),
+            offset: jest.fn().mockReturnThis(),
+            getCount: jest.fn().mockResolvedValue(0),
+            getOne: jest.fn().mockResolvedValue(null),
+            getMany: jest.fn().mockResolvedValue([]),
+        };
+
         const mockEntityManager = {
             getRepository: jest.fn(),
+            findOne: jest.fn(),
+            find: jest.fn(),
+            save: jest.fn(),
+            createQueryBuilder: jest.fn().mockReturnValue(mockQueryBuilder),
+            connection: {
+                getMetadata: jest.fn().mockReturnValue(mockMetadata),
+            },
         };
 
         const mockDs = {
             transaction: jest.fn(),
             createEntityManager: jest.fn().mockReturnValue(mockEntityManager),
+            getMetadata: jest.fn().mockReturnValue(mockMetadata),
         };
 
         (mockMarkets as any).getMarketsByIds.mockResolvedValue([
@@ -168,10 +204,9 @@ describe("Orders Flow Integration", () => {
                 MOCK_IDS.privyUserId,
             );
 
-            expect(result.statusCode).toBe(HttpStatus.CREATED);
-            expect(result.data.side).toBe(OrderSide.Lend);
-            expect(result.data.type).toBe(OrderType.Limit);
-            expect(result.data.rate).toBe(5); // 500 BPS = 5%
+            expect(result.side).toBe(OrderSide.Lend);
+            expect(result.type).toBe(OrderType.Limit);
+            expect(result.rate).toBe(5); // 500 BPS = 5%
             expect(natsService.publish).toHaveBeenCalledWith(
                 "orders.lend.limit",
                 expect.objectContaining({
@@ -216,6 +251,10 @@ describe("Orders Flow Integration", () => {
             jest.spyOn(orderRepository, "create").mockReturnValue(
                 expectedOrder,
             );
+            jest.spyOn(
+                orderRepository,
+                "hasCounterpartyOrders",
+            ).mockResolvedValue(true);
 
             const result = await ordersService.createLendMarketOrder(
                 dto,
@@ -223,8 +262,7 @@ describe("Orders Flow Integration", () => {
                 MOCK_IDS.privyUserId,
             );
 
-            expect(result.statusCode).toBe(HttpStatus.CREATED);
-            expect(result.data.rate).toBe(0);
+            expect(result.rate).toBe(0);
             expect(natsService.publish).toHaveBeenCalledWith(
                 "orders.lend.market",
                 expect.anything(),
@@ -276,8 +314,7 @@ describe("Orders Flow Integration", () => {
                 MOCK_IDS.privyUserId,
             );
 
-            expect(result.statusCode).toBe(HttpStatus.CREATED);
-            expect(result.data.side).toBe(OrderSide.Borrow);
+            expect(result.side).toBe(OrderSide.Borrow);
             expect(natsService.publish).toHaveBeenCalledWith(
                 "orders.borrow.limit",
                 expect.anything(),
@@ -323,9 +360,9 @@ describe("Orders Flow Integration", () => {
                 status: OrderStatus.Cancelled,
             };
 
-            jest.spyOn(orderRepository, "getOpenOrders").mockResolvedValue([
+            jest.spyOn(orderRepository, "getOrderById").mockResolvedValue(
                 openOrder,
-            ]);
+            );
             jest.spyOn(
                 orderRepository,
                 "findAccountByWallet",
@@ -350,7 +387,7 @@ describe("Orders Flow Integration", () => {
         });
 
         it("should reject cancel for non-existent order", async () => {
-            jest.spyOn(orderRepository, "getOpenOrders").mockResolvedValue([]);
+            jest.spyOn(orderRepository, "getOrderById").mockResolvedValue(null);
 
             await expect(
                 ordersService.cancelOrder(
@@ -366,9 +403,9 @@ describe("Orders Flow Integration", () => {
                 accountId: "other-account",
             });
 
-            jest.spyOn(orderRepository, "getOpenOrders").mockResolvedValue([
+            jest.spyOn(orderRepository, "getOrderById").mockResolvedValue(
                 openOrder,
-            ]);
+            );
             jest.spyOn(
                 orderRepository,
                 "findAccountByWallet",

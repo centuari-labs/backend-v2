@@ -5,14 +5,11 @@ import {
     Get,
     Param,
     ParseIntPipe,
-    UsePipes,
-    ValidationPipe,
 } from "@nestjs/common";
 import { FaucetService } from "./faucet.service";
 import { RequestTokenDto, FaucetResponseDto } from "./dto/faucet.dto";
 
 @Controller("faucet")
-@UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
 export class FaucetController {
     constructor(private readonly faucetService: FaucetService) {}
 

@@ -612,7 +612,11 @@ export class PortfolioService {
         );
         const portfolioBalance = safeBigInt(portfolioBalanceRaw);
 
-        if (totalFees > portfolioBalance) {
+        const lockedAmount = await this.getLockedAmount(accountId, assetId);
+
+        const availableBalance = portfolioBalance - lockedAmount;
+
+        if (totalFees > availableBalance) {
             const token = await this.tokensService.getTokenByAssetId(assetId);
             throw new BadRequestException(
                 `Insufficient ${token.symbol} balance to cover borrow fees. Please deposit some ${token.symbol} first to cover settlement and trade fees.`,

@@ -1,6 +1,7 @@
 import { Test, TestingModule } from "@nestjs/testing";
 import { EventsGateway } from "../../core/websocket/websocket.gateway";
 import { NatsService } from "../../core/nats/nats.service";
+import { OrderRepository } from "../../orders/repositories/order.repository";
 import {
     OrderSide,
     OrderStatus,
@@ -38,10 +39,17 @@ describe("WebSocket Recent Trades Integration", () => {
             },
         );
 
+        const mockOrderRepo = {
+            findActiveLimitOrdersForOrderbook: jest.fn().mockResolvedValue([]),
+            findOrderForTracking: jest.fn().mockResolvedValue(null),
+            findActiveOrderIdsByAsset: jest.fn().mockResolvedValue([]),
+        };
+
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 EventsGateway,
                 { provide: NatsService, useValue: mockNats },
+                { provide: OrderRepository, useValue: mockOrderRepo },
             ],
         }).compile();
 
@@ -70,6 +78,7 @@ describe("WebSocket Recent Trades Integration", () => {
     });
 
     afterEach(() => {
+        gateway.onModuleDestroy();
         jest.clearAllMocks();
     });
 
@@ -171,8 +180,8 @@ describe("WebSocket Recent Trades Integration", () => {
     });
 
     describe("Orderbook subscription", () => {
-        it("should join orderbook room on subscribe", () => {
-            const result = gateway.handleSubscribeOrderbook(mockClient, {
+        it("should join orderbook room on subscribe", async () => {
+            const result = await gateway.handleSubscribeOrderbook(mockClient, {
                 assetId: TEST_ASSET_ID,
             });
 
@@ -199,7 +208,7 @@ describe("WebSocket Recent Trades Integration", () => {
             });
         });
 
-        it("should send cached orderbook on subscribe", () => {
+        it("should send cached orderbook on subscribe", async () => {
             // Populate orderbook cache via NATS order creation
             const ordersCallback = natsCallbacks.get("orders.>");
             if (ordersCallback) {
@@ -224,7 +233,7 @@ describe("WebSocket Recent Trades Integration", () => {
             }
 
             // Subscribe should return cached orderbook
-            gateway.handleSubscribeOrderbook(mockClient, {
+            await gateway.handleSubscribeOrderbook(mockClient, {
                 assetId: TEST_ASSET_ID,
             });
 

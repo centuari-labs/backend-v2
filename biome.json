@@ -28,7 +28,16 @@
             }
         }
     },
-    "files": {},
+    "files": {
+        "includes": [
+            "**",
+            "!**/dist",
+            "!**/node_modules",
+            "!**/build",
+            "!**/coverage",
+            "!**/postman"
+        ]
+    },
     "assist": {
         "actions": {
             "source": {

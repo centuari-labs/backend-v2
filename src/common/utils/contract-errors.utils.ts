@@ -15,8 +15,7 @@ const CONTRACT_ERRORS: Record<string, string> = {
     Unauthorized: "Unauthorized: caller does not have permission.",
     ZeroAddress: "Invalid address provided.",
     InvalidAmount: "Invalid amount. Please check the value and try again.",
-    ContractPaused:
-        "The contract is currently paused. Please try again later.",
+    ContractPaused: "The contract is currently paused. Please try again later.",
 
     // ── Centuari ────────────────────────────────────────────────────────
     InvalidMaturity: "Invalid maturity date.",
@@ -32,8 +31,7 @@ const CONTRACT_ERRORS: Record<string, string> = {
     EmptyBatch: "Empty batch provided.",
 
     // ── OpenZeppelin ────────────────────────────────────────────────────
-    EnforcedPause:
-        "The contract is currently paused. Please try again later.",
+    EnforcedPause: "The contract is currently paused. Please try again later.",
     ReentrancyGuardReentrantCall: "Transaction conflict. Please try again.",
     AccessControlUnauthorizedAccount:
         "Unauthorized: insufficient role permissions.",
@@ -71,8 +69,7 @@ export function parseContractError(
     isKnown: boolean;
 } {
     const resolve = (name: string): { message: string; isKnown: true } => ({
-        message:
-            overrides?.[name] ?? CONTRACT_ERRORS[name] ?? name,
+        message: overrides?.[name] ?? CONTRACT_ERRORS[name] ?? name,
         isKnown: true,
     });
 

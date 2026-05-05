@@ -21,6 +21,7 @@ import {
     MAKER_FEE_RATE_BPS,
     TAKER_FEE_RATE_BPS,
 } from "./constants/order.constants";
+import { DataSource } from "typeorm";
 import type {
     BaseCreateOrderDto,
     CreateLimitOrderDto,
@@ -42,6 +43,8 @@ import {
     orderSchema,
     MatchingEngineOrder,
 } from "./matching-engine/order.schema";
+import { UpdateOrderDto } from "./dto/update-order.dto";
+import { OrderMarket } from "./entities/order-market.entity";
 
 const MIN_HEALTH_FACTOR = 1;
 
@@ -51,6 +54,23 @@ interface PreparedOrderContext {
     quantityBaseUnits: string;
     settlementFeeBaseUnits: string;
     estimatedTradeFeeBaseUnits: string;
+}
+
+interface MatchingEngineOrderPayload {
+    orderId: string;
+    walletAddress: string;
+    loanToken: string;
+    assetId: string;
+    markets: { marketId: string; maturity: number }[];
+    timestamp: number;
+    side: OrderSide;
+    type: OrderType;
+    status: OrderStatus;
+    originalAmount: string;
+    remainingAmount: string;
+    settlementFeeAmount: string;
+    remainingSettlementFeeAmount: string;
+    rate?: number;
 }
 
 @Injectable()
@@ -64,6 +84,7 @@ export class OrdersService {
         private readonly priceService: PriceService,
         private readonly marketRepository: MarketRepositories,
         private readonly portfolioService: PortfolioService,
+        private readonly dataSource: DataSource,
     ) {}
 
     async getOrCreateAccount(
@@ -239,6 +260,118 @@ export class OrdersService {
         await this.publishCancelOrderToNats(orderId, walletAddress);
 
         return updatedOrder;
+    }
+
+    async updateOrder(
+        orderId: string,
+        walletAddress: string,
+        dto: UpdateOrderDto,
+    ): Promise<Order> {
+        return this.dataSource.transaction(async (manager) => {
+            const orderRepo = manager.getRepository(Order);
+            const orderMarketRepo = manager.getRepository(OrderMarket);
+
+            const order = await orderRepo.findOne({ where: { id: orderId } });
+            if (!order) {
+                throw new NotFoundException(
+                    `Order with ID ${orderId} not found`,
+                );
+            }
+
+            const account =
+                await this.orderRepository.findAccountByWallet(walletAddress);
+            if (!account || order.accountId !== account.id) {
+                throw new ForbiddenException("You do not own this order");
+            }
+
+            if (
+                order.status !== OrderStatus.Open &&
+                order.status !== OrderStatus.PartiallyFilled
+            ) {
+                throw new BadRequestException(
+                    "Order can only be updated when status is open or partially filled",
+                );
+            }
+
+            const decimals = await this.tokensService.getTokenDecimalsByAssetId(
+                order.assetId,
+            );
+            if (decimals == null) {
+                throw new BadRequestException("Token decimals not configured");
+            }
+
+            const newQuantityBaseUnits = humanToBaseUnits(dto.amount, decimals);
+            const filledQty = BigInt(order.filledQuantity);
+
+            if (BigInt(newQuantityBaseUnits) <= filledQty) {
+                throw new BadRequestException(
+                    "New quantity must be greater than the already filled quantity",
+                );
+            }
+
+            const settlementFee = await this.computeSettlementFee(
+                order.assetId,
+                dto.amount,
+                decimals,
+            );
+
+            if (order.side === OrderSide.Borrow) {
+                const assetPrice = await this.priceService.getPrice(
+                    order.assetId,
+                );
+                if (assetPrice == null || assetPrice <= 0) {
+                    throw new BadRequestException(
+                        "Price not available for this asset",
+                    );
+                }
+                const newOrderUsd = Number(dto.amount) * assetPrice;
+
+                const hfResult =
+                    await this.portfolioService.getHealthFactorForAccount(
+                        order.accountId,
+                        {
+                            additionalBorrowUsd: newOrderUsd,
+                            includeOpenOrders: true,
+                        },
+                    );
+
+                if (
+                    hfResult.healthFactor !== HEALTH_FACTOR_NO_DEBT &&
+                    Number.isFinite(hfResult.healthFactor) &&
+                    hfResult.healthFactor < MIN_HEALTH_FACTOR
+                ) {
+                    throw new BadRequestException(
+                        "Update would reduce health factor below 1",
+                    );
+                }
+            }
+
+            order.quantity = newQuantityBaseUnits;
+            order.settlementFee = settlementFee;
+            order.rate = dto.rate;
+            order.autoRollover = dto.autoRollover ?? order.autoRollover;
+            order.status =
+                filledQty > 0n ? OrderStatus.PartiallyFilled : OrderStatus.Open;
+
+            const updatedOrder = await orderRepo.save(order);
+
+            await orderMarketRepo.delete({ orderId });
+            for (const marketId of dto.marketIds) {
+                await orderMarketRepo.save({
+                    orderId: updatedOrder.id,
+                    marketId,
+                });
+            }
+
+            const engineOrder = await this.buildMatchingEngineOrder(
+                updatedOrder,
+                { marketIds: dto.marketIds },
+                walletAddress,
+            );
+            await this.natsService.publish(NATS_SUBJECTS.UPDATE, engineOrder);
+
+            return updatedOrder;
+        });
     }
 
     private async prepareOrder(
@@ -458,37 +591,34 @@ export class OrdersService {
         );
 
         return {
-            statusCode: HttpStatus.CREATED,
-            data: {
-                orderId: order.id,
-                walletAddress: walletAddress,
-                assetId: dto.assetId,
-                markets,
-                timestamp: new Date(order.createdAt).getTime(),
-                side: order.side,
-                type: order.type,
-                status: order.status,
-                originalAmount: dto.amount,
-                settlementFeeAmount: baseUnitsToHuman(
-                    order.settlementFee,
-                    decimals!,
-                ),
-                estimatedTradeFeeAmount: baseUnitsToHuman(
-                    estimatedTradeFeeBaseUnits,
-                    decimals!,
-                ),
-                // order.rate is stored as basis points in the DB; expose percentage in responses
-                rate: toPercentage(order.rate),
-                autoRollover: order.autoRollover,
-                createdAt: order.createdAt,
-                updatedAt: order.updatedAt,
-            },
+            orderId: order.id,
+            walletAddress: walletAddress,
+            assetId: dto.assetId,
+            markets,
+            timestamp: new Date(order.createdAt).getTime(),
+            side: order.side,
+            type: order.type,
+            status: order.status,
+            originalAmount: dto.amount,
+            settlementFeeAmount: baseUnitsToHuman(
+                order.settlementFee,
+                decimals!,
+            ),
+            estimatedTradeFeeAmount: baseUnitsToHuman(
+                estimatedTradeFeeBaseUnits,
+                decimals!,
+            ),
+            // order.rate is stored as basis points in the DB; expose percentage in responses
+            rate: toPercentage(order.rate),
+            autoRollover: order.autoRollover,
+            createdAt: order.createdAt,
+            updatedAt: order.updatedAt,
         };
     }
 
     private async buildMatchingEngineOrder(
         order: Order,
-        dto: BaseCreateOrderDto,
+        dto: { marketIds: string[] },
         walletAddress: string,
     ): Promise<MatchingEngineOrder> {
         const token = await this.tokensService.getTokenByAssetId(order.assetId);
@@ -506,7 +636,7 @@ export class OrdersService {
         const filledQuantity = BigInt(order.filledQuantity);
         const remaining = quantity - filledQuantity;
 
-        const basePayload: any = {
+        const basePayload: MatchingEngineOrderPayload = {
             orderId: order.id,
             walletAddress,
             loanToken,

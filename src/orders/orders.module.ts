@@ -12,6 +12,7 @@ import { OrderMarket } from "./entities/order-market.entity";
 import { Account } from "./entities/account.entity";
 import { Token } from "../tokens/entities/token.entity";
 import { Market } from "../market/entities/market.entity";
+import { WalletThrottlerGuard } from "../common/guards/wallet-throttler.guard";
 import { OrdersController } from "./orders.controller";
 import { OrdersService } from "./orders.service";
 import { OrderRepository } from "./repositories/order.repository";
@@ -21,7 +22,7 @@ import { OrdersWorker } from "./orders.worker";
     imports: [
         TypeOrmModule.forFeature([Order, OrderMarket, Account, Token, Market]),
         ConfigModule,
-        CoreModule,
+        forwardRef(() => CoreModule),
         PriceModule,
         TokensModule,
         forwardRef(() => MarketModule),
@@ -29,7 +30,12 @@ import { OrdersWorker } from "./orders.worker";
         FaucetModule,
     ],
     controllers: [OrdersController],
-    providers: [OrdersService, OrderRepository, OrdersWorker],
+    providers: [
+        OrdersService,
+        OrderRepository,
+        OrdersWorker,
+        WalletThrottlerGuard,
+    ],
     exports: [OrdersService, OrderRepository],
 })
 export class OrdersModule {}

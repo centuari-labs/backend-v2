@@ -6,8 +6,6 @@ import {
     Patch,
     Post,
     UseGuards,
-    UsePipes,
-    ValidationPipe,
 } from "@nestjs/common";
 import { AuthService } from "./auth.service";
 import type {
@@ -46,7 +44,6 @@ export class AuthController {
 
     @Post("redeem-access-code")
     @UseGuards(AuthGuard)
-    @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
     async redeemAccessCode(
         @CurrentUser() user: AuthUser,
         @Body() body: RedeemAccessCodeDto,
@@ -67,7 +64,6 @@ export class AuthController {
 
     @Post("access-codes/generate")
     @UseGuards(AdminSecretGuard)
-    @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
     async generateAccessCodes(@Body() body: GenerateAccessCodesDto) {
         return this.authService.generateAccessCodes(body);
     }

@@ -7,16 +7,19 @@ import {
 } from "@nestjs/common";
 import { parseUnits } from "viem";
 import type { TransactionReceipt } from "viem";
+import { DataSource } from "typeorm";
 import { ViemService } from "../core/viem/viem.service";
 import { ChainConfigService } from "../core/chain-config/chain-config.service";
 import { TokensService } from "../tokens/tokens.service";
 import { PortfolioRepository } from "../portfolio/repositories/portfolio.repository";
 import { PortfolioService } from "../portfolio/portfolio.service";
 import { OrderRepository } from "../orders/repositories/order.repository";
+import { Portfolio } from "../portfolio/entities/portfolio.entity";
 import { HEALTH_FACTOR_NO_DEBT } from "../portfolio/helpers/health-factor.helpers";
 import { treasuryAbi } from "../../abis/treasury";
 import { humanToBaseUnits } from "../common/utils/number.utils";
 import { parseContractError } from "../common/utils/contract-errors.utils";
+import { withTransaction } from "../common/utils/transaction.utils";
 import type {
     WithdrawRequestDto,
     WithdrawResponseDto,
@@ -27,6 +30,7 @@ export class WithdrawService {
     private readonly logger = new Logger(WithdrawService.name);
 
     constructor(
+        private readonly dataSource: DataSource,
         private readonly viemService: ViemService,
         private readonly tokensService: TokensService,
         private readonly portfolioRepository: PortfolioRepository,
@@ -64,153 +68,140 @@ export class WithdrawService {
         const amountInBaseStr = humanToBaseUnits(amount, decimals);
         const amountBaseNum = Number(amountInBaseStr);
 
-        // Lock all portfolio rows for this account + asset (both collateral and non-collateral)
-        const queryRunner =
-            this.portfolioRepository.manager.connection.createQueryRunner();
-        await queryRunner.connect();
-        await queryRunner.startTransaction();
-
         try {
-            const portfolioRows = await queryRunner.query(
-                `SELECT id, amount, is_collateral FROM portfolio
-                 WHERE account_id = $1 AND asset_id = $2
-                 FOR UPDATE`,
-                [account.id, assetId],
-            );
+            return await withTransaction(this.dataSource, async (manager) => {
+                // Lock all portfolio rows for this account + asset (both collateral and non-collateral)
+                const portfolioRows = await manager
+                    .createQueryBuilder(Portfolio, "p")
+                    .setLock("pessimistic_write")
+                    .where("p.accountId = :accountId", {
+                        accountId: account.id,
+                    })
+                    .andWhere("p.assetId = :assetId", { assetId })
+                    .getMany();
 
-            if (!portfolioRows || portfolioRows.length === 0) {
-                throw new BadRequestException(
-                    "No balance found for this asset",
-                );
-            }
-
-            // Separate collateral and non-collateral rows
-            const nonCollateralRow = portfolioRows.find(
-                (r: any) => !r.is_collateral,
-            );
-            const collateralRow = portfolioRows.find(
-                (r: any) => r.is_collateral,
-            );
-
-            const nonCollateralAmount = nonCollateralRow
-                ? Number(nonCollateralRow.amount)
-                : 0;
-            const collateralAmount = collateralRow
-                ? Number(collateralRow.amount)
-                : 0;
-            const totalAvailable = nonCollateralAmount + collateralAmount;
-
-            if (amountBaseNum > totalAvailable) {
-                throw new BadRequestException(
-                    `Insufficient balance. Available: ${totalAvailable}, Requested: ${amountNum}`,
-                );
-            }
-
-            // Deduct from non-collateral first, then collateral
-            const nonCollateralDeduction = Math.min(
-                amountBaseNum,
-                nonCollateralAmount,
-            );
-            const collateralDeduction = amountBaseNum - nonCollateralDeduction;
-
-            // Health factor check when touching collateral
-            if (collateralDeduction > 0) {
-                const simulated =
-                    await this.portfolioService.simulateHealthFactorAfterWithdrawal(
-                        account.id,
-                        assetId,
-                        collateralDeduction.toString(),
-                    );
-
-                if (
-                    simulated.healthFactor !== HEALTH_FACTOR_NO_DEBT &&
-                    simulated.healthFactor <= 1.0
-                ) {
+                if (!portfolioRows || portfolioRows.length === 0) {
                     throw new BadRequestException(
-                        `Withdrawal would reduce health factor below 1.0 (projected: ${simulated.healthFactor.toFixed(4)})`,
+                        "No balance found for this asset",
                     );
                 }
-            }
 
-            // Call Treasury.withdraw on-chain
-            const amountInBaseUnits = parseUnits(amount, decimals);
-            this.logger.log(
-                `Executing withdraw: token=${token.tokenAddress}, to=${walletAddress}, amount=${amountInBaseUnits}`,
-            );
+                // Separate collateral and non-collateral rows
+                const nonCollateralRow = portfolioRows.find(
+                    (p) => !p.isCollateral,
+                );
+                const collateralRow = portfolioRows.find((p) => p.isCollateral);
 
-            const receipt = (await this.viemService.writeContract(
-                this.chainConfig.chainId,
-                this.chainConfig.operatorPrivateKey,
-                this.chainConfig.treasuryAddress,
-                treasuryAbi,
-                "withdraw",
-                [token.tokenAddress, walletAddress, amountInBaseUnits],
-                { waitForReceipt: true },
-            )) as TransactionReceipt;
+                const nonCollateralAmount = nonCollateralRow
+                    ? Number(nonCollateralRow.amount)
+                    : 0;
+                const collateralAmount = collateralRow
+                    ? Number(collateralRow.amount)
+                    : 0;
+                const lockedAmount = nonCollateralRow
+                    ? Number(nonCollateralRow.lockedAmount ?? 0)
+                    : 0;
+                const totalAvailable =
+                    nonCollateralAmount + collateralAmount - lockedAmount;
 
-            // Deduct from non-collateral row
-            if (nonCollateralDeduction > 0 && nonCollateralRow) {
-                const newAmount = nonCollateralAmount - nonCollateralDeduction;
-                if (newAmount <= 0) {
-                    await queryRunner.query(
-                        "DELETE FROM portfolio WHERE id = $1",
-                        [nonCollateralRow.id],
-                    );
-                } else {
-                    await queryRunner.query(
-                        "UPDATE portfolio SET amount = $1, updated_at = NOW() WHERE id = $2",
-                        [newAmount.toString(), nonCollateralRow.id],
+                if (amountBaseNum > totalAvailable) {
+                    throw new BadRequestException(
+                        `Insufficient balance. Available: ${totalAvailable}, Requested: ${amountNum}`,
                     );
                 }
-            }
 
-            // Deduct from collateral row
-            if (collateralDeduction > 0 && collateralRow) {
-                const newAmount = collateralAmount - collateralDeduction;
-                if (newAmount <= 0) {
-                    await queryRunner.query(
-                        "DELETE FROM portfolio WHERE id = $1",
-                        [collateralRow.id],
-                    );
-                } else {
-                    await queryRunner.query(
-                        "UPDATE portfolio SET amount = $1, updated_at = NOW() WHERE id = $2",
-                        [newAmount.toString(), collateralRow.id],
-                    );
+                // Deduct from non-collateral first, then collateral
+                const nonCollateralDeduction = Math.min(
+                    amountBaseNum,
+                    nonCollateralAmount,
+                );
+                const collateralDeduction =
+                    amountBaseNum - nonCollateralDeduction;
+
+                // Health factor check when touching collateral
+                if (collateralDeduction > 0) {
+                    const simulated =
+                        await this.portfolioService.simulateHealthFactorAfterWithdrawal(
+                            account.id,
+                            assetId,
+                            collateralDeduction.toString(),
+                        );
+
+                    if (
+                        simulated.healthFactor !== HEALTH_FACTOR_NO_DEBT &&
+                        simulated.healthFactor <= 1.0
+                    ) {
+                        throw new BadRequestException(
+                            `Withdrawal would reduce health factor below 1.0 (projected: ${simulated.healthFactor.toFixed(4)})`,
+                        );
+                    }
                 }
-            }
 
-            await queryRunner.commitTransaction();
+                // Call Treasury.withdraw on-chain
+                const amountInBaseUnits = parseUnits(amount, decimals);
+                this.logger.log(
+                    `Executing withdraw: token=${token.tokenAddress}, to=${walletAddress}, amount=${amountInBaseUnits}`,
+                );
 
-            this.logger.log(
-                `Withdraw successful: txHash=${receipt.transactionHash}, amount=${amount} ${token.symbol}`,
-            );
+                const receipt = (await this.viemService.writeContract(
+                    this.chainConfig.chainId,
+                    this.chainConfig.operatorPrivateKey,
+                    this.chainConfig.treasuryAddress,
+                    treasuryAbi,
+                    "withdraw",
+                    [token.tokenAddress, walletAddress, amountInBaseUnits],
+                    { waitForReceipt: true },
+                )) as TransactionReceipt;
 
-            return {
-                txHash: receipt.transactionHash,
-                status: "success",
-            };
+                // Deduct from non-collateral row
+                if (nonCollateralDeduction > 0 && nonCollateralRow) {
+                    const newAmount =
+                        nonCollateralAmount - nonCollateralDeduction;
+                    if (newAmount <= 0) {
+                        await manager.remove(nonCollateralRow);
+                    } else {
+                        nonCollateralRow.amount = newAmount.toString();
+                        await manager.save(nonCollateralRow);
+                    }
+                }
+
+                // Deduct from collateral row
+                if (collateralDeduction > 0 && collateralRow) {
+                    const newAmount = collateralAmount - collateralDeduction;
+                    if (newAmount <= 0) {
+                        await manager.remove(collateralRow);
+                    } else {
+                        collateralRow.amount = newAmount.toString();
+                        await manager.save(collateralRow);
+                    }
+                }
+
+                this.logger.log(
+                    `Withdraw successful: txHash=${receipt.transactionHash}, amount=${amount} ${token.symbol}`,
+                );
+
+                return {
+                    txHash: receipt.transactionHash,
+                    status: "success",
+                };
+            });
         } catch (error: any) {
-            await queryRunner.rollbackTransaction();
-            if (
-                error instanceof BadRequestException ||
-                error instanceof NotFoundException
-            ) {
+            // Re-throw if it's already a NestJS exception
+            if (error.status >= 400 || error.getStatus) {
                 throw error;
             }
-            this.logger.error(
-                `Withdraw contract call failed: ${error.message}`,
-            );
+
+            this.logger.error(`Withdraw failed: ${error.message}`, error.stack);
+
             const parsed = parseContractError(error.message, {
-                InsufficientFunds:
-                    "Insufficient balance in Treasury to withdraw this amount.",
+                InsufficientFunds: "Insufficient balance for withdrawal.",
             });
+
             if (parsed.isKnown) {
                 throw new BadRequestException(parsed.message);
             }
+
             throw new InternalServerErrorException(parsed.message);
-        } finally {
-            await queryRunner.release();
         }
     }
 }

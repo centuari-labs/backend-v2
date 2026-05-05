@@ -274,9 +274,7 @@ describe("Deposit Tokens Contract (Integration)", () => {
                 (s) =>
                     !(DEPOSIT_TOKEN_PRIORITY as readonly string[]).includes(s),
             );
-            const sorted = [...nonPriority].sort((a, b) =>
-                a.localeCompare(b),
-            );
+            const sorted = [...nonPriority].sort((a, b) => a.localeCompare(b));
             expect(nonPriority).toEqual(sorted);
         });
     });

@@ -705,32 +705,22 @@ describe("PortfolioService", () => {
                 id: mockAccountId,
             });
 
+            // token-uuid-001 is ETH with 18 decimals; quantity = 1000 ETH in base units
             portfolioRepositoryMock.getUserPositions.mockResolvedValue({
                 data: [
                     {
-                        order_id: "order-001",
+                        position_id: "market-001",
+                        market_id: "market-001",
                         asset_id: "token-uuid-001",
                         side: OrderSide.Lend,
                         rate: "5.5",
-                        quantity: "1000",
-                        filled_quantity: "300",
-                        status: OrderStatus.PartiallyFilled,
-                        symbol: "ETH",
-                        name: "Ethereum",
-                        token_address: "0xETH",
+                        quantity: "1000000000000000000000",
+                        base_amount: "1000000000000000000000",
                     },
                 ],
                 total: 1,
             });
 
-            const mockQueryBuilder = {
-                select: jest.fn().mockReturnThis(),
-                where: jest.fn().mockReturnThis(),
-                getMany: jest.fn().mockResolvedValue([mockTokens[0]]),
-            };
-            tokenRepositoryMock.createQueryBuilder.mockReturnValue(
-                mockQueryBuilder as any,
-            );
             priceServiceMock.getPrices.mockReturnValue({
                 "token-uuid-001": 3000,
             });
@@ -748,32 +738,22 @@ describe("PortfolioService", () => {
                 id: mockAccountId,
             });
 
+            // token-uuid-001 is ETH with 18 decimals; quantity = 2 ETH in base units
             portfolioRepositoryMock.getUserPositions.mockResolvedValue({
                 data: [
                     {
-                        order_id: "order-001",
+                        position_id: "market-001",
+                        market_id: "market-001",
                         asset_id: "token-uuid-001",
                         side: OrderSide.Lend,
                         rate: "5.5",
-                        quantity: "2",
-                        filled_quantity: "0.5",
-                        status: OrderStatus.PartiallyFilled,
-                        symbol: "ETH",
-                        name: "Ethereum",
-                        token_address: "0xETH",
+                        quantity: "2000000000000000000",
+                        base_amount: "2000000000000000000",
                     },
                 ],
                 total: 1,
             });
 
-            const mockQueryBuilder = {
-                select: jest.fn().mockReturnThis(),
-                where: jest.fn().mockReturnThis(),
-                getMany: jest.fn().mockResolvedValue([mockTokens[0]]),
-            };
-            tokenRepositoryMock.createQueryBuilder.mockReturnValue(
-                mockQueryBuilder as any,
-            );
             priceServiceMock.getPrices.mockReturnValue({
                 "token-uuid-001": 3000,
             });
@@ -783,7 +763,7 @@ describe("PortfolioService", () => {
                 limit: 10,
             });
 
-            // quantity = 2, price = 3000 → USD = 6000
+            // quantity = 2 ETH, price = 3000 → USD = 6000
             expect(result.data[0].amountInUsd).toBe(6000);
         });
 

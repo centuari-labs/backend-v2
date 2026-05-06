@@ -80,8 +80,8 @@ describe("MarketService", () => {
 
         const result = await service.getMarketSnapshot();
 
-        const btcMarket = result.markets.find((m) => m.asset.symbol === "BTC");
-        const ethMarket = result.markets.find((m) => m.asset.symbol === "ETH");
+        const btcMarket = result.markets.find((m) => m.assetId === "asset1");
+        const ethMarket = result.markets.find((m) => m.assetId === "asset2");
 
         expect(btcMarket).toBeDefined();
         // API exposes human-readable percentages
@@ -161,13 +161,7 @@ describe("MarketService", () => {
         const result = await service.getMarketDetail(assetId);
 
         expect(result).toEqual({
-            asset: {
-                id: mockAsset.id,
-                name: mockAsset.name,
-                symbol: mockAsset.symbol,
-                decimals: mockAsset.decimals,
-                imageUrl: null,
-            },
+            assetId: mockAsset.id,
             collateral_factor: 75,
             total_deposit: "50000.00",
             active_loans: "25000.00",

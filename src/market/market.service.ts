@@ -85,13 +85,7 @@ export class MarketService {
             const rates = rateMap.get(asset.id) || { borrow: 0, lend: 0 };
             const earliest = earliestByAsset.get(asset.id);
             return {
-                asset: {
-                    id: asset.id,
-                    name: asset.name,
-                    symbol: asset.symbol,
-                    decimals: asset.decimals ?? null,
-                    image_url: asset.imageUrl ?? null,
-                },
+                assetId: asset.id,
                 market: {
                     market_id: earliest?.marketId ?? null,
                     maturity: earliest
@@ -120,8 +114,6 @@ export class MarketService {
         }
 
         const price = await this.priceService.getPrice(assetId);
-        const rateMap = await this.orderRepository.getBestRates();
-        const rates = rateMap.get(assetId) || { borrow: 0, lend: 0 };
 
         const rawDeposit =
             await this.marketRepository.getSumDepositByAssetId(assetId);
@@ -143,13 +135,7 @@ export class MarketService {
             3,
         );
         return {
-            asset: {
-                id: asset.id,
-                name: asset.name,
-                symbol: asset.symbol,
-                decimals: asset.decimals ?? null,
-                imageUrl: asset.imageUrl ?? null,
-            },
+            assetId: asset.id,
             collateral_factor: toPercentage(asset.averageLTV),
             total_deposit: totalDepositUSD.toFixed(2),
             active_loans: activeLoansUSD.toFixed(2),

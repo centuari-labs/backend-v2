@@ -1,6 +1,5 @@
 import { IsOptional, IsUUID, IsEnum, IsDateString } from "class-validator";
 import { Transform } from "class-transformer";
-import type { AssetDto } from "../../common/dto/asset.dto";
 import { OrderSide } from "../../orders/constants/order.constants";
 
 export class TransactionHistoryQueryDto {
@@ -35,7 +34,7 @@ export interface TransactionHistoryItem {
     rate: number;
     amount: string;
     fee: string | null;
-    asset: AssetDto;
+    assetId: string;
     maturity: string;
     createdAt: string;
 }

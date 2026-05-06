@@ -10,13 +10,7 @@ describe("MarketResponseDto contract", () => {
             active_loans: "750000.00",
             markets: [
                 {
-                    asset: {
-                        id: "b0000000-0000-0000-0000-000000000001",
-                        name: "USD Coin",
-                        symbol: "USDC",
-                        decimals: 6,
-                        image_url: "https://example.com/usdc.png",
-                    },
+                    assetId: "b0000000-0000-0000-0000-000000000001",
                     market: {
                         market_id: "c0000000-0000-0000-0000-000000000001",
                         maturity: 1748736000,
@@ -42,18 +36,11 @@ describe("MarketResponseDto contract", () => {
     });
 
     describe("MarketItemDto shape", () => {
-        it("asset has id, name, symbol fields", () => {
+        it("item has assetId string", () => {
             const resp = buildMarketResponse();
             const item = resp.markets[0];
-            expect(item.asset).toHaveProperty("id");
-            expect(item.asset).toHaveProperty("name");
-            expect(item.asset).toHaveProperty("symbol");
-        });
-
-        it("asset has image_url", () => {
-            const resp = buildMarketResponse();
-            const item = resp.markets[0];
-            expect(item.asset).toHaveProperty("image_url");
+            expect(typeof item.assetId).toBe("string");
+            expect(item.assetId).toBe("b0000000-0000-0000-0000-000000000001");
         });
 
         it("market has market_id and maturity", () => {
@@ -67,11 +54,7 @@ describe("MarketResponseDto contract", () => {
             const resp = buildMarketResponse({
                 markets: [
                     {
-                        asset: {
-                            id: "b0000000-0000-0000-0000-000000000001",
-                            name: "USD Coin",
-                            symbol: "USDC",
-                        },
+                        assetId: "b0000000-0000-0000-0000-000000000001",
                         market: { market_id: null, maturity: null },
                         borrow_rate: 0,
                         lend_rate: 0,

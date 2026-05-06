@@ -1,7 +1,6 @@
 import { IsOptional, IsEnum, IsDateString, IsUUID } from "class-validator";
 import { Transform } from "class-transformer";
 import { OrderSide, OrderStatus } from "../../orders/constants/order.constants";
-import type { AssetDto } from "../../common/dto/asset.dto";
 
 export class OpenOrdersQueryDto {
     @IsOptional()
@@ -43,7 +42,7 @@ export interface OpenOrderItem {
     status: string;
     cancelReason: string | null;
     maturity: string | null;
-    asset: AssetDto;
+    assetId: string;
     createdAt: string;
 }
 
@@ -57,11 +56,6 @@ export interface RawOpenOrderRow {
     status: string;
     cancel_reason: string | null;
     asset_id: string;
-    name: string;
-    symbol: string;
-    image_url: string | null;
-    decimals: string;
-    token_address: string;
     maturity: string | null;
     created_at: string;
 }

@@ -1,6 +1,5 @@
 import { IsOptional, IsUUID, IsEnum, IsDateString } from "class-validator";
 import { Transform } from "class-transformer";
-import type { AssetDto } from "../../common/dto/asset.dto";
 import { OrderSide, OrderStatus } from "../../orders/constants/order.constants";
 
 export class OrderHistoryQueryDto {
@@ -42,7 +41,7 @@ export interface OrderHistoryItem {
     filledQuantity: string | null;
     status: string;
     cancelReason: string | null;
-    asset: AssetDto;
+    assetId: string;
     fee: string | null;
     createdAt: string;
     maturity: string | null;

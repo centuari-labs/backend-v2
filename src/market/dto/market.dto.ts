@@ -1,14 +1,5 @@
 export class MarketItemDto {
-    asset: {
-        /**
-         * Asset identifier (Token.id UUID).
-         */
-        id: string;
-        name: string;
-        symbol: string;
-        decimals?: number | null;
-        image_url?: string | null;
-    };
+    assetId: string;
     /**
      * Single earliest-maturity market for this asset (market_id and maturity), or null if none.
      * maturity is Unix timestamp in seconds.
@@ -41,13 +32,7 @@ export class MarketResponseDto {
 }
 
 export class MarketDetailResponseDto {
-    asset: {
-        id: string;
-        name: string;
-        symbol: string;
-        decimals: number | null;
-        imageUrl: string | null;
-    };
+    assetId: string;
     collateral_factor: number;
     total_deposit: string;
     active_loans: string;

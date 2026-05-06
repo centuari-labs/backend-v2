@@ -123,14 +123,12 @@ export class MyPositionQueryDto {
 
 export class MyPositionItemDto {
     id: string;
+    assetId: string;
     marketId: string;
-    symbol: string;
-    name: string;
     shares: number;
     baseAmount: number;
     amountInUsd: number;
     isCollateral: boolean;
-    imageUrl?: string | null;
     side: "LEND" | "BORROW";
     maturity?: number | null;
     apr: number;

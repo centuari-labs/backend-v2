@@ -212,13 +212,7 @@ describe("Response Contract Integration", () => {
                 active_loans: "750000.00",
                 markets: [
                     {
-                        asset: {
-                            id: "asset-1",
-                            name: "USD Coin",
-                            symbol: "USDC",
-                            decimals: 6,
-                            imageUrl: null,
-                        },
+                        assetId: "asset-1",
                         market: {
                             market_id: "market-1",
                             maturity: 1748736000,

@@ -59,7 +59,7 @@ import {
     type HealthFactorResult,
     type HealthFactorOptions,
 } from "./helpers/health-factor.helpers";
-import { OrderSide, OrderStatus } from "../orders/constants/order.constants";
+import { OrderSide } from "../orders/constants/order.constants";
 
 @Injectable()
 export class PortfolioService {
@@ -728,9 +728,19 @@ export class PortfolioService {
 
         const allPrices = this.priceService.getPrices();
 
+        const uniqueAssetIds = [...new Set(positions.map((p) => p.asset_id))];
+        const decimalsMap = new Map<string, number>();
+        await Promise.all(
+            uniqueAssetIds.map(async (id) => {
+                const d =
+                    await this.tokensService.getTokenDecimalsByAssetId(id);
+                decimalsMap.set(id, d ?? 0);
+            }),
+        );
+
         const data = positions.map((position) => {
             const price = allPrices[position.asset_id.toLowerCase()];
-            const decimals = Number(position.decimals) || 0;
+            const decimals = decimalsMap.get(position.asset_id) ?? 0;
             const quantityHuman = Number(
                 baseUnitsToHuman(position.quantity, decimals),
             );
@@ -742,13 +752,10 @@ export class PortfolioService {
                 id: position.position_id,
                 assetId: position.asset_id,
                 marketId: position.market_id,
-                symbol: position.symbol,
-                name: position.name,
                 shares: quantityHuman,
                 baseAmount: baseAmountHuman,
                 amountInUsd: calculateUsdAmount(quantityHuman, price ?? 0),
                 isCollateral: false,
-                imageUrl: position.image_url ?? null,
                 side: position.side as "LEND" | "BORROW",
                 maturity: position.maturity
                     ? new Date(position.maturity).getTime() / 1000
@@ -830,37 +837,40 @@ export class PortfolioService {
                 },
             );
 
-        const items: OrderHistoryItem[] = rows.map((row) => ({
-            id: row.id,
-            side: row.side,
-            orderType: row.order_type,
-            rate: toPercentage(Number(row.rate)),
-            amount: baseUnitsToHuman(row.amount, Number(row.decimals) || 0),
-            filledQuantity: row.filled_quantity
-                ? baseUnitsToHuman(
-                      row.filled_quantity,
-                      Number(row.decimals) || 0,
-                  )
-                : null,
-            status: row.status,
-            cancelReason: row.cancel_reason ?? null,
-            asset: {
-                id: row.asset_id,
-                name: row.name,
-                symbol: row.symbol,
-                decimals: Number(row.decimals) || 0,
-                imageUrl: row.image_url,
-                tokenAddress: row.token_address,
-            },
-            maturity: row.maturity
-                ? new Date(row.maturity).toISOString()
-                : null,
-            fee:
-                row.total_fee && row.total_fee !== "0"
-                    ? baseUnitsToHuman(row.total_fee, Number(row.decimals) || 0)
+        const uniqueAssetIds = [...new Set(rows.map((r) => r.asset_id))];
+        const decimalsMap = new Map<string, number>();
+        await Promise.all(
+            uniqueAssetIds.map(async (id) => {
+                const d =
+                    await this.tokensService.getTokenDecimalsByAssetId(id);
+                decimalsMap.set(id, d ?? 0);
+            }),
+        );
+
+        const items: OrderHistoryItem[] = rows.map((row) => {
+            const decimals = decimalsMap.get(row.asset_id) ?? 0;
+            return {
+                id: row.id,
+                side: row.side,
+                orderType: row.order_type,
+                rate: toPercentage(Number(row.rate)),
+                amount: baseUnitsToHuman(row.amount, decimals),
+                filledQuantity: row.filled_quantity
+                    ? baseUnitsToHuman(row.filled_quantity, decimals)
                     : null,
-            createdAt: new Date(row.created_at).toISOString(),
-        }));
+                status: row.status,
+                cancelReason: row.cancel_reason ?? null,
+                assetId: row.asset_id,
+                maturity: row.maturity
+                    ? new Date(row.maturity).toISOString()
+                    : null,
+                fee:
+                    row.total_fee && row.total_fee !== "0"
+                        ? baseUnitsToHuman(row.total_fee, decimals)
+                        : null,
+                createdAt: new Date(row.created_at).toISOString(),
+            };
+        });
 
         return createPaginatedResponse(
             items,
@@ -895,33 +905,36 @@ export class PortfolioService {
                 },
             );
 
-        const items: OpenOrderItem[] = rows.map((row) => ({
-            id: row.id,
-            side: row.side,
-            orderType: row.order_type,
-            rate: toPercentage(Number(row.rate)),
-            amount: baseUnitsToHuman(row.amount, Number(row.decimals) || 0),
-            filledQuantity: row.filled_quantity
-                ? baseUnitsToHuman(
-                      row.filled_quantity,
-                      Number(row.decimals) || 0,
-                  )
-                : null,
-            status: row.status,
-            cancelReason: row.cancel_reason ?? null,
-            maturity: row.maturity
-                ? new Date(row.maturity).toISOString()
-                : null,
-            asset: {
-                id: row.asset_id,
-                name: row.name,
-                symbol: row.symbol,
-                decimals: Number(row.decimals) || 0,
-                imageUrl: row.image_url,
-                tokenAddress: row.token_address,
-            },
-            createdAt: new Date(row.created_at).toISOString(),
-        }));
+        const uniqueAssetIds = [...new Set(rows.map((r) => r.asset_id))];
+        const decimalsMap = new Map<string, number>();
+        await Promise.all(
+            uniqueAssetIds.map(async (id) => {
+                const d =
+                    await this.tokensService.getTokenDecimalsByAssetId(id);
+                decimalsMap.set(id, d ?? 0);
+            }),
+        );
+
+        const items: OpenOrderItem[] = rows.map((row) => {
+            const decimals = decimalsMap.get(row.asset_id) ?? 0;
+            return {
+                id: row.id,
+                side: row.side,
+                orderType: row.order_type,
+                rate: toPercentage(Number(row.rate)),
+                amount: baseUnitsToHuman(row.amount, decimals),
+                filledQuantity: row.filled_quantity
+                    ? baseUnitsToHuman(row.filled_quantity, decimals)
+                    : null,
+                status: row.status,
+                cancelReason: row.cancel_reason ?? null,
+                maturity: row.maturity
+                    ? new Date(row.maturity).toISOString()
+                    : null,
+                assetId: row.asset_id,
+                createdAt: new Date(row.created_at).toISOString(),
+            };
+        });
 
         return createPaginatedResponse(
             items,
@@ -1300,9 +1313,19 @@ export class PortfolioService {
                 },
             );
 
+        const uniqueAssetIds = [...new Set(rows.map((r) => r.asset_id))];
+        const decimalsMap = new Map<string, number>();
+        await Promise.all(
+            uniqueAssetIds.map(async (id) => {
+                const d =
+                    await this.tokensService.getTokenDecimalsByAssetId(id);
+                decimalsMap.set(id, d ?? 0);
+            }),
+        );
+
         const items: TransactionHistoryItem[] = rows.map((row) => {
             const isLender = row.lender_account_id === account.id;
-            const decimals = Number(row.decimals) || 0;
+            const decimals = decimalsMap.get(row.asset_id) ?? 0;
 
             const totalFee = isLender
                 ? (
@@ -1325,14 +1348,7 @@ export class PortfolioService {
                     totalFee !== "0"
                         ? baseUnitsToHuman(totalFee, decimals)
                         : null,
-                asset: {
-                    id: row.asset_id,
-                    name: row.name,
-                    symbol: row.symbol,
-                    decimals,
-                    imageUrl: row.image_url,
-                    tokenAddress: row.token_address,
-                },
+                assetId: row.asset_id,
                 maturity: new Date(row.maturity).toISOString(),
                 createdAt: new Date(row.created_at).toISOString(),
             };

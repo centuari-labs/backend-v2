@@ -14,11 +14,6 @@ export interface RawPosition {
     quantity: string;
     base_amount: string;
     status: OrderStatus;
-    symbol: string;
-    name: string;
-    token_address: string;
-    image_url: string | null;
-    decimals: number;
     maturity: Date | null;
     created_at: Date;
 }
@@ -33,11 +28,6 @@ export interface RawOrderHistoryRow {
     status: string;
     cancel_reason: string | null;
     asset_id: string;
-    name: string;
-    symbol: string;
-    image_url: string | null;
-    decimals: string;
-    token_address: string;
     maturity: string | null;
     total_fee: string;
     created_at: string;
@@ -56,11 +46,6 @@ export interface RawTransactionHistoryRow {
     lender_settlement_fee: string;
     borrower_settlement_fee: string;
     asset_id: string;
-    name: string;
-    symbol: string;
-    image_url: string | null;
-    decimals: string;
-    token_address: string;
 }
 
 export interface LendPositionForApr {
@@ -223,26 +208,15 @@ export class PortfolioRepository extends Repository<Portfolio> {
                     "rate",
                 )
                 .addSelect("SUM(lp.shares)", "quantity")
-                .addSelect("t.symbol", "symbol")
-                .addSelect("t.name", "name")
-                .addSelect("t.token_address", "token_address")
-                .addSelect("t.image_url", "image_url")
-                .addSelect("COALESCE(t.decimals, 0)", "decimals")
                 .addSelect("SUM(lp.amount)", "base_amount")
                 .addSelect("m.maturity", "maturity")
                 .addSelect("MIN(lp.created_at)", "created_at")
                 .from("lend_positions", "lp")
-                .innerJoin("assets", "t", "lp.asset_id = t.id")
                 .leftJoin("markets", "m", "lp.market_id = m.id")
                 .where("lp.account_id = :accountId", { accountId })
                 .andWhere("lp.shares > 0")
                 .groupBy("lp.market_id")
                 .addGroupBy("lp.asset_id")
-                .addGroupBy("t.symbol")
-                .addGroupBy("t.name")
-                .addGroupBy("t.token_address")
-                .addGroupBy("t.image_url")
-                .addGroupBy("t.decimals")
                 .addGroupBy("m.maturity");
 
             if (assetId) {
@@ -281,26 +255,15 @@ export class PortfolioRepository extends Repository<Portfolio> {
                     "rate",
                 )
                 .addSelect("SUM(bp.debt)", "quantity")
-                .addSelect("t.symbol", "symbol")
-                .addSelect("t.name", "name")
-                .addSelect("t.token_address", "token_address")
-                .addSelect("t.image_url", "image_url")
-                .addSelect("COALESCE(t.decimals, 0)", "decimals")
                 .addSelect("SUM(bp.amount)", "base_amount")
                 .addSelect("m.maturity", "maturity")
                 .addSelect("MIN(bp.created_at)", "created_at")
                 .from("borrow_positions", "bp")
-                .innerJoin("assets", "t", "bp.asset_id = t.id")
                 .leftJoin("markets", "m", "bp.market_id = m.id")
                 .where("bp.account_id = :accountId", { accountId })
                 .andWhere("bp.debt > 0")
                 .groupBy("bp.market_id")
                 .addGroupBy("bp.asset_id")
-                .addGroupBy("t.symbol")
-                .addGroupBy("t.name")
-                .addGroupBy("t.token_address")
-                .addGroupBy("t.image_url")
-                .addGroupBy("t.decimals")
                 .addGroupBy("m.maturity");
 
             if (assetId) {
@@ -493,8 +456,7 @@ export class PortfolioRepository extends Repository<Portfolio> {
             SELECT o.id, o.side::text, o.type::text as order_type, o.rate,
                    o.quantity as amount, o.filled_quantity, o.status::text,
                    o.cancel_reason::text,
-                   a.id as asset_id, a.name, a.symbol, a.image_url,
-                   COALESCE(a.decimals, 0) as decimals, a.token_address,
+                   o.asset_id,
                    (
                        SELECT m.maturity
                        FROM order_markets om
@@ -506,7 +468,6 @@ export class PortfolioRepository extends Repository<Portfolio> {
                    mf.total_fee,
                    o.created_at
             FROM orders o
-            JOIN assets a ON o.asset_id = a.id
             LEFT JOIN LATERAL (
                 SELECT COALESCE(SUM(
                     CASE WHEN mt.lend_order_market_id = o.id
@@ -594,12 +555,10 @@ export class PortfolioRepository extends Repository<Portfolio> {
             SELECT o.id, o.side::text, o.type::text as order_type, o.rate,
                    o.quantity as amount, o.filled_quantity, o.status::text,
                    o.cancel_reason::text,
-                   a.id as asset_id, a.name, a.symbol, a.image_url,
-                   COALESCE(a.decimals, 0) as decimals, a.token_address,
+                   o.asset_id,
                    m.maturity,
                    o.created_at
             FROM orders o
-            JOIN assets a ON o.asset_id = a.id
             LEFT JOIN order_markets om ON om.order_id = o.id
             LEFT JOIN markets m ON om.market_id = m.id
             ${whereClause}
@@ -750,10 +709,8 @@ export class PortfolioRepository extends Repository<Portfolio> {
                    m.lender_account_id, m.borrower_account_id,
                    m.maker_fee, m.taker_fee,
                    m.lender_settlement_fee, m.borrower_settlement_fee,
-                   a.id as asset_id, a.name, a.symbol, a.image_url,
-                   COALESCE(a.decimals, 0) as decimals, a.token_address
+                   m.asset_id
             FROM matches m
-            JOIN assets a ON m.asset_id = a.id
             ${whereClause}
             ORDER BY m.created_at DESC
             LIMIT $${paramIndex} OFFSET $${paramIndex + 1}

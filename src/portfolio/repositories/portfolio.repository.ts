@@ -92,9 +92,7 @@ export class PortfolioRepository extends Repository<LegacyPortfolio> {
         super(LegacyPortfolio, dataSource.createEntityManager());
     }
 
-    async getUserTotalBalances(
-        accountId: string,
-    ): Promise<
+    async getUserTotalBalances(accountId: string): Promise<
         {
             asset_id: string;
             total_amount: string;
@@ -351,9 +349,12 @@ export class PortfolioRepository extends Repository<LegacyPortfolio> {
                   .addSelect("'OPEN'", "status")
                   .where("lp.lender = :w", { w: walletBuf })
                   .andWhere("lp.cbt_balance > 0")
-                  .andWhere("(CAST(:assetId AS uuid) IS NULL OR t.id = :assetId)", {
-                      assetId: assetId ?? null,
-                  })
+                  .andWhere(
+                      "(CAST(:assetId AS uuid) IS NULL OR t.id = :assetId)",
+                      {
+                          assetId: assetId ?? null,
+                      },
+                  )
                   .getRawMany()
             : [];
 
@@ -383,9 +384,12 @@ export class PortfolioRepository extends Repository<LegacyPortfolio> {
                   .addSelect("'OPEN'", "status")
                   .where("bp.borrower = :w", { w: walletBuf })
                   .andWhere("bp.debt > 0")
-                  .andWhere("(CAST(:assetId AS uuid) IS NULL OR t.id = :assetId)", {
-                      assetId: assetId ?? null,
-                  })
+                  .andWhere(
+                      "(CAST(:assetId AS uuid) IS NULL OR t.id = :assetId)",
+                      {
+                          assetId: assetId ?? null,
+                      },
+                  )
                   .getRawMany()
             : [];
 
@@ -459,18 +463,6 @@ export class PortfolioRepository extends Repository<LegacyPortfolio> {
         `;
 
         return this.dataSource.query(query, [accountId, days]);
-    }
-
-    async setAssetAsCollateral(
-        accountId: string,
-        assetIds: string[],
-        isCollateral: boolean,
-    ) {
-        return this.createQueryBuilder("portfolio")
-            .update({ isCollateral })
-            .where("portfolio.account_id = :accountId", { accountId })
-            .andWhere("portfolio.asset_id IN (:...assetIds)", { assetIds })
-            .execute();
     }
 
     /**
@@ -799,10 +791,7 @@ export class PortfolioRepository extends Repository<LegacyPortfolio> {
 
         const [rows, countResult] = await Promise.all([
             this.dataSource.query(dataQuery, params),
-            this.dataSource.query(
-                countQuery,
-                params.slice(0, paramIndex - 1),
-            ),
+            this.dataSource.query(countQuery, params.slice(0, paramIndex - 1)),
         ]);
 
         return {

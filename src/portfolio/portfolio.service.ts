@@ -33,7 +33,6 @@ import {
     LendBorrowAssetResponseDto,
     GetMyPositionResponseDto,
     MyPositionQueryDto,
-    SetAssetAsCollateralDto,
     MyHealthFactorResponseDto,
     UserDetailsResponseDto,
 } from "./dto/portfolio.dto";
@@ -368,9 +367,8 @@ export class PortfolioService {
                 amountBaseUnits: options.additionalDebt.amountBaseUnits,
                 decimals,
                 priceUsd:
-                    allPrices[
-                        options.additionalDebt.assetId.toLowerCase()
-                    ] ?? 0,
+                    allPrices[options.additionalDebt.assetId.toLowerCase()] ??
+                    0,
             });
         }
 
@@ -521,10 +519,7 @@ export class PortfolioService {
         );
         const portfolioBalance = safeBigInt(portfolioBalanceRaw);
 
-        const lockedAmount = await this.getLockedAmount(
-            accountId,
-            assetId,
-        );
+        const lockedAmount = await this.getLockedAmount(accountId, assetId);
 
         const availableBalance = portfolioBalance - lockedAmount;
 
@@ -630,54 +625,6 @@ export class PortfolioService {
         });
 
         return createPaginatedResponse(data, total, page, limit);
-    }
-
-    async setAssetAsCollateral(
-        wallet: string,
-        body: SetAssetAsCollateralDto,
-    ): Promise<void> {
-        if (
-            !body ||
-            !body.assetIds ||
-            !Array.isArray(body.assetIds) ||
-            body.assetIds.length === 0
-        ) {
-            throw new Error("Invalid request body: assetIds array is required");
-        }
-
-        const account = await this.orderRepository.findAccountByWallet(wallet);
-        if (!account) {
-            throw new NotFoundException("Account not found");
-        }
-
-        if (!body.isCollateral) {
-            const { collateralPositions, debtPositions } =
-                await this.buildHealthFactorInputs(
-                    wallet.toLowerCase() as `0x${string}`,
-                    account.id,
-                );
-
-            if (debtPositions.length > 0) {
-                const assetIdSet = new Set(body.assetIds);
-                const remaining = collateralPositions.filter(
-                    (pos) => !assetIdSet.has(pos.assetId),
-                );
-
-                const simulated = computeHealthFactor(remaining, debtPositions);
-
-                if (simulated.healthFactor < MIN_HEALTH_FACTOR) {
-                    throw new BadRequestException(
-                        `Cannot disable collateral: health factor would drop to ${simulated.healthFactor.toFixed(4)} (minimum ${MIN_HEALTH_FACTOR})`,
-                    );
-                }
-            }
-        }
-
-        await this.portfolioRepository.setAssetAsCollateral(
-            account.id,
-            body.assetIds,
-            body.isCollateral,
-        );
     }
 
     async getOrderHistory(wallet: string, query: OrderHistoryQueryDto) {
@@ -1008,8 +955,7 @@ export class PortfolioService {
                 BigInt(order.quantity) - BigInt(order.filledQuantity)
             ).toString();
             pendingDebtUsd +=
-                Number(baseUnitsToHuman(remainingBaseUnits, decimals)) *
-                price;
+                Number(baseUnitsToHuman(remainingBaseUnits, decimals)) * price;
         }
 
         const formattedHf = formatHealthFactorResponse(hfResult);
@@ -1114,9 +1060,7 @@ function sumUsd(
     for (const row of rows) {
         const price = prices[row.asset_id.toLowerCase()];
         if (price === undefined) continue;
-        const amountHuman = Number(
-            baseUnitsToHuman(row.amount, row.decimals),
-        );
+        const amountHuman = Number(baseUnitsToHuman(row.amount, row.decimals));
         total += amountHuman * price;
     }
     return total;

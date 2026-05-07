@@ -138,11 +138,6 @@ export class GetMyPositionResponseDto {
     totalPages: number;
 }
 
-export class SetAssetAsCollateralDto {
-    assetIds: string[];
-    isCollateral: boolean;
-}
-
 export class UserAssetDetailDto {
     assetId: string;
     symbol: string;

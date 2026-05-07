@@ -85,7 +85,7 @@ export class OrdersWorker implements OnModuleInit {
         private readonly portfolioRepository: PortfolioRepository,
         private readonly tokensService: TokensService,
         private readonly priceService: PriceService,
-    ) { }
+    ) {}
 
     private initialized = false;
     private cycleInProgress = false;
@@ -445,19 +445,14 @@ export class OrdersWorker implements OnModuleInit {
             `Faucet + deposit complete for bot ${bot.wallet} (${supportedSpecs.length} token(s))`,
         );
 
-        // Set collateral
-        if (collateralAssetIds.length > 0) {
-            try {
-                await this.portfolioService.setAssetAsCollateral(bot.wallet, {
-                    assetIds: collateralAssetIds,
-                    isCollateral: true,
-                });
-            } catch (e) {
-                this.logger.error(
-                    `Failed to set collateral for bot ${bot.wallet}: ${(e as Error).message}`,
-                );
-            }
-        }
+        // Note: legacy off-chain `setAssetAsCollateral` was removed in
+        // Phase 2 of the loophole-fix work. Bot collateral is no longer
+        // marked off-chain. If a future test scenario needs bots to have
+        // on-chain `usedAsCollateral=true`, route through
+        // `CollateralService.flag` (which enqueues, then settlement engine
+        // applies on-chain) or call `CollateralManager.flagFor` directly
+        // with the operator key. The current bot orders work without it
+        // because Phase 1 matching engine does not HF-gate at order time.
     }
 
     private async ensureGasForBot(

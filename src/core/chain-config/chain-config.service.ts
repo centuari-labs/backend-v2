@@ -7,8 +7,10 @@ export class ChainConfigService {
     readonly operatorPrivateKey: string;
     readonly treasuryAddress: string;
     readonly centuariAddress: string;
+    readonly collateralManagerAddress: string;
+    readonly riskModuleAddress: string;
 
-    constructor(private readonly configService: ConfigService) {
+    constructor(configService: ConfigService) {
         this.chainId = Number(
             configService.get<string>("DEPOSIT_CHAIN_ID") ?? "421614",
         );
@@ -18,5 +20,9 @@ export class ChainConfigService {
             configService.get<string>("TREASURY_ADDRESS") ?? "";
         this.centuariAddress =
             configService.get<string>("CENTUARI_ADDRESS") ?? "";
+        this.collateralManagerAddress =
+            configService.get<string>("COLLATERAL_MANAGER_ADDRESS") ?? "";
+        this.riskModuleAddress =
+            configService.get<string>("RISK_MODULE_ADDRESS") ?? "";
     }
 }

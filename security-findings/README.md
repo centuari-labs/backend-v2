@@ -3,6 +3,8 @@
 Pentest report from 2026-05-08. Web2 application-layer scope.
 
 > **Start here**: [THREAT-MODEL.md](./THREAT-MODEL.md) traces 7 concrete attack chains across these findings and gives a 5–6-hour fix path that closes 6 of them.
+>
+> **Uploading to GitHub Issues?** See [`_issues/ISSUES.md`](./_issues/ISSUES.md) for the manual copy-paste guide (titles + labels per finding) and [`_issues/_epic-body.md`](./_issues/_epic-body.md) for the tracking-epic body.
 
 ## Index
 

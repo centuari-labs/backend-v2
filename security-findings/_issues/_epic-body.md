@@ -1,8 +1,8 @@
-# Pentest 2026-05-08 — 44 findings tracking
+# Pentest 2026-05-08 — 45 findings tracking
 
 Tracking epic for the web2-scope pentest performed on 2026-05-08. Findings live on branch [`security/pentest-findings-2026-05-08`](https://github.com/centuari-labs/backend-v2/tree/security/pentest-findings-2026-05-08/security-findings) under `security-findings/`.
 
-**Numbers**: 44 findings — 14 critical, 15 high, 15 moderate.
+**Numbers**: 45 findings — 14 critical, 16 high, 15 moderate.
 
 > Read [`THREAT-MODEL.md`](https://github.com/centuari-labs/backend-v2/blob/security/pentest-findings-2026-05-08/security-findings/THREAT-MODEL.md) first — it traces 7 concrete attack chains across these findings and shows which fixes close the most chains per hour invested.
 
@@ -50,7 +50,7 @@ The remaining "free money" attack chain (reorg / float drift) needs ~14–25 h o
 - [ ] <TBD-F-32> F-32: `ENABLE_DEV_AUTH=true` not gated by `NODE_ENV` — accidental prod = total auth bypass
 - [ ] <TBD-F-35> F-35: Paired-wallet private keys generated server-side, persisted plaintext
 
-### 🟠 High (15)
+### 🟠 High (16)
 
 - [ ] <TBD-F-3> F-3: handlebars 4.7.8 — JS injection via AST type confusion
 - [ ] <TBD-F-4> F-4: jws 3.2.2 — improperly verifies HMAC signature
@@ -67,6 +67,7 @@ The remaining "free money" attack chain (reorg / float drift) needs ~14–25 h o
 - [ ] <TBD-F-41> F-41: NATS payloads expose `walletAddress` and order amounts in plaintext
 - [ ] <TBD-F-43> F-43: `PriceService` ingests prices by `token.symbol` — duplicate symbols collide
 - [ ] <TBD-F-45> F-45: `OrdersWorker` retry loop burns operator gas without budget
+- [ ] <TBD-F-46> F-46: `viemService.writeContract` queue head-of-line blocks on hung receipt
 
 ### 🟡 Moderate (15)
 

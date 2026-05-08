@@ -1,6 +1,6 @@
 # GitHub Issues — Manual Upload Guide
 
-Copy-paste guide for converting the 44 pentest findings + tracking epic into GitHub issues.
+Copy-paste guide for converting the 45 pentest findings + tracking epic into GitHub issues.
 
 ---
 
@@ -88,6 +88,7 @@ For each row below:
 | F-41 | F-41: NATS payloads expose `walletAddress` and order amounts in plaintext | `security`, `severity:high` | [`F-41-nats-payload-pii-exposure.md`](../F-41-nats-payload-pii-exposure.md) |
 | F-43 | F-43: `PriceService` ingests prices by `token.symbol` — duplicate symbols collide | `security`, `severity:high` | [`F-43-price-symbol-collision.md`](../F-43-price-symbol-collision.md) |
 | F-45 | F-45: `OrdersWorker` retry loop burns operator gas without budget | `security`, `severity:high` | [`F-45-bot-worker-gas-burn-no-budget.md`](../F-45-bot-worker-gas-burn-no-budget.md) |
+| F-46 | F-46: `viemService.writeContract` queue head-of-line blocks on hung receipt | `security`, `severity:high` | [`F-46-no-tx-timeouts-head-of-line-block.md`](../F-46-no-tx-timeouts-head-of-line-block.md) |
 
 ### 🟡 Moderate (15)
 
@@ -162,6 +163,7 @@ F-42  → #
 F-43  → #
 F-44  → #
 F-45  → #
+F-46  → #
 ```
 
 GitHub auto-renders `#NNN` as cross-references, so once filled in, the epic shows progress on each child.

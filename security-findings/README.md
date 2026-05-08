@@ -18,6 +18,7 @@ Pentest report from 2026-05-08. Web2 application-layer scope.
 | [F-25](./F-25-cancel-vs-fill-race.md) | 🔴 Critical | `cancelOrder` runs without transaction/lock — races matching engine | Open |
 | [F-26](./F-26-operator-key-blast-radius.md) | 🔴 Critical | Operator key signs every user action; bot keys derive from it | Open |
 | [F-29](./F-29-no-balance-check-on-order.md) | 🔴 Critical | Order placement performs no balance check and never locks funds | Open |
+| [F-32](./F-32-enable-dev-auth-not-prod-gated.md) | 🔴 Critical | `ENABLE_DEV_AUTH=true` not gated by `NODE_ENV` — accidental prod = total auth bypass | Open |
 | [F-3](./F-3-handlebars-cve.md) | 🟠 High | handlebars 4.7.8 — JS injection (transitive) | Open |
 | [F-4](./F-4-jws-cve.md) | 🟠 High | jws 3.2.2 — improper HMAC verification | Open |
 | [F-5](./F-5-multer-cve.md) | 🟠 High | multer 2.0.2 — DoS (3 CVEs) | Open |
@@ -27,6 +28,7 @@ Pentest report from 2026-05-08. Web2 application-layer scope.
 | [F-20](./F-20-update-order-cross-asset-markets.md) | 🟠 High | `updateOrder` allows binding markets to a different asset | Open |
 | [F-27](./F-27-repay-withdraw-toctou.md) | 🟠 High | `repay` and `withdrawLendPosition` not transactional — chain/DB desync | Open |
 | [F-30](./F-30-access-granted-not-enforced.md) | 🟠 High | `access_granted` flag set on redemption but never enforced | Open |
+| [F-34](./F-34-helmet-and-migrate-on-start.md) | 🟠 High | Missing security headers + auto-run migrations on every boot | Open |
 | [F-10](./F-10-nestjs-core-cve.md) | 🟡 Moderate | `@nestjs/core` injection neutralization | Open |
 | [F-11](./F-11-socketio-parser-cve.md) | 🟡 Moderate | `socket.io-parser` unbounded binary attachments | Open |
 | [F-12](./F-12-body-parser-dos.md) | 🟡 Moderate | `body-parser` DoS on urlencoded | Open |
@@ -36,6 +38,7 @@ Pentest report from 2026-05-08. Web2 application-layer scope.
 | [F-22](./F-22-privy-console-error-leak.md) | 🟡 Moderate | `PrivyService.verify` uses `console.error` — token leak risk | Open |
 | [F-28](./F-28-server-clock-maturity.md) | 🟡 Moderate | `withdrawLendPosition` gates maturity on server clock (not chain) | Open |
 | [F-31](./F-31-recent-trades-cache-poisoning.md) | 🟡 Moderate | WS recent-trades cache poisonable + persists indefinitely | Open |
+| [F-33](./F-33-dist-build-artifacts-committed.md) | 🟡 Moderate | Compiled `dist/` build artifacts committed to repo | Open |
 
 ## Quick remediation priority
 
@@ -63,8 +66,11 @@ Pentest report from 2026-05-08. Web2 application-layer scope.
 22. **F-29** — Lock `portfolio.locked_amount` on order create; symmetric release on cancel/fill (3–5 h)
 23. **F-30** — Add `AccessGrantedGuard` (or remove the system) (1 h)
 24. **F-31** — Validate NATS shapes + DB cross-check for recent-trades cache (1 h)
+25. **F-32** — Fail-closed boot guard for `ENABLE_DEV_AUTH` + `NODE_ENV` (15 min)
+26. **F-33** — `git rm -r --cached dist/`; CI guard against tracked build output (15 min)
+27. **F-34** — Add helmet; gate `MIGRATIONS_ON_START`/`SEED_ON_START` by env; advisory lock (1–2 h)
 
-Total ~30–43 hours to address all critical and high findings (operator-key + balance-lock remediation are the long poles).
+Total ~33–47 hours to address all critical and high findings.
 
 ## Out of scope (functional bugs, not security)
 

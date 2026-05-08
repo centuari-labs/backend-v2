@@ -17,6 +17,7 @@ Pentest report from 2026-05-08. Web2 application-layer scope.
 | [F-24](./F-24-oracle-single-source.md) | 🔴 Critical | Single CoinGecko oracle, no sanity bounds, missing price → $0 | Open |
 | [F-25](./F-25-cancel-vs-fill-race.md) | 🔴 Critical | `cancelOrder` runs without transaction/lock — races matching engine | Open |
 | [F-26](./F-26-operator-key-blast-radius.md) | 🔴 Critical | Operator key signs every user action; bot keys derive from it | Open |
+| [F-29](./F-29-no-balance-check-on-order.md) | 🔴 Critical | Order placement performs no balance check and never locks funds | Open |
 | [F-3](./F-3-handlebars-cve.md) | 🟠 High | handlebars 4.7.8 — JS injection (transitive) | Open |
 | [F-4](./F-4-jws-cve.md) | 🟠 High | jws 3.2.2 — improper HMAC verification | Open |
 | [F-5](./F-5-multer-cve.md) | 🟠 High | multer 2.0.2 — DoS (3 CVEs) | Open |
@@ -25,6 +26,7 @@ Pentest report from 2026-05-08. Web2 application-layer scope.
 | [F-18](./F-18-nats-trust-boundary.md) | 🟠 High | NATS trust boundary — gateway accepts arbitrary publishers | Open |
 | [F-20](./F-20-update-order-cross-asset-markets.md) | 🟠 High | `updateOrder` allows binding markets to a different asset | Open |
 | [F-27](./F-27-repay-withdraw-toctou.md) | 🟠 High | `repay` and `withdrawLendPosition` not transactional — chain/DB desync | Open |
+| [F-30](./F-30-access-granted-not-enforced.md) | 🟠 High | `access_granted` flag set on redemption but never enforced | Open |
 | [F-10](./F-10-nestjs-core-cve.md) | 🟡 Moderate | `@nestjs/core` injection neutralization | Open |
 | [F-11](./F-11-socketio-parser-cve.md) | 🟡 Moderate | `socket.io-parser` unbounded binary attachments | Open |
 | [F-12](./F-12-body-parser-dos.md) | 🟡 Moderate | `body-parser` DoS on urlencoded | Open |
@@ -33,6 +35,7 @@ Pentest report from 2026-05-08. Web2 application-layer scope.
 | [F-21](./F-21-pagination-unbounded.md) | 🟡 Moderate | Pagination DTOs accept unbounded `limit` and `page` | Open |
 | [F-22](./F-22-privy-console-error-leak.md) | 🟡 Moderate | `PrivyService.verify` uses `console.error` — token leak risk | Open |
 | [F-28](./F-28-server-clock-maturity.md) | 🟡 Moderate | `withdrawLendPosition` gates maturity on server clock (not chain) | Open |
+| [F-31](./F-31-recent-trades-cache-poisoning.md) | 🟡 Moderate | WS recent-trades cache poisonable + persists indefinitely | Open |
 
 ## Quick remediation priority
 
@@ -57,8 +60,11 @@ Pentest report from 2026-05-08. Web2 application-layer scope.
 19. **F-14** — Strip stack traces from error responses (10 min)
 20. **F-22** — Replace `console.error` in PrivyService with Logger (5 min)
 21. **F-28** — Use chain `block.timestamp` for maturity checks (30 min)
+22. **F-29** — Lock `portfolio.locked_amount` on order create; symmetric release on cancel/fill (3–5 h)
+23. **F-30** — Add `AccessGrantedGuard` (or remove the system) (1 h)
+24. **F-31** — Validate NATS shapes + DB cross-check for recent-trades cache (1 h)
 
-Total ~26–36 hours to address all critical and high findings (operator-key remediation is the long pole).
+Total ~30–43 hours to address all critical and high findings (operator-key + balance-lock remediation are the long poles).
 
 ## Out of scope (functional bugs, not security)
 

@@ -13,6 +13,9 @@ Pentest report from 2026-05-08. Web2 application-layer scope.
 | [F-15](./F-15-websocket-no-auth.md) | 🔴 Critical | WebSocket has no auth — cross-user data leak | Open |
 | [F-16](./F-16-money-precision-loss.md) | 🔴 Critical | Token amounts use JS `Number` — precision loss on money paths | Open |
 | [F-19](./F-19-chain-indexer-no-finality.md) | 🔴 Critical | Chain indexer credits deposits without finality / reorg handling | Open |
+| [F-23](./F-23-health-factor-floats.md) | 🔴 Critical | Health factor logic computed entirely in JS `Number` (floats) | Open |
+| [F-24](./F-24-oracle-single-source.md) | 🔴 Critical | Single CoinGecko oracle, no sanity bounds, missing price → $0 | Open |
+| [F-25](./F-25-cancel-vs-fill-race.md) | 🔴 Critical | `cancelOrder` runs without transaction/lock — races matching engine | Open |
 | [F-3](./F-3-handlebars-cve.md) | 🟠 High | handlebars 4.7.8 — JS injection (transitive) | Open |
 | [F-4](./F-4-jws-cve.md) | 🟠 High | jws 3.2.2 — improper HMAC verification | Open |
 | [F-5](./F-5-multer-cve.md) | 🟠 High | multer 2.0.2 — DoS (3 CVEs) | Open |
@@ -38,15 +41,18 @@ Pentest report from 2026-05-08. Web2 application-layer scope.
 6. **F-16** — Migrate withdraw/repay/order-worker to BigInt (1–2 h)
 7. **F-19** — Wait for finality + reorg-aware reconciliation (2–4 h)
 8. **F-20** — Validate market ↔ asset on order create/update (30 min)
-9. **F-3..F-5, F-10** — Run `pnpm update` to clear transitive CVEs (5 min)
-10. **F-6** — Verify txHash is associated with the caller's wallet (30 min)
-11. **F-17** — Allow-list table names in `DatabaseService.insert`; add `MaxLength` to DTOs (30 min)
-12. **F-18** — Enable NATS auth + bind to localhost in dev (1 h)
-13. **F-21** — Cap `limit`/`page` in pagination DTOs; statement_timeout (15 min)
-14. **F-14** — Strip stack traces from error responses (10 min)
-15. **F-22** — Replace `console.error` in PrivyService with Logger (5 min)
+9. **F-23** — Migrate health factor to BigInt fixed-point (3–5 h)
+10. **F-24** — Strict missing-price handling + sanity bounds + readiness guard (2–3 h)
+11. **F-25** — Wrap `cancelOrder` in tx + `FOR UPDATE`; transactional outbox for NATS (1–2 h)
+12. **F-3..F-5, F-10** — Run `pnpm update` to clear transitive CVEs (5 min)
+13. **F-6** — Verify txHash is associated with the caller's wallet (30 min)
+14. **F-17** — Allow-list table names in `DatabaseService.insert`; add `MaxLength` to DTOs (30 min)
+15. **F-18** — Enable NATS auth + bind to localhost in dev (1 h)
+16. **F-21** — Cap `limit`/`page` in pagination DTOs; statement_timeout (15 min)
+17. **F-14** — Strip stack traces from error responses (10 min)
+18. **F-22** — Replace `console.error` in PrivyService with Logger (5 min)
 
-Total ~8–10 hours to address all critical and high findings.
+Total ~16–22 hours to address all critical and high findings.
 
 ## Out of scope (functional bugs, not security)
 

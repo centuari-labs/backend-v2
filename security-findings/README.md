@@ -35,6 +35,7 @@ Pentest report from 2026-05-08. Web2 application-layer scope.
 | [F-38](./F-38-ws-orderbook-amplifier.md) | 🟠 High | WS `subscribe-orderbook` triggers expensive DB read per request | Open |
 | [F-39](./F-39-bot-rates-no-market-anchor.md) | 🟠 High | Bot worker rates use `Math.random()` mid with no market anchor | Open |
 | [F-41](./F-41-nats-payload-pii-exposure.md) | 🟠 High | NATS payloads expose `walletAddress` + amounts on a flat shared bus | Open |
+| [F-43](./F-43-price-symbol-collision.md) | 🟠 High | `PriceService` ingests prices by `token.symbol` — duplicate symbols collide | Open |
 | [F-10](./F-10-nestjs-core-cve.md) | 🟡 Moderate | `@nestjs/core` injection neutralization | Open |
 | [F-11](./F-11-socketio-parser-cve.md) | 🟡 Moderate | `socket.io-parser` unbounded binary attachments | Open |
 | [F-12](./F-12-body-parser-dos.md) | 🟡 Moderate | `body-parser` DoS on urlencoded | Open |
@@ -49,6 +50,7 @@ Pentest report from 2026-05-08. Web2 application-layer scope.
 | [F-37](./F-37-privy-no-defense-in-depth.md) | 🟡 Moderate | Privy verification fully delegated to SDK; key file loaded but unused | Open |
 | [F-40](./F-40-tokens-cache-no-invalidation.md) | 🟡 Moderate | `TokensService` cache has no invalidation — stale until restart | Open |
 | [F-42](./F-42-chainconfig-public-operator-key.md) | 🟡 Moderate | `ChainConfigService.operatorPrivateKey` is a public readonly field | Open |
+| [F-44](./F-44-coingecko-fetch-no-timeout.md) | 🟡 Moderate | `CoinGeckoProvider` calls `fetch` with no timeout — worker stalls | Open |
 
 ## Quick remediation priority
 
@@ -87,8 +89,10 @@ Pentest report from 2026-05-08. Web2 application-layer scope.
 33. **F-40** — `@Interval` cache refresh; LISTEN/NOTIFY hook; immutable-decimals trigger (1–2 h)
 34. **F-41** — Drop `walletAddress` from NATS payloads; per-account subjects; NATS TLS (3–4 h)
 35. **F-42** — Private-field `operatorPrivateKey`; signer accessor; `toJSON` redaction; CI lint rule (1–2 h)
+36. **F-43** — Key price ingestion by `token.id`, not `symbol`; per-chain symbol/coingecko_id unique indexes (2–3 h)
+37. **F-44** — `AbortSignal.timeout` on CoinGecko fetch; in-flight guard on the worker; honour `Retry-After` (30 min)
 
-Total ~47–68 hours to address all critical and high findings.
+Total ~50–72 hours to address all critical and high findings.
 
 ## Out of scope (functional bugs, not security)
 

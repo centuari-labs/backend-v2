@@ -1,8 +1,8 @@
-# Pentest 2026-05-08 — 45 findings tracking
+# Pentest 2026-05-08 — 46 findings tracking
 
 Tracking epic for the web2-scope pentest performed on 2026-05-08. Findings live on branch [`security/pentest-findings-2026-05-08`](https://github.com/centuari-labs/backend-v2/tree/security/pentest-findings-2026-05-08/security-findings) under `security-findings/`.
 
-**Numbers**: 45 findings — 14 critical, 16 high, 15 moderate.
+**Numbers**: 46 findings — 14 critical, 16 high, 16 moderate.
 
 > Read [`THREAT-MODEL.md`](https://github.com/centuari-labs/backend-v2/blob/security/pentest-findings-2026-05-08/security-findings/THREAT-MODEL.md) first — it traces 7 concrete attack chains across these findings and shows which fixes close the most chains per hour invested.
 
@@ -69,7 +69,7 @@ The remaining "free money" attack chain (reorg / float drift) needs ~14–25 h o
 - [ ] <TBD-F-45> F-45: `OrdersWorker` retry loop burns operator gas without budget
 - [ ] <TBD-F-46> F-46: `viemService.writeContract` queue head-of-line blocks on hung receipt
 
-### 🟡 Moderate (15)
+### 🟡 Moderate (16)
 
 - [ ] <TBD-F-10> F-10: `@nestjs/core` injection neutralization
 - [ ] <TBD-F-11> F-11: `socket.io-parser` unbounded binary attachments
@@ -86,6 +86,7 @@ The remaining "free money" attack chain (reorg / float drift) needs ~14–25 h o
 - [ ] <TBD-F-40> F-40: `TokensService` cache has no invalidation
 - [ ] <TBD-F-42> F-42: `ChainConfigService.operatorPrivateKey` is a public readonly field
 - [ ] <TBD-F-44> F-44: `CoinGeckoProvider` calls `fetch` with no timeout
+- [ ] <TBD-F-47> F-47: `app.set('trust proxy')` not configured — IP throttling collapses behind any proxy
 
 ---
 

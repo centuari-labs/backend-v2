@@ -1,6 +1,6 @@
 # GitHub Issues — Manual Upload Guide
 
-Copy-paste guide for converting the 45 pentest findings + tracking epic into GitHub issues.
+Copy-paste guide for converting the 46 pentest findings + tracking epic into GitHub issues.
 
 ---
 
@@ -109,6 +109,7 @@ For each row below:
 | F-40 | F-40: `TokensService` cache has no invalidation | `security`, `severity:moderate` | [`F-40-tokens-cache-no-invalidation.md`](../F-40-tokens-cache-no-invalidation.md) |
 | F-42 | F-42: `ChainConfigService.operatorPrivateKey` is a public readonly field | `security`, `severity:moderate` | [`F-42-chainconfig-public-operator-key.md`](../F-42-chainconfig-public-operator-key.md) |
 | F-44 | F-44: `CoinGeckoProvider` calls `fetch` with no timeout | `security`, `severity:moderate` | [`F-44-coingecko-fetch-no-timeout.md`](../F-44-coingecko-fetch-no-timeout.md) |
+| F-47 | F-47: `app.set('trust proxy')` not configured — IP throttling collapses behind any proxy | `security`, `severity:moderate` | [`F-47-trust-proxy-ip-throttling.md`](../F-47-trust-proxy-ip-throttling.md) |
 
 ---
 
@@ -164,6 +165,7 @@ F-43  → #
 F-44  → #
 F-45  → #
 F-46  → #
+F-47  → #
 ```
 
 GitHub auto-renders `#NNN` as cross-references, so once filled in, the epic shows progress on each child.

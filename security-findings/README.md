@@ -55,6 +55,7 @@ Pentest report from 2026-05-08. Web2 application-layer scope.
 | [F-40](./F-40-tokens-cache-no-invalidation.md) | 🟡 Moderate | `TokensService` cache has no invalidation — stale until restart | Open |
 | [F-42](./F-42-chainconfig-public-operator-key.md) | 🟡 Moderate | `ChainConfigService.operatorPrivateKey` is a public readonly field | Open |
 | [F-44](./F-44-coingecko-fetch-no-timeout.md) | 🟡 Moderate | `CoinGeckoProvider` calls `fetch` with no timeout — worker stalls | Open |
+| [F-47](./F-47-trust-proxy-ip-throttling.md) | 🟡 Moderate | `app.set('trust proxy')` not configured — IP-based rate limiting collapses behind any proxy | Open |
 
 ## Quick remediation priority
 
@@ -97,8 +98,9 @@ Pentest report from 2026-05-08. Web2 application-layer scope.
 37. **F-44** — `AbortSignal.timeout` on CoinGecko fetch; in-flight guard on the worker; honour `Retry-After` (30 min)
 38. **F-45** — Error classification on bot retry; daily gas budget; faucet-exhausted short-circuit; production opt-in (2–3 h)
 39. **F-46** — Bound `waitForReceipt` timeout; outbox-style decouple of receipt wait from queue; statement_timeout + fetch timeout (2–3 h)
+40. **F-47** — `TRUSTED_PROXY` env-driven `trust proxy`; boot-time enforcement; strip-untrusted-headers middleware (30 min)
 
-Total ~54–78 hours to address all critical and high findings.
+Total ~54.5–78.5 hours to address all critical and high findings.
 
 ## Out of scope (functional bugs, not security)
 

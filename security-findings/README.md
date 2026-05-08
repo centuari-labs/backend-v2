@@ -30,6 +30,8 @@ Pentest report from 2026-05-08. Web2 application-layer scope.
 | [F-27](./F-27-repay-withdraw-toctou.md) | 🟠 High | `repay` and `withdrawLendPosition` not transactional — chain/DB desync | Open |
 | [F-30](./F-30-access-granted-not-enforced.md) | 🟠 High | `access_granted` flag set on redemption but never enforced | Open |
 | [F-34](./F-34-helmet-and-migrate-on-start.md) | 🟠 High | Missing security headers + auto-run migrations on every boot | Open |
+| [F-38](./F-38-ws-orderbook-amplifier.md) | 🟠 High | WS `subscribe-orderbook` triggers expensive DB read per request | Open |
+| [F-39](./F-39-bot-rates-no-market-anchor.md) | 🟠 High | Bot worker rates use `Math.random()` mid with no market anchor | Open |
 | [F-10](./F-10-nestjs-core-cve.md) | 🟡 Moderate | `@nestjs/core` injection neutralization | Open |
 | [F-11](./F-11-socketio-parser-cve.md) | 🟡 Moderate | `socket.io-parser` unbounded binary attachments | Open |
 | [F-12](./F-12-body-parser-dos.md) | 🟡 Moderate | `body-parser` DoS on urlencoded | Open |
@@ -42,6 +44,7 @@ Pentest report from 2026-05-08. Web2 application-layer scope.
 | [F-33](./F-33-dist-build-artifacts-committed.md) | 🟡 Moderate | Compiled `dist/` build artifacts committed to repo | Open |
 | [F-36](./F-36-account-lookup-case-and-race.md) | 🟡 Moderate | `getOrCreateAccount` case-sensitive + race on duplicate insert | Open |
 | [F-37](./F-37-privy-no-defense-in-depth.md) | 🟡 Moderate | Privy verification fully delegated to SDK; key file loaded but unused | Open |
+| [F-40](./F-40-tokens-cache-no-invalidation.md) | 🟡 Moderate | `TokensService` cache has no invalidation — stale until restart | Open |
 
 ## Quick remediation priority
 
@@ -75,8 +78,11 @@ Pentest report from 2026-05-08. Web2 application-layer scope.
 28. **F-35** — Eliminate server-side keygen OR encrypt at rest + auth + drop key from response (4–6 h)
 29. **F-36** — Lowercase wallet at strategy ingress; upsert in `getOrCreateAccount`; DB CHECK + index (1 h)
 30. **F-37** — Add `jose.jwtVerify` defense-in-depth; mandatory `PRIVY_ISSUER`/`PRIVY_APP_ID`; per-route freshness (1–2 h)
+31. **F-38** — UUID-validate `assetId`; per-IP throttle on `subscribe-orderbook`; load-TTL cache (1 h)
+32. **F-39** — Anchor bot mid to on-chain APR / VWAP; `crypto.randomInt`; loss budget; exclude bots from bestRate (3–4 h)
+33. **F-40** — `@Interval` cache refresh; LISTEN/NOTIFY hook; immutable-decimals trigger (1–2 h)
 
-Total ~38–55 hours to address all critical and high findings.
+Total ~43–62 hours to address all critical and high findings.
 
 ## Out of scope (functional bugs, not security)
 

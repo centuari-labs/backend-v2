@@ -2,6 +2,8 @@
 
 Pentest report from 2026-05-08. Web2 application-layer scope.
 
+> **Start here**: [THREAT-MODEL.md](./THREAT-MODEL.md) traces 7 concrete attack chains across these findings and gives a 5–6-hour fix path that closes 6 of them.
+
 ## Index
 
 | ID | Severity | Title | Status |

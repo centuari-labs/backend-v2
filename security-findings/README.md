@@ -19,6 +19,7 @@ Pentest report from 2026-05-08. Web2 application-layer scope.
 | [F-26](./F-26-operator-key-blast-radius.md) | 🔴 Critical | Operator key signs every user action; bot keys derive from it | Open |
 | [F-29](./F-29-no-balance-check-on-order.md) | 🔴 Critical | Order placement performs no balance check and never locks funds | Open |
 | [F-32](./F-32-enable-dev-auth-not-prod-gated.md) | 🔴 Critical | `ENABLE_DEV_AUTH=true` not gated by `NODE_ENV` — accidental prod = total auth bypass | Open |
+| [F-35](./F-35-paired-wallet-private-key-plaintext.md) | 🔴 Critical | Paired-wallet private keys generated server-side, persisted plaintext, returned over HTTP | Open |
 | [F-3](./F-3-handlebars-cve.md) | 🟠 High | handlebars 4.7.8 — JS injection (transitive) | Open |
 | [F-4](./F-4-jws-cve.md) | 🟠 High | jws 3.2.2 — improper HMAC verification | Open |
 | [F-5](./F-5-multer-cve.md) | 🟠 High | multer 2.0.2 — DoS (3 CVEs) | Open |
@@ -39,6 +40,8 @@ Pentest report from 2026-05-08. Web2 application-layer scope.
 | [F-28](./F-28-server-clock-maturity.md) | 🟡 Moderate | `withdrawLendPosition` gates maturity on server clock (not chain) | Open |
 | [F-31](./F-31-recent-trades-cache-poisoning.md) | 🟡 Moderate | WS recent-trades cache poisonable + persists indefinitely | Open |
 | [F-33](./F-33-dist-build-artifacts-committed.md) | 🟡 Moderate | Compiled `dist/` build artifacts committed to repo | Open |
+| [F-36](./F-36-account-lookup-case-and-race.md) | 🟡 Moderate | `getOrCreateAccount` case-sensitive + race on duplicate insert | Open |
+| [F-37](./F-37-privy-no-defense-in-depth.md) | 🟡 Moderate | Privy verification fully delegated to SDK; key file loaded but unused | Open |
 
 ## Quick remediation priority
 
@@ -69,8 +72,11 @@ Pentest report from 2026-05-08. Web2 application-layer scope.
 25. **F-32** — Fail-closed boot guard for `ENABLE_DEV_AUTH` + `NODE_ENV` (15 min)
 26. **F-33** — `git rm -r --cached dist/`; CI guard against tracked build output (15 min)
 27. **F-34** — Add helmet; gate `MIGRATIONS_ON_START`/`SEED_ON_START` by env; advisory lock (1–2 h)
+28. **F-35** — Eliminate server-side keygen OR encrypt at rest + auth + drop key from response (4–6 h)
+29. **F-36** — Lowercase wallet at strategy ingress; upsert in `getOrCreateAccount`; DB CHECK + index (1 h)
+30. **F-37** — Add `jose.jwtVerify` defense-in-depth; mandatory `PRIVY_ISSUER`/`PRIVY_APP_ID`; per-route freshness (1–2 h)
 
-Total ~33–47 hours to address all critical and high findings.
+Total ~38–55 hours to address all critical and high findings.
 
 ## Out of scope (functional bugs, not security)
 

@@ -16,6 +16,7 @@ Pentest report from 2026-05-08. Web2 application-layer scope.
 | [F-23](./F-23-health-factor-floats.md) | 🔴 Critical | Health factor logic computed entirely in JS `Number` (floats) | Open |
 | [F-24](./F-24-oracle-single-source.md) | 🔴 Critical | Single CoinGecko oracle, no sanity bounds, missing price → $0 | Open |
 | [F-25](./F-25-cancel-vs-fill-race.md) | 🔴 Critical | `cancelOrder` runs without transaction/lock — races matching engine | Open |
+| [F-26](./F-26-operator-key-blast-radius.md) | 🔴 Critical | Operator key signs every user action; bot keys derive from it | Open |
 | [F-3](./F-3-handlebars-cve.md) | 🟠 High | handlebars 4.7.8 — JS injection (transitive) | Open |
 | [F-4](./F-4-jws-cve.md) | 🟠 High | jws 3.2.2 — improper HMAC verification | Open |
 | [F-5](./F-5-multer-cve.md) | 🟠 High | multer 2.0.2 — DoS (3 CVEs) | Open |
@@ -23,6 +24,7 @@ Pentest report from 2026-05-08. Web2 application-layer scope.
 | [F-17](./F-17-databaseservice-insert-and-dto-gaps.md) | 🟠 High | `DatabaseService.insert` table interpolation + DTO bound gaps | Open |
 | [F-18](./F-18-nats-trust-boundary.md) | 🟠 High | NATS trust boundary — gateway accepts arbitrary publishers | Open |
 | [F-20](./F-20-update-order-cross-asset-markets.md) | 🟠 High | `updateOrder` allows binding markets to a different asset | Open |
+| [F-27](./F-27-repay-withdraw-toctou.md) | 🟠 High | `repay` and `withdrawLendPosition` not transactional — chain/DB desync | Open |
 | [F-10](./F-10-nestjs-core-cve.md) | 🟡 Moderate | `@nestjs/core` injection neutralization | Open |
 | [F-11](./F-11-socketio-parser-cve.md) | 🟡 Moderate | `socket.io-parser` unbounded binary attachments | Open |
 | [F-12](./F-12-body-parser-dos.md) | 🟡 Moderate | `body-parser` DoS on urlencoded | Open |
@@ -30,6 +32,7 @@ Pentest report from 2026-05-08. Web2 application-layer scope.
 | [F-14](./F-14-error-info-disclosure.md) | 🟡 Moderate | Error response leaks implementation details | Open |
 | [F-21](./F-21-pagination-unbounded.md) | 🟡 Moderate | Pagination DTOs accept unbounded `limit` and `page` | Open |
 | [F-22](./F-22-privy-console-error-leak.md) | 🟡 Moderate | `PrivyService.verify` uses `console.error` — token leak risk | Open |
+| [F-28](./F-28-server-clock-maturity.md) | 🟡 Moderate | `withdrawLendPosition` gates maturity on server clock (not chain) | Open |
 
 ## Quick remediation priority
 
@@ -44,15 +47,18 @@ Pentest report from 2026-05-08. Web2 application-layer scope.
 9. **F-23** — Migrate health factor to BigInt fixed-point (3–5 h)
 10. **F-24** — Strict missing-price handling + sanity bounds + readiness guard (2–3 h)
 11. **F-25** — Wrap `cancelOrder` in tx + `FOR UPDATE`; transactional outbox for NATS (1–2 h)
-12. **F-3..F-5, F-10** — Run `pnpm update` to clear transitive CVEs (5 min)
-13. **F-6** — Verify txHash is associated with the caller's wallet (30 min)
-14. **F-17** — Allow-list table names in `DatabaseService.insert`; add `MaxLength` to DTOs (30 min)
-15. **F-18** — Enable NATS auth + bind to localhost in dev (1 h)
-16. **F-21** — Cap `limit`/`page` in pagination DTOs; statement_timeout (15 min)
-17. **F-14** — Strip stack traces from error responses (10 min)
-18. **F-22** — Replace `console.error` in PrivyService with Logger (5 min)
+12. **F-26** — Split operator key by role; move bot seed to its own key; KMS/HSM (4–8 h, plus contract changes)
+13. **F-27** — Wrap `repay`/`withdrawLendPosition` in tx; outbox for chain calls; idempotency keys (4–6 h)
+14. **F-3..F-5, F-10** — Run `pnpm update` to clear transitive CVEs (5 min)
+15. **F-6** — Verify txHash is associated with the caller's wallet (30 min)
+16. **F-17** — Allow-list table names in `DatabaseService.insert`; add `MaxLength` to DTOs (30 min)
+17. **F-18** — Enable NATS auth + bind to localhost in dev (1 h)
+18. **F-21** — Cap `limit`/`page` in pagination DTOs; statement_timeout (15 min)
+19. **F-14** — Strip stack traces from error responses (10 min)
+20. **F-22** — Replace `console.error` in PrivyService with Logger (5 min)
+21. **F-28** — Use chain `block.timestamp` for maturity checks (30 min)
 
-Total ~16–22 hours to address all critical and high findings.
+Total ~26–36 hours to address all critical and high findings (operator-key remediation is the long pole).
 
 ## Out of scope (functional bugs, not security)
 

@@ -176,6 +176,7 @@ How many of the 7 attack chains each finding appears in. **Higher = higher fix p
 | [F-23](./F-23-health-factor-floats.md) — HF floats | 🔴 | 2 (1, 5) | 3–5 h |
 | [F-24](./F-24-oracle-single-source.md) — oracle | 🔴 | 1 (1) | 2–3 h |
 | [F-25](./F-25-cancel-vs-fill-race.md) — cancel race | 🔴 | 2 (1, 3) | 1–2 h |
+| [F-48](./F-48-update-order-lost-update-race.md) — updateOrder race | 🔴 | 2 (1, 3) | 1 h |
 | [F-26](./F-26-operator-key-blast-radius.md) — operator key | 🔴 | 3 (1, 5, 7-implicit) | 4–8 h |
 | [F-27](./F-27-repay-withdraw-toctou.md) — repay TOCTOU | 🟠 | 2 (1, 5) | 4–6 h |
 | [F-29](./F-29-no-balance-check-on-order.md) — no balance check | 🔴 | 1 (3) | 3–5 h |

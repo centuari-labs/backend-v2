@@ -1,8 +1,8 @@
-# Pentest 2026-05-08 — 46 findings tracking
+# Pentest 2026-05-08 — 47 findings tracking
 
 Tracking epic for the web2-scope pentest performed on 2026-05-08. Findings live on branch [`security/pentest-findings-2026-05-08`](https://github.com/centuari-labs/backend-v2/tree/security/pentest-findings-2026-05-08/security-findings) under `security-findings/`.
 
-**Numbers**: 46 findings — 14 critical, 16 high, 16 moderate.
+**Numbers**: 47 findings — 15 critical, 16 high, 16 moderate.
 
 > Read [`THREAT-MODEL.md`](https://github.com/centuari-labs/backend-v2/blob/security/pentest-findings-2026-05-08/security-findings/THREAT-MODEL.md) first — it traces 7 concrete attack chains across these findings and shows which fixes close the most chains per hour invested.
 
@@ -33,7 +33,7 @@ The remaining "free money" attack chain (reorg / float drift) needs ~14–25 h o
 
 ## Children — by severity
 
-### 🔴 Critical (14)
+### 🔴 Critical (15)
 
 - [ ] <TBD-F-1> F-1: Secrets committed to repo (`.env`)
 - [ ] <TBD-F-2> F-2: No global rate limiter
@@ -49,6 +49,7 @@ The remaining "free money" attack chain (reorg / float drift) needs ~14–25 h o
 - [ ] <TBD-F-29> F-29: Order placement performs no balance check and never locks funds
 - [ ] <TBD-F-32> F-32: `ENABLE_DEV_AUTH=true` not gated by `NODE_ENV` — accidental prod = total auth bypass
 - [ ] <TBD-F-35> F-35: Paired-wallet private keys generated server-side, persisted plaintext
+- [ ] <TBD-F-48> F-48: `updateOrder` has the same lost-update race as `cancelOrder`
 
 ### 🟠 High (16)
 

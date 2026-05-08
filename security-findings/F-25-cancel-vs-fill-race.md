@@ -40,7 +40,7 @@ async cancelOrder(orderId: string, walletAddress: string): Promise<Order> {
 }
 ```
 
-For comparison, `updateOrder` *is* wrapped in `this.dataSource.transaction(...)` (line 270). The asymmetry is the bug — `cancelOrder` is the more sensitive of the two operations and gets the weaker consistency.
+For comparison, `updateOrder` *is* wrapped in `this.dataSource.transaction(...)` (line 270). The asymmetry is part of the bug — `cancelOrder` is the more sensitive of the two operations and gets the weaker consistency. **Correction (added with [F-48](./F-48-update-order-lost-update-race.md))**: `updateOrder`'s transaction wrapper does not actually make it safe — at the default `READ COMMITTED` isolation level a transaction without a row lock still races. The same lost-update class lives there too; see F-48 for the dedicated finding.
 
 `repository.save(entity)` in TypeORM produces a full UPDATE of every column, with no `WHERE status = :priorStatus` guard, so:
 

@@ -1,6 +1,6 @@
 # GitHub Issues — Manual Upload Guide
 
-Copy-paste guide for converting the 46 pentest findings + tracking epic into GitHub issues.
+Copy-paste guide for converting the 47 pentest findings + tracking epic into GitHub issues.
 
 ---
 
@@ -50,7 +50,7 @@ For each row below:
 
 ---
 
-### 🔴 Critical (14)
+### 🔴 Critical (15)
 
 | # | Title | Labels | Body file |
 |---|-------|--------|-----------|
@@ -68,6 +68,7 @@ For each row below:
 | F-29 | F-29: Order placement performs no balance check and never locks funds | `security`, `severity:critical` | [`F-29-no-balance-check-on-order.md`](../F-29-no-balance-check-on-order.md) |
 | F-32 | F-32: `ENABLE_DEV_AUTH=true` not gated by `NODE_ENV` — accidental prod = total auth bypass | `security`, `severity:critical` | [`F-32-enable-dev-auth-not-prod-gated.md`](../F-32-enable-dev-auth-not-prod-gated.md) |
 | F-35 | F-35: Paired-wallet private keys generated server-side, persisted plaintext | `security`, `severity:critical` | [`F-35-paired-wallet-private-key-plaintext.md`](../F-35-paired-wallet-private-key-plaintext.md) |
+| F-48 | F-48: `updateOrder` has the same lost-update race as `cancelOrder` | `security`, `severity:critical` | [`F-48-update-order-lost-update-race.md`](../F-48-update-order-lost-update-race.md) |
 
 ### 🟠 High (15)
 
@@ -166,6 +167,7 @@ F-44  → #
 F-45  → #
 F-46  → #
 F-47  → #
+F-48  → #
 ```
 
 GitHub auto-renders `#NNN` as cross-references, so once filled in, the epic shows progress on each child.

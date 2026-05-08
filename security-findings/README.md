@@ -24,6 +24,7 @@ Pentest report from 2026-05-08. Web2 application-layer scope.
 | [F-29](./F-29-no-balance-check-on-order.md) | 🔴 Critical | Order placement performs no balance check and never locks funds | Open |
 | [F-32](./F-32-enable-dev-auth-not-prod-gated.md) | 🔴 Critical | `ENABLE_DEV_AUTH=true` not gated by `NODE_ENV` — accidental prod = total auth bypass | Open |
 | [F-35](./F-35-paired-wallet-private-key-plaintext.md) | 🔴 Critical | Paired-wallet private keys generated server-side, persisted plaintext, returned over HTTP | Open |
+| [F-48](./F-48-update-order-lost-update-race.md) | 🔴 Critical | `updateOrder` has the same lost-update race as `cancelOrder` — F-25 incorrectly excluded it | Open |
 | [F-3](./F-3-handlebars-cve.md) | 🟠 High | handlebars 4.7.8 — JS injection (transitive) | Open |
 | [F-4](./F-4-jws-cve.md) | 🟠 High | jws 3.2.2 — improper HMAC verification | Open |
 | [F-5](./F-5-multer-cve.md) | 🟠 High | multer 2.0.2 — DoS (3 CVEs) | Open |
@@ -99,8 +100,9 @@ Pentest report from 2026-05-08. Web2 application-layer scope.
 38. **F-45** — Error classification on bot retry; daily gas budget; faucet-exhausted short-circuit; production opt-in (2–3 h)
 39. **F-46** — Bound `waitForReceipt` timeout; outbox-style decouple of receipt wait from queue; statement_timeout + fetch timeout (2–3 h)
 40. **F-47** — `TRUSTED_PROXY` env-driven `trust proxy`; boot-time enforcement; strip-untrusted-headers middleware (30 min)
+41. **F-48** — `setLock('pessimistic_write')` on `updateOrder`; replace `repo.save(entity)` with `repo.update(criteria, partial)` (1 h)
 
-Total ~54.5–78.5 hours to address all critical and high findings.
+Total ~55.5–79.5 hours to address all critical and high findings.
 
 ## Out of scope (functional bugs, not security)
 

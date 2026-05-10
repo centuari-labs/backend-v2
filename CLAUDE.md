@@ -146,6 +146,43 @@ All responses are wrapped by the global interceptor:
 { success: false, message: "...", statusCode: 400, timestamp: "...", path: "/..." }
 ```
 
+### Order Lock Lifecycle
+
+The backend reads — but never writes — `portfolio.locked_amount`. Match-time increments are owned by the matching-engine's db-writer process; settlement-time decrements are owned by settlement-engine. Backend's job is validation (place-order) and HF accounting (using both open orders and unsettled matches as in-flight debt).
+
+#### HF buffer config
+
+`risk.borrow_buffer_bps` (`INT NOT NULL DEFAULT 100`, per [migration 20260510130000](src/core/database/migrations/20260510130000_add_borrow_buffer_bps.sql)) configures the per-market safety margin above HF=1 that a new borrow must clear. The effective threshold is `1 + bufferBps/10000` (e.g. 100 bps → threshold 1.01).
+
+Aggregation rule: for a given `(account, loanToken)`, the effective buffer is `MAX(risk.borrow_buffer_bps)` over every flagged-collateral × loanToken risk row the user has. The conservative MAX prevents a low-buffer collateral from masking a high-buffer collateral the user also flagged.
+
+- Repo-level lookup: [`PortfolioRepository.getBorrowBufferBps(collateralIds, loanTokenId)`](src/portfolio/repositories/portfolio.repository.ts) returns the MAX, or `null` when no risk row matches.
+- Service-level resolver: [`PortfolioService.getBorrowBufferBps(accountId, loanTokenId)`](src/portfolio/portfolio.service.ts) loads the user's flagged collateral, calls the repo, and falls back to `DEFAULT_BORROW_BUFFER_BPS = 100` from [health-factor.helpers.ts](src/portfolio/helpers/health-factor.helpers.ts) when the repo returns `null`.
+- Enforcement: [`OrdersService.validateHealthFactor`](src/orders/orders.service.ts) computes the threshold `1 + bufferBps/10000` and rejects with an error message that surfaces both the threshold and the buffer (e.g. "below 1.01 (1.0 + 100bps buffer)"). The same threshold is used by `updateOrder`.
+
+#### Lock lifecycle as observed by the backend
+
+`portfolio.locked_amount` is backend-readable but never backend-written:
+
+- **Increment (match time):** db-writer in matching-engine inserts the `matches` row and updates both sides' `portfolio.locked_amount += matched + fees` in the same transaction — see [matching-engine/src/services/db/postgres-db-client.ts:216-254](../matching-engine/src/services/db/postgres-db-client.ts).
+- **Decrement (settlement time):** settlement-engine's `writebackSettledMatches` flips `matches.settlement_status PENDING → SETTLED` and decrements both sides' `portfolio.locked_amount` by the same amounts the db-writer added — see [settlement-engine/src/settlement/database/lock-release.ts](../settlement-engine/src/settlement/database/lock-release.ts) (called from [apply-settlement.ts:416-421](../settlement-engine/src/settlement/database/apply-settlement.ts)).
+
+Backend's available-balance formula is `wallet − portfolio.locked_amount − sum_open_orders`. It will under-count for the brief window between match and settlement-engine writeback (typical ~30s − few minutes per `SETTLEMENT_BATCH_INTERVAL_MS`).
+
+#### FILLED-but-unsettled HF gap closure
+
+OPEN/PARTIALLY_FILLED borrow orders are counted in HF via `getOpenBorrowOrders` (already wired). The remaining gap is the window between match (status → FILLED) and settlement (`borrow_position` row created): a matched order has left OPEN/PARTIALLY_FILLED but its `borrow_position` row hasn't been written, so neither bucket counts it.
+
+Closure: [`MatchRepository.getPendingBorrowMatches(accountId)`](src/orders/repositories/match.repository.ts) selects `matches WHERE borrower_account_id = ? AND settlement_status = 'PENDING'`. The result is pushed into `additionalDebtPositions` in [`PortfolioService.getHealthFactorForAccount`](src/portfolio/portfolio.service.ts) whenever `includeOpenOrders: true` (the same flag the order place-borrow path passes).
+
+This depends on settlement-engine's writeback flipping `settlement_status` PENDING → SETTLED — until that lands, the query has no signal but the read path is harmless.
+
+The `Match` TypeORM entity is a mirror with `synchronize: false` ([match.entity.ts](src/orders/entities/match.entity.ts)) — db-writer remains the canonical writer; backend only reads.
+
+#### Known cancel race window (unfixed in Phase 1)
+
+For the cancel-during-match race window and the planned engine-coordinated-cancel fix, see [../smart-contract-revamp/docs/order-lock-lifecycle-followups.md](../smart-contract-revamp/docs/order-lock-lifecycle-followups.md).
+
 ### Inter-Service Communication
 
 - **NATS** (request/reply) for backend ↔ matching engine

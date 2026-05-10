@@ -345,7 +345,9 @@ describe("Orders Flow Integration", () => {
                     MOCK_IDS.walletAddress,
                     MOCK_IDS.privyUserId,
                 ),
-            ).rejects.toThrow("Borrow would reduce health factor below 1");
+            ).rejects.toThrow(
+                /Borrow would reduce health factor to 0\.5000, below required 1\.0100/,
+            );
         });
     });
 

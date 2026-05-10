@@ -126,6 +126,33 @@ export class PortfolioRepository extends Repository<LegacyPortfolio> {
         );
     }
 
+    /**
+     * Returns the most-conservative borrow HF buffer (max basis points)
+     * across the user's flagged collateral × the order's loan token. Caller
+     * (PortfolioService) supplies the user's actual collateral set so the
+     * buffer reflects the real exposure rather than a worst-case across all
+     * possible pairs.
+     *
+     * Returns null when no `risk` row matches — callers default to
+     * DEFAULT_BORROW_BUFFER_BPS (see health-factor.helpers.ts).
+     */
+    async getBorrowBufferBps(
+        collateralTokenIds: string[],
+        loanTokenId: string,
+    ): Promise<number | null> {
+        if (collateralTokenIds.length === 0) return null;
+        const rows: { max_buffer: number | null }[] =
+            await this.dataSource.query(
+                `SELECT MAX(borrow_buffer_bps)::int AS max_buffer
+                 FROM risk
+                 WHERE loan_token_id = $1
+                   AND collateral_token_id = ANY($2)`,
+                [loanTokenId, collateralTokenIds],
+            );
+        const max = rows[0]?.max_buffer;
+        return max != null ? Number(max) : null;
+    }
+
     // ──────────────────────────────────────────────────────────────
     // Shared on-chain-state reads (A5)
     //

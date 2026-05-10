@@ -107,6 +107,9 @@ describe("OrdersService", () => {
             getHealthFactorForAccount: jest
                 .fn()
                 .mockResolvedValue({ healthFactor: 2 }),
+            // 100bps = threshold 1.01; tests that need a different threshold
+            // override per-test via .mockResolvedValueOnce(...)
+            getBorrowBufferBps: jest.fn().mockResolvedValue(100),
             getAssetBalance: jest.fn().mockResolvedValue("1000000000"),
             checkAvailableBalanceForLend: jest
                 .fn()
@@ -126,13 +129,17 @@ describe("OrdersService", () => {
                 }
                 return {
                     findOne: jest.fn(),
-                    save: jest.fn().mockImplementation((val) => Promise.resolve(val)),
+                    save: jest
+                        .fn()
+                        .mockImplementation((val) => Promise.resolve(val)),
                 };
             }),
         };
 
         const mockDataSource = {
-            transaction: jest.fn().mockImplementation((cb: any) => cb(mockManager)),
+            transaction: jest
+                .fn()
+                .mockImplementation((cb: any) => cb(mockManager)),
         };
 
         const module: TestingModule = await Test.createTestingModule({
@@ -687,7 +694,7 @@ describe("OrdersService", () => {
                     mockPrivyUserId,
                 ),
             ).rejects.toThrow(
-                "Borrow would reduce health factor below 1 (considering open orders); position not allowed.",
+                /Borrow would reduce health factor to 0\.8000, below required 1\.0100 \(1\.0 \+ 100bps buffer\)\./,
             );
             expect(orderRepository.saveOrderWithMarkets).not.toHaveBeenCalled();
         });
@@ -820,7 +827,7 @@ describe("OrdersService", () => {
                     mockPrivyUserId,
                 ),
             ).rejects.toThrow(
-                "Borrow would reduce health factor below 1 (considering open orders); position not allowed.",
+                /Borrow would reduce health factor to 0\.5000, below required 1\.0100 \(1\.0 \+ 100bps buffer\)\./,
             );
             expect(orderRepository.saveOrderWithMarkets).not.toHaveBeenCalled();
         });
@@ -982,18 +989,20 @@ describe("OrdersService", () => {
                 id: mockAccountId,
             } as any);
             tokensService.getTokenDecimalsByAssetId.mockResolvedValue(6);
-            
+
             // Mock transaction manager repository results
             const mockRepo = {
                 findOne: jest.fn().mockResolvedValue(existingOrder),
                 save: jest.fn().mockImplementation((v) => Promise.resolve(v)),
                 delete: jest.fn().mockResolvedValue({}),
             };
-            (dataSource.transaction as jest.Mock).mockImplementationOnce(async (cb) => {
-                return cb({
-                    getRepository: jest.fn().mockReturnValue(mockRepo),
-                });
-            });
+            (dataSource.transaction as jest.Mock).mockImplementationOnce(
+                async (cb) => {
+                    return cb({
+                        getRepository: jest.fn().mockReturnValue(mockRepo),
+                    });
+                },
+            );
 
             const result = await service.updateOrder(
                 existingOrder.id,
@@ -1014,19 +1023,29 @@ describe("OrdersService", () => {
                 filledQuantity: "500000000", // 500
             });
 
-            orderRepository.findAccountByWallet.mockResolvedValue({ id: mockAccountId } as any);
+            orderRepository.findAccountByWallet.mockResolvedValue({
+                id: mockAccountId,
+            } as any);
             tokensService.getTokenDecimalsByAssetId.mockResolvedValue(6);
-            
+
             const mockRepo = {
                 findOne: jest.fn().mockResolvedValue(existingOrder),
                 save: jest.fn().mockImplementation((v) => Promise.resolve(v)),
                 delete: jest.fn().mockResolvedValue({}),
             };
-            (dataSource.transaction as jest.Mock).mockImplementationOnce(async (cb) => {
-                return cb({ getRepository: jest.fn().mockReturnValue(mockRepo) });
-            });
+            (dataSource.transaction as jest.Mock).mockImplementationOnce(
+                async (cb) => {
+                    return cb({
+                        getRepository: jest.fn().mockReturnValue(mockRepo),
+                    });
+                },
+            );
 
-            const result = await service.updateOrder(existingOrder.id, mockWalletAddress, updateDto);
+            const result = await service.updateOrder(
+                existingOrder.id,
+                mockWalletAddress,
+                updateDto,
+            );
 
             expect(result.status).toBe(OrderStatus.PartiallyFilled);
             expect(BigInt(result.quantity)).toBe(1500000000n);
@@ -1038,19 +1057,31 @@ describe("OrdersService", () => {
                 filledQuantity: "2000000000", // 2000
             });
 
-            orderRepository.findAccountByWallet.mockResolvedValue({ id: mockAccountId } as any);
+            orderRepository.findAccountByWallet.mockResolvedValue({
+                id: mockAccountId,
+            } as any);
             tokensService.getTokenDecimalsByAssetId.mockResolvedValue(6);
-            
+
             const mockRepo = {
                 findOne: jest.fn().mockResolvedValue(existingOrder),
             };
-            (dataSource.transaction as jest.Mock).mockImplementationOnce(async (cb) => {
-                return cb({ getRepository: jest.fn().mockReturnValue(mockRepo) });
-            });
+            (dataSource.transaction as jest.Mock).mockImplementationOnce(
+                async (cb) => {
+                    return cb({
+                        getRepository: jest.fn().mockReturnValue(mockRepo),
+                    });
+                },
+            );
 
             await expect(
-                service.updateOrder(existingOrder.id, mockWalletAddress, updateDto),
-            ).rejects.toThrow("New quantity must be greater than the already filled quantity");
+                service.updateOrder(
+                    existingOrder.id,
+                    mockWalletAddress,
+                    updateDto,
+                ),
+            ).rejects.toThrow(
+                "New quantity must be greater than the already filled quantity",
+            );
         });
 
         it("should throw ForbiddenException if user does not own the order", async () => {
@@ -1065,14 +1096,20 @@ describe("OrdersService", () => {
             const mockRepo = {
                 findOne: jest.fn().mockResolvedValue(otherOrder),
             };
-            (dataSource.transaction as jest.Mock).mockImplementationOnce(async (cb) => {
-                return cb({
-                    getRepository: jest.fn().mockReturnValue(mockRepo),
-                });
-            });
+            (dataSource.transaction as jest.Mock).mockImplementationOnce(
+                async (cb) => {
+                    return cb({
+                        getRepository: jest.fn().mockReturnValue(mockRepo),
+                    });
+                },
+            );
 
             await expect(
-                service.updateOrder(otherOrder.id, mockWalletAddress, updateDto),
+                service.updateOrder(
+                    otherOrder.id,
+                    mockWalletAddress,
+                    updateDto,
+                ),
             ).rejects.toThrow(ForbiddenException);
         });
 
@@ -1088,14 +1125,20 @@ describe("OrdersService", () => {
             const mockRepo = {
                 findOne: jest.fn().mockResolvedValue(cancelledOrder),
             };
-            (dataSource.transaction as jest.Mock).mockImplementationOnce(async (cb) => {
-                return cb({
-                    getRepository: jest.fn().mockReturnValue(mockRepo),
-                });
-            });
+            (dataSource.transaction as jest.Mock).mockImplementationOnce(
+                async (cb) => {
+                    return cb({
+                        getRepository: jest.fn().mockReturnValue(mockRepo),
+                    });
+                },
+            );
 
             await expect(
-                service.updateOrder(cancelledOrder.id, mockWalletAddress, updateDto),
+                service.updateOrder(
+                    cancelledOrder.id,
+                    mockWalletAddress,
+                    updateDto,
+                ),
             ).rejects.toThrow(BadRequestException);
         });
 
@@ -1117,18 +1160,24 @@ describe("OrdersService", () => {
                 findOne: jest.fn().mockResolvedValue(partiallyFilledOrder),
                 save: jest.fn(),
             };
-            (dataSource.transaction as jest.Mock).mockImplementationOnce(async (cb) => {
-                return cb({
-                    getRepository: jest.fn().mockReturnValue(mockRepo),
-                });
-            });
+            (dataSource.transaction as jest.Mock).mockImplementationOnce(
+                async (cb) => {
+                    return cb({
+                        getRepository: jest.fn().mockReturnValue(mockRepo),
+                    });
+                },
+            );
 
             // Amount "0.4" with 6 decimals = 400000 base units, which is <= filledQuantity 500000
             await expect(
-                service.updateOrder(partiallyFilledOrder.id, mockWalletAddress, {
-                    ...updateDto,
-                    amount: "0.4",
-                }),
+                service.updateOrder(
+                    partiallyFilledOrder.id,
+                    mockWalletAddress,
+                    {
+                        ...updateDto,
+                        amount: "0.4",
+                    },
+                ),
             ).rejects.toThrow(BadRequestException);
         });
 
@@ -1155,14 +1204,20 @@ describe("OrdersService", () => {
                 findOne: jest.fn().mockResolvedValue(borrowOrder),
                 save: jest.fn(),
             };
-            (dataSource.transaction as jest.Mock).mockImplementationOnce(async (cb) => {
-                return cb({
-                    getRepository: jest.fn().mockReturnValue(mockRepo),
-                });
-            });
+            (dataSource.transaction as jest.Mock).mockImplementationOnce(
+                async (cb) => {
+                    return cb({
+                        getRepository: jest.fn().mockReturnValue(mockRepo),
+                    });
+                },
+            );
 
             await expect(
-                service.updateOrder(borrowOrder.id, mockWalletAddress, updateDto),
+                service.updateOrder(
+                    borrowOrder.id,
+                    mockWalletAddress,
+                    updateDto,
+                ),
             ).rejects.toThrow(BadRequestException);
         });
 
@@ -1183,11 +1238,13 @@ describe("OrdersService", () => {
                 findOne: jest.fn().mockResolvedValue(openOrder),
                 save: jest.fn().mockRejectedValue(new Error("DB save failed")),
             };
-            (dataSource.transaction as jest.Mock).mockImplementationOnce(async (cb) => {
-                return cb({
-                    getRepository: jest.fn().mockReturnValue(mockRepo),
-                });
-            });
+            (dataSource.transaction as jest.Mock).mockImplementationOnce(
+                async (cb) => {
+                    return cb({
+                        getRepository: jest.fn().mockReturnValue(mockRepo),
+                    });
+                },
+            );
 
             await expect(
                 service.updateOrder(openOrder.id, mockWalletAddress, updateDto),
@@ -1290,6 +1347,146 @@ describe("OrdersService", () => {
             );
 
             expect(result).toBeDefined();
+        });
+
+        const setupBorrowMocks = (healthFactor: number, bufferBps: number) => {
+            orderRepository.getOrCreateAccount.mockResolvedValue({
+                id: mockAccountId,
+            } as any);
+            tokensService.validateTokenByAssetId.mockResolvedValue({
+                id: mockAssetId,
+                tokenAddress: "0xToken",
+            } as any);
+            tokensService.getTokenDecimalsByAssetId.mockResolvedValue(6);
+            priceService.getPrice.mockResolvedValue(1);
+            portfolioService.getHealthFactorForAccount.mockResolvedValue({
+                healthFactor,
+                collateralUsd: 1000,
+                debtUsd: 500,
+                weightedLtvDecimal: 0.75,
+            } as any);
+            (
+                portfolioService.getBorrowBufferBps as jest.Mock
+            ).mockResolvedValueOnce(bufferBps);
+
+            const mockOrder = createMockOrder({
+                side: OrderSide.Borrow,
+                type: OrderType.Limit,
+            });
+            orderRepository.create.mockReturnValue(mockOrder);
+            orderRepository.saveOrderWithMarkets.mockResolvedValue(mockOrder);
+        };
+
+        it("should reject when HF=1.005 with default 100bps buffer (threshold 1.01)", async () => {
+            setupBorrowMocks(1.005, 100);
+            await expect(
+                service.createBorrowLimitOrder(
+                    borrowLimitDto,
+                    mockWalletAddress,
+                    mockPrivyUserId,
+                ),
+            ).rejects.toThrow(
+                /below required 1\.0100 \(1\.0 \+ 100bps buffer\)/,
+            );
+        });
+
+        it("should accept when HF=1.05 with 100bps buffer", async () => {
+            setupBorrowMocks(1.05, 100);
+            await expect(
+                service.createBorrowLimitOrder(
+                    borrowLimitDto,
+                    mockWalletAddress,
+                    mockPrivyUserId,
+                ),
+            ).resolves.toBeDefined();
+        });
+
+        it("should reject when HF=1.05 with 500bps buffer (threshold 1.05 — strict <)", async () => {
+            setupBorrowMocks(1.0499, 500);
+            await expect(
+                service.createBorrowLimitOrder(
+                    borrowLimitDto,
+                    mockWalletAddress,
+                    mockPrivyUserId,
+                ),
+            ).rejects.toThrow(
+                /below required 1\.0500 \(1\.0 \+ 500bps buffer\)/,
+            );
+        });
+    });
+
+    describe("updateOrder buffer-based HF threshold", () => {
+        const updateDto: UpdateOrderDto = {
+            amount: "100",
+            rate: 500,
+            marketIds: [mockMarketId],
+        } as UpdateOrderDto;
+
+        const setupUpdateMocks = (healthFactor: number, bufferBps: number) => {
+            const borrowOrder = createMockOrder({
+                side: OrderSide.Borrow,
+                status: OrderStatus.Open,
+            });
+            orderRepository.findAccountByWallet.mockResolvedValue({
+                id: mockAccountId,
+            } as any);
+            tokensService.getTokenDecimalsByAssetId.mockResolvedValue(6);
+            priceService.getPrice.mockResolvedValue(1);
+            portfolioService.getHealthFactorForAccount.mockResolvedValue({
+                healthFactor,
+                collateralUsd: 1000,
+                debtUsd: 500,
+                weightedLtvDecimal: 0.75,
+            } as any);
+            (
+                portfolioService.getBorrowBufferBps as jest.Mock
+            ).mockResolvedValueOnce(bufferBps);
+
+            const mockOrderRepo = {
+                findOne: jest.fn().mockResolvedValue(borrowOrder),
+                save: jest.fn().mockImplementation((v) => Promise.resolve(v)),
+            };
+            const mockOrderMarketRepo = {
+                save: jest.fn().mockResolvedValue({}),
+                delete: jest.fn().mockResolvedValue({}),
+            };
+            (dataSource.transaction as jest.Mock).mockImplementationOnce(
+                async (cb: any) => {
+                    return cb({
+                        getRepository: jest.fn((entity: any) => {
+                            if (entity === OrderMarket)
+                                return mockOrderMarketRepo;
+                            return mockOrderRepo;
+                        }),
+                    });
+                },
+            );
+            return borrowOrder;
+        };
+
+        it("should reject update when HF=1.005 with 100bps buffer", async () => {
+            const order = setupUpdateMocks(1.005, 100);
+            await expect(
+                service.updateOrder(order.id, mockWalletAddress, updateDto),
+            ).rejects.toThrow(
+                /Update would reduce health factor to 1\.0050, below required 1\.0100 \(1\.0 \+ 100bps buffer\)/,
+            );
+        });
+
+        it("should accept update when HF=1.05 with 100bps buffer", async () => {
+            const order = setupUpdateMocks(1.05, 100);
+            await expect(
+                service.updateOrder(order.id, mockWalletAddress, updateDto),
+            ).resolves.toBeDefined();
+        });
+
+        it("should reject update when HF=1.0499 with 500bps buffer (threshold 1.05)", async () => {
+            const order = setupUpdateMocks(1.0499, 500);
+            await expect(
+                service.updateOrder(order.id, mockWalletAddress, updateDto),
+            ).rejects.toThrow(
+                /Update would reduce health factor.*below required 1\.0500 \(1\.0 \+ 500bps buffer\)/,
+            );
         });
     });
 });

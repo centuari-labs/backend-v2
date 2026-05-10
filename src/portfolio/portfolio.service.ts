@@ -38,6 +38,7 @@ import {
 } from "./dto/portfolio.dto";
 import { PortfolioRepository } from "./repositories/portfolio.repository";
 import { OrderRepository } from "../orders/repositories/order.repository";
+import { MatchRepository } from "../orders/repositories/match.repository";
 import { MarketRepositories } from "../market/repository/market.repository";
 import { bytes32ToUuid, uuidToBytes32 } from "../common/utils/uuid.utils";
 import { parseContractError } from "../common/utils/contract-errors.utils";
@@ -52,6 +53,7 @@ import {
 } from "../common/utils/number.utils";
 import {
     computeHealthFactor,
+    DEFAULT_BORROW_BUFFER_BPS,
     formatHealthFactorResponse,
     MIN_HEALTH_FACTOR,
     type CollateralPositionInput,
@@ -72,6 +74,7 @@ export class PortfolioService {
         private readonly tokensService: TokensService,
         private readonly portfolioRepository: PortfolioRepository,
         private readonly orderRepository: OrderRepository,
+        private readonly matchRepository: MatchRepository,
         private readonly marketRepository: MarketRepositories,
         private readonly viemService: ViemService,
         private readonly chainConfig: ChainConfigService,
@@ -303,6 +306,30 @@ export class PortfolioService {
     }
 
     /**
+     * Per-(collateral, loan) HF buffer for borrow place/update validation.
+     * Resolves the user's currently flagged collateral set, then asks the
+     * `risk` table for the most-conservative (max) buffer across pairs the
+     * user actually holds. Falls back to DEFAULT_BORROW_BUFFER_BPS when the
+     * user has no collateral or no risk row matches.
+     */
+    async getBorrowBufferBps(
+        accountId: string,
+        loanTokenId: string,
+    ): Promise<number> {
+        const wallet = await this.resolveWallet(accountId);
+        const collateralRows =
+            await this.portfolioRepository.getUserCollateralAssets(wallet);
+        if (collateralRows.length === 0) {
+            return DEFAULT_BORROW_BUFFER_BPS;
+        }
+        const buffer = await this.portfolioRepository.getBorrowBufferBps(
+            collateralRows.map((r) => r.asset_id),
+            loanTokenId,
+        );
+        return buffer ?? DEFAULT_BORROW_BUFFER_BPS;
+    }
+
+    /**
      * Builds the inputs for `computeHealthFactor`: collateral from
      * `user_balance` rows flagged `used_as_collateral`; debt from
      * `borrow_position` rolled up per `market.loan_token`. Accepts an
@@ -387,6 +414,27 @@ export class PortfolioService {
                     ).toString(),
                     decimals,
                     priceUsd: allPrices[order.assetId.toLowerCase()] ?? 0,
+                });
+            }
+
+            // FILLED-but-unsettled borrow matches: status has already left
+            // OPEN/PARTIALLY_FILLED but settlement-engine hasn't yet written
+            // the borrow_position row. Settlement-engine flips
+            // matches.settlement_status PENDING → SETTLED in the same tx as
+            // the position write (Phase 1A), so anything still PENDING is in
+            // the gap and must be folded into prospective debt.
+            const pendingMatches =
+                await this.matchRepository.getPendingBorrowMatches(accountId);
+            for (const match of pendingMatches) {
+                const decimals =
+                    (await this.tokensService.getTokenDecimalsByAssetId(
+                        match.assetId,
+                    )) ?? 0;
+                additionalDebtPositions.push({
+                    assetId: match.assetId,
+                    amountBaseUnits: match.matchAmount,
+                    decimals,
+                    priceUsd: allPrices[match.assetId.toLowerCase()] ?? 0,
                 });
             }
         }

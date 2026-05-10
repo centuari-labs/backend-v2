@@ -15,6 +15,7 @@ import { ChainConfigService } from "../../core/chain-config/chain-config.service
 import { DatabaseService } from "../../core/database/database.service";
 import { ViemService } from "../../core/viem/viem.service";
 import { MarketRepositories } from "../../market/repository/market.repository";
+import { MatchRepository } from "../../orders/repositories/match.repository";
 import { OrderRepository } from "../../orders/repositories/order.repository";
 import { PortfolioService } from "../../portfolio/portfolio.service";
 import { PortfolioRepository } from "../../portfolio/repositories/portfolio.repository";
@@ -23,7 +24,8 @@ import { Token } from "../../tokens/entities/token.entity";
 import { TokensService } from "../../tokens/tokens.service";
 
 const USDC_UUID = "token-uuid-usdc";
-const MARKET_HEX = "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd";
+const MARKET_HEX =
+    "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd";
 const MARKET_UUID = "cdcdcdcd-cdcd-cdcd-cdcd-cdcdcdcdcdcd";
 
 describe("PortfolioService (A5)", () => {
@@ -31,6 +33,7 @@ describe("PortfolioService (A5)", () => {
 
     let service: PortfolioService;
     let portfolioRepository: jest.Mocked<PortfolioRepository>;
+    let matchRepository: jest.Mocked<MatchRepository>;
     let priceService: jest.Mocked<PriceService>;
 
     beforeEach(async () => {
@@ -40,16 +43,19 @@ describe("PortfolioService (A5)", () => {
             getUserBorrowedAssets: jest.fn().mockResolvedValue([]),
             getUserLendPositionsForApr: jest.fn().mockResolvedValue([]),
             getUserCollateralAssets: jest.fn().mockResolvedValue([]),
-            getUserAssets: jest
-                .fn()
-                .mockResolvedValue({ data: [], total: 0 }),
+            getUserAssets: jest.fn().mockResolvedValue({ data: [], total: 0 }),
             getUserPositions: jest
                 .fn()
                 .mockResolvedValue({ data: [], total: 0 }),
             getRiskParamsByCollateralTokenIds: jest.fn().mockResolvedValue([]),
+            getBorrowBufferBps: jest.fn().mockResolvedValue(null),
             getLendPosition: jest.fn().mockResolvedValue(null),
             getBorrowPosition: jest.fn().mockResolvedValue(null),
         } as unknown as jest.Mocked<PortfolioRepository>;
+
+        matchRepository = {
+            getPendingBorrowMatches: jest.fn().mockResolvedValue([]),
+        } as unknown as jest.Mocked<MatchRepository>;
 
         priceService = {
             getPrices: jest.fn().mockReturnValue({ [USDC_UUID]: 1 }),
@@ -86,6 +92,7 @@ describe("PortfolioService (A5)", () => {
                         getOpenBorrowOrders: jest.fn().mockResolvedValue([]),
                     },
                 },
+                { provide: MatchRepository, useValue: matchRepository },
                 { provide: MarketRepositories, useValue: {} },
                 { provide: ViemService, useValue: {} },
                 {
@@ -215,6 +222,113 @@ describe("PortfolioService (A5)", () => {
             expect(result.data[0].marketId).toBe(MARKET_UUID);
             expect(result.data[0].side).toBe("LEND");
             expect(result.data[0].shares).toBe(1);
+        });
+    });
+
+    describe("getHealthFactorForAccount with includeOpenOrders", () => {
+        const accountId = "acc-uuid";
+
+        it("rolls FILLED-but-unsettled borrow matches into the prospective debt", async () => {
+            // 1000 USDC collateral at $1, 75% LTV; no settled debt; one
+            // pending match for 500 USDC. Without the pending match the HF
+            // would be Infinity (no debt); with it folded in we expect
+            // ((1000 - 0) * 0.75) / 500 = 1.5.
+            portfolioRepository.getUserCollateralAssets.mockResolvedValue([
+                { asset_id: USDC_UUID, amount: "1000000000", decimals: 6 },
+            ]);
+            portfolioRepository.getRiskParamsByCollateralTokenIds.mockResolvedValue(
+                [
+                    {
+                        asset_id: USDC_UUID,
+                        avg_ltv: "7500",
+                        avg_lt: "8000",
+                    },
+                ],
+            );
+            matchRepository.getPendingBorrowMatches.mockResolvedValue([
+                { assetId: USDC_UUID, matchAmount: "500000000" },
+            ]);
+
+            const result = await service.getHealthFactorForAccount(accountId, {
+                includeOpenOrders: true,
+            });
+
+            expect(
+                matchRepository.getPendingBorrowMatches,
+            ).toHaveBeenCalledWith(accountId);
+            expect(result.debtUsd).toBeCloseTo(500, 5);
+            expect(result.healthFactor).toBeCloseTo(1.5, 5);
+        });
+
+        it("ignores pending matches when includeOpenOrders is false", async () => {
+            portfolioRepository.getUserCollateralAssets.mockResolvedValue([
+                { asset_id: USDC_UUID, amount: "1000000000", decimals: 6 },
+            ]);
+            matchRepository.getPendingBorrowMatches.mockResolvedValue([
+                { assetId: USDC_UUID, matchAmount: "500000000" },
+            ]);
+
+            const result = await service.getHealthFactorForAccount(accountId);
+
+            expect(
+                matchRepository.getPendingBorrowMatches,
+            ).not.toHaveBeenCalled();
+            expect(result.debtUsd).toBe(0);
+        });
+    });
+
+    describe("getBorrowBufferBps", () => {
+        const accountId = "acc-uuid";
+        const LOAN_TOKEN_UUID = "token-uuid-loan";
+
+        it("returns DEFAULT_BORROW_BUFFER_BPS when user has no flagged collateral", async () => {
+            portfolioRepository.getUserCollateralAssets.mockResolvedValue([]);
+
+            const buffer = await service.getBorrowBufferBps(
+                accountId,
+                LOAN_TOKEN_UUID,
+            );
+
+            expect(buffer).toBe(100);
+            expect(
+                portfolioRepository.getBorrowBufferBps,
+            ).not.toHaveBeenCalled();
+        });
+
+        it("returns DEFAULT when no risk row matches the user's collateral × loan token", async () => {
+            portfolioRepository.getUserCollateralAssets.mockResolvedValue([
+                { asset_id: USDC_UUID, amount: "1000", decimals: 6 },
+            ]);
+            (
+                portfolioRepository.getBorrowBufferBps as jest.Mock
+            ).mockResolvedValue(null);
+
+            const buffer = await service.getBorrowBufferBps(
+                accountId,
+                LOAN_TOKEN_UUID,
+            );
+
+            expect(buffer).toBe(100);
+        });
+
+        it("returns repo result when a risk row matches", async () => {
+            portfolioRepository.getUserCollateralAssets.mockResolvedValue([
+                { asset_id: USDC_UUID, amount: "1000", decimals: 6 },
+            ]);
+            (
+                portfolioRepository.getBorrowBufferBps as jest.Mock
+            ).mockResolvedValue(500);
+
+            const buffer = await service.getBorrowBufferBps(
+                accountId,
+                LOAN_TOKEN_UUID,
+            );
+
+            expect(buffer).toBe(500);
+            expect(portfolioRepository.getBorrowBufferBps).toHaveBeenCalledWith(
+                [USDC_UUID],
+                LOAN_TOKEN_UUID,
+            );
         });
     });
 });

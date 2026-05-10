@@ -46,8 +46,6 @@ import {
 import { UpdateOrderDto } from "./dto/update-order.dto";
 import { OrderMarket } from "./entities/order-market.entity";
 
-const MIN_HEALTH_FACTOR = 1;
-
 interface PreparedOrderContext {
     accountId: string;
     decimals: number;
@@ -85,7 +83,7 @@ export class OrdersService {
         private readonly marketRepository: MarketRepositories,
         private readonly portfolioService: PortfolioService,
         private readonly dataSource: DataSource,
-    ) { }
+    ) {}
 
     async getOrCreateAccount(
         walletAddress: string,
@@ -262,7 +260,6 @@ export class OrdersService {
         return updatedOrder;
     }
 
-
     async updateOrder(
         orderId: string,
         walletAddress: string,
@@ -274,10 +271,13 @@ export class OrdersService {
 
             const order = await orderRepo.findOne({ where: { id: orderId } });
             if (!order) {
-                throw new NotFoundException(`Order with ID ${orderId} not found`);
+                throw new NotFoundException(
+                    `Order with ID ${orderId} not found`,
+                );
             }
 
-            const account = await this.orderRepository.findAccountByWallet(walletAddress);
+            const account =
+                await this.orderRepository.findAccountByWallet(walletAddress);
             if (!account || order.accountId !== account.id) {
                 throw new ForbiddenException("You do not own this order");
             }
@@ -291,7 +291,9 @@ export class OrdersService {
                 );
             }
 
-            const decimals = await this.tokensService.getTokenDecimalsByAssetId(order.assetId);
+            const decimals = await this.tokensService.getTokenDecimalsByAssetId(
+                order.assetId,
+            );
             if (decimals == null) {
                 throw new BadRequestException("Token decimals not configured");
             }
@@ -312,27 +314,39 @@ export class OrdersService {
             );
 
             if (order.side === OrderSide.Borrow) {
-                const assetPrice = await this.priceService.getPrice(order.assetId);
+                const assetPrice = await this.priceService.getPrice(
+                    order.assetId,
+                );
                 if (assetPrice == null || assetPrice <= 0) {
-                    throw new BadRequestException("Price not available for this asset");
+                    throw new BadRequestException(
+                        "Price not available for this asset",
+                    );
                 }
                 const newOrderUsd = Number(dto.amount) * assetPrice;
 
-                const hfResult = await this.portfolioService.getHealthFactorForAccount(
-                    order.accountId,
-                    {
-                        additionalBorrowUsd: newOrderUsd,
-                        includeOpenOrders: true,
-                    },
-                );
+                const [hfResult, bufferBps] = await Promise.all([
+                    this.portfolioService.getHealthFactorForAccount(
+                        order.accountId,
+                        {
+                            additionalBorrowUsd: newOrderUsd,
+                            includeOpenOrders: true,
+                        },
+                    ),
+                    this.portfolioService.getBorrowBufferBps(
+                        order.accountId,
+                        order.assetId,
+                    ),
+                ]);
+                const threshold = 1 + bufferBps / 10000;
 
                 if (
                     hfResult.healthFactor !== HEALTH_FACTOR_NO_DEBT &&
                     Number.isFinite(hfResult.healthFactor) &&
-                    hfResult.healthFactor < MIN_HEALTH_FACTOR
+                    hfResult.healthFactor < threshold
                 ) {
                     throw new BadRequestException(
-                        "Update would reduce health factor below 1",
+                        `Update would reduce health factor to ${hfResult.healthFactor.toFixed(4)}, ` +
+                            `below required ${threshold.toFixed(4)} (1.0 + ${bufferBps}bps buffer).`,
                     );
                 }
             }
@@ -341,7 +355,8 @@ export class OrdersService {
             order.settlementFee = settlementFee;
             order.rate = dto.rate;
             order.autoRollover = dto.autoRollover ?? order.autoRollover;
-            order.status = filledQty > 0n ? OrderStatus.PartiallyFilled : OrderStatus.Open;
+            order.status =
+                filledQty > 0n ? OrderStatus.PartiallyFilled : OrderStatus.Open;
 
             const updatedOrder = await orderRepo.save(order);
 
@@ -430,20 +445,22 @@ export class OrdersService {
             throw new BadRequestException("Price not available for this asset");
         }
         const newOrderUsd = Number(dto.amount) * assetPrice;
-        const hfResult = await this.portfolioService.getHealthFactorForAccount(
-            accountId,
-            {
+        const [hfResult, bufferBps] = await Promise.all([
+            this.portfolioService.getHealthFactorForAccount(accountId, {
                 additionalBorrowUsd: newOrderUsd,
                 includeOpenOrders: true,
-            },
-        );
+            }),
+            this.portfolioService.getBorrowBufferBps(accountId, dto.assetId),
+        ]);
+        const threshold = 1 + bufferBps / 10000;
         if (
             hfResult.healthFactor !== HEALTH_FACTOR_NO_DEBT &&
             Number.isFinite(hfResult.healthFactor) &&
-            hfResult.healthFactor < MIN_HEALTH_FACTOR
+            hfResult.healthFactor < threshold
         ) {
             throw new BadRequestException(
-                "Borrow would reduce health factor below 1 (considering open orders); position not allowed.",
+                `Borrow would reduce health factor to ${hfResult.healthFactor.toFixed(4)}, ` +
+                    `below required ${threshold.toFixed(4)} (1.0 + ${bufferBps}bps buffer).`,
             );
         }
     }

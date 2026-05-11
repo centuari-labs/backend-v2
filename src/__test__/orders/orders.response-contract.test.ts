@@ -4,9 +4,7 @@ import {
     OrderType,
     OrderStatus,
 } from "src/orders/constants/order.constants";
-import {
-    OrderResponse,
-} from "src/orders/dto/order-response.dto";
+import { OrderResponse } from "src/orders/dto/order-response.dto";
 import { toPercentage } from "src/common/utils/number.utils";
 
 describe("OrderResponse contract", () => {
@@ -122,9 +120,7 @@ describe("OrderResponse contract", () => {
     });
 
     it("side enum values are LEND or BORROW", () => {
-        expect(buildOrderResponse({ side: OrderSide.Lend }).side).toBe(
-            "LEND",
-        );
+        expect(buildOrderResponse({ side: OrderSide.Lend }).side).toBe("LEND");
         expect(buildOrderResponse({ side: OrderSide.Borrow }).side).toBe(
             "BORROW",
         );

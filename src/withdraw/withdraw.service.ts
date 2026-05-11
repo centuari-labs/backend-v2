@@ -191,10 +191,7 @@ export class WithdrawService {
                 throw error;
             }
 
-            this.logger.error(
-                `Withdraw failed: ${error.message}`,
-                error.stack,
-            );
+            this.logger.error(`Withdraw failed: ${error.message}`, error.stack);
 
             const parsed = parseContractError(error.message, {
                 InsufficientFunds: "Insufficient balance for withdrawal.",

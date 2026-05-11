@@ -41,7 +41,9 @@ describe("PrivyService", () => {
     describe("constructor / key loading", () => {
         it("should load verification key when file exists", () => {
             mockExistsSync.mockReturnValue(true);
-            mockReadFileSync.mockReturnValue("-----BEGIN PUBLIC KEY-----\nMOCK\n-----END PUBLIC KEY-----");
+            mockReadFileSync.mockReturnValue(
+                "-----BEGIN PUBLIC KEY-----\nMOCK\n-----END PUBLIC KEY-----",
+            );
 
             const service = new PrivyService();
 
@@ -129,9 +131,9 @@ describe("PrivyService", () => {
             const error = new Error("User not found");
             mockGetUser.mockRejectedValue(error);
 
-            await expect(
-                service.getUser("did:privy:unknown"),
-            ).rejects.toThrow("User not found");
+            await expect(service.getUser("did:privy:unknown")).rejects.toThrow(
+                "User not found",
+            );
         });
     });
 

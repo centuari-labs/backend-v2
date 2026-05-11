@@ -36,7 +36,17 @@ import { MarketModule } from "../market/market.module";
         MarketModule,
     ],
     controllers: [PortfolioController],
-    providers: [PortfolioService, PortfolioRepository, RepayService, RepayRepository],
-    exports: [PortfolioService, PortfolioRepository, RepayService, RepayRepository],
+    providers: [
+        PortfolioService,
+        PortfolioRepository,
+        RepayService,
+        RepayRepository,
+    ],
+    exports: [
+        PortfolioService,
+        PortfolioRepository,
+        RepayService,
+        RepayRepository,
+    ],
 })
 export class PortfolioModule {}

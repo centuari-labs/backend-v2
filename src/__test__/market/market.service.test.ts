@@ -189,7 +189,7 @@ describe("MarketService", () => {
     it("should skip maturities within 7 days (inclusive) for getMarketSnapshot", async () => {
         const now = new Date();
         const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
-        
+
         // Setup mocks
         orderRepositoryMock.getBestRates.mockResolvedValue(new Map());
         marketRepositoryMock.getTotalDepositUsd.mockResolvedValue([]);
@@ -199,11 +199,14 @@ describe("MarketService", () => {
 
         await service.getMarketSnapshot();
 
-        expect(marketRepositoryMock.getEarliestMarketByAssetIds).toHaveBeenCalled();
-        const calledDate = marketRepositoryMock.getEarliestMarketByAssetIds.mock.calls[0][1];
-        
+        expect(
+            marketRepositoryMock.getEarliestMarketByAssetIds,
+        ).toHaveBeenCalled();
+        const calledDate =
+            marketRepositoryMock.getEarliestMarketByAssetIds.mock.calls[0][1];
+
         const diff = calledDate.getTime() - now.getTime();
-        
+
         // Should be > 7 days. Our implementation adds 1ms to ensure exclusivity.
         expect(diff).toBeGreaterThan(sevenDaysMs);
         expect(diff).toBeLessThan(sevenDaysMs + 1000); // Allow for small execution delay, but should be close to 7 days + 1ms

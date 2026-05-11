@@ -137,8 +137,7 @@ describe("ChainIndexerService", () => {
                 mockTokenQb,
             );
 
-            const result =
-                await service.processTransactionDeposits(mockTxHash);
+            const result = await service.processTransactionDeposits(mockTxHash);
 
             expect(result).toBe(1);
             expect(portfolioRepository.upsertPortfolio).toHaveBeenCalled();
@@ -150,8 +149,7 @@ describe("ChainIndexerService", () => {
                 logs: [],
             });
 
-            const result =
-                await service.processTransactionDeposits(mockTxHash);
+            const result = await service.processTransactionDeposits(mockTxHash);
 
             expect(result).toBe(0);
         });
@@ -177,8 +175,7 @@ describe("ChainIndexerService", () => {
             // markAsProcessed returns empty (already processed)
             databaseService.query.mockResolvedValueOnce([]);
 
-            const result =
-                await service.processTransactionDeposits(mockTxHash);
+            const result = await service.processTransactionDeposits(mockTxHash);
 
             expect(result).toBe(0);
             expect(portfolioRepository.upsertPortfolio).not.toHaveBeenCalled();
@@ -216,8 +213,7 @@ describe("ChainIndexerService", () => {
                 mockQb,
             );
 
-            const result =
-                await service.processTransactionDeposits(mockTxHash);
+            const result = await service.processTransactionDeposits(mockTxHash);
 
             expect(result).toBe(0);
             expect(portfolioRepository.upsertPortfolio).not.toHaveBeenCalled();
@@ -266,8 +262,7 @@ describe("ChainIndexerService", () => {
                 mockTokenQb,
             );
 
-            const result =
-                await service.processTransactionDeposits(mockTxHash);
+            const result = await service.processTransactionDeposits(mockTxHash);
 
             expect(result).toBe(0);
             expect(portfolioRepository.upsertPortfolio).not.toHaveBeenCalled();
@@ -381,9 +376,7 @@ describe("ChainIndexerService", () => {
                 ["treasury-deposited"],
             );
             expect(databaseService.query).toHaveBeenCalledWith(
-                expect.stringContaining(
-                    "INSERT INTO indexer_state",
-                ),
+                expect.stringContaining("INSERT INTO indexer_state"),
                 ["treasury-deposited", "100"],
             );
         });

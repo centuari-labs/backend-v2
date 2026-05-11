@@ -5,7 +5,7 @@ import { createParamDecorator, ExecutionContext } from "@nestjs/common";
  * Requires AuthGuard to be applied to populate request.user
  */
 export const Wallet = createParamDecorator(
-    (data: unknown, ctx: ExecutionContext): string => {
+    (_data: unknown, ctx: ExecutionContext): string => {
         const request = ctx.switchToHttp().getRequest();
         return request.user?.walletAddress;
     },
@@ -15,7 +15,7 @@ export const Wallet = createParamDecorator(
  * Full user object including userId and walletAddress
  */
 export const CurrentUser = createParamDecorator(
-    (data: unknown, ctx: ExecutionContext) => {
+    (_data: unknown, ctx: ExecutionContext) => {
         const request = ctx.switchToHttp().getRequest();
         return request.user;
     },

@@ -145,9 +145,7 @@ export function createMockChainConfigService() {
     };
 }
 
-export function createMockConfigService(
-    overrides: Record<string, any> = {},
-) {
+export function createMockConfigService(overrides: Record<string, any> = {}) {
     return {
         get: jest.fn((key: string, defaultValue?: any) =>
             key in overrides ? overrides[key] : defaultValue,

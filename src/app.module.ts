@@ -56,6 +56,6 @@ import { EventsGateway } from "./core/websocket/websocket.gateway";
         CollateralModule,
     ],
     controllers: [],
-    providers: [EventsGateway],
+    providers: [],
 })
 export class AppModule {}

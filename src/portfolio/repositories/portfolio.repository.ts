@@ -292,12 +292,15 @@ export class PortfolioRepository extends Repository<LegacyPortfolio> {
     ): Promise<{
         data: {
             asset_id: string;
+            token_address: string;
             symbol: string;
             name: string;
             image_url: string | null;
             decimals: number;
             amount: string;
             is_collateral: boolean;
+            pending_collateral_flag: boolean;
+            flagged_at: string;
         }[];
         total: number;
     }> {
@@ -309,13 +312,24 @@ export class PortfolioRepository extends Repository<LegacyPortfolio> {
                 "t",
                 "LOWER(t.token_address) = '0x' || encode(ub.asset, 'hex')",
             )
+            .leftJoin(
+                "pending_collateral_flags",
+                "pcf",
+                "pcf.user_address = ub.user_address AND pcf.asset = ub.asset",
+            )
             .select("t.id", "asset_id")
+            .addSelect("LOWER(t.token_address)", "token_address")
             .addSelect("t.symbol", "symbol")
             .addSelect("t.name", "name")
             .addSelect("t.image_url", "image_url")
             .addSelect("COALESCE(t.decimals, 0)", "decimals")
             .addSelect("ub.available::text", "amount")
             .addSelect("ub.used_as_collateral", "is_collateral")
+            .addSelect("ub.flagged_at::text", "flagged_at")
+            .addSelect(
+                "pcf.user_address IS NOT NULL",
+                "pending_collateral_flag",
+            )
             .addSelect("COUNT(*) OVER ()", "total_count")
             .where("ub.user_address = :w", { w: BYTEA_HEX.to(wallet) })
             .andWhere("ub.available > 0")
@@ -324,12 +338,15 @@ export class PortfolioRepository extends Repository<LegacyPortfolio> {
             .offset(offset)
             .getRawMany<{
                 asset_id: string;
+                token_address: string;
                 symbol: string;
                 name: string;
                 image_url: string | null;
                 decimals: number;
                 amount: string;
                 is_collateral: boolean;
+                pending_collateral_flag: boolean;
+                flagged_at: string;
                 total_count: string;
             }>();
 

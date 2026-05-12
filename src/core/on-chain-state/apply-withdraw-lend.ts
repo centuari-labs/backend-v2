@@ -174,19 +174,14 @@ export async function applyWithdrawLendEffects(
             logIndex: event.logIndex,
             abi: [CREDITED_EVENT],
             expectedArgsPredicate: (decoded) =>
-                decoded.user.toLowerCase() ===
-                    event.args.user.toLowerCase() &&
-                decoded.asset.toLowerCase() ===
-                    event.args.asset.toLowerCase(),
+                decoded.user.toLowerCase() === event.args.user.toLowerCase() &&
+                decoded.asset.toLowerCase() === event.args.asset.toLowerCase(),
             alreadyAppliedCheck: (tx, stamp) =>
                 alreadyStamped(
                     tx,
                     "user_balance",
                     "user_address = $1 AND asset = $2",
-                    [
-                        hexToBytea(event.args.user),
-                        hexToBytea(event.args.asset),
-                    ],
+                    [hexToBytea(event.args.user), hexToBytea(event.args.asset)],
                     stamp,
                 ),
             mutation: async (tx, decoded, stamp) => {
@@ -219,12 +214,7 @@ export async function applyWithdrawLendEffects(
                 );
             },
         });
-        logOutcome(
-            receipt.transactionHash,
-            "Credited",
-            event.logIndex,
-            result,
-        );
+        logOutcome(receipt.transactionHash, "Credited", event.logIndex, result);
     }
 }
 
@@ -240,8 +230,7 @@ function parseReceiptLogs(
         if (!topic0) continue;
 
         if (
-            topic0.toLowerCase() ===
-            TOPIC_LEND_POSITION_WITHDRAWN.toLowerCase()
+            topic0.toLowerCase() === TOPIC_LEND_POSITION_WITHDRAWN.toLowerCase()
         ) {
             try {
                 const decoded = decodeEventLog({

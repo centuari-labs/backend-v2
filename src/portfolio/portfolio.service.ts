@@ -605,8 +605,15 @@ export class PortfolioService {
             );
             const price = allPrices[row.asset_id.toLowerCase()] ?? 0;
             const risk = riskMap.get(row.asset_id);
+            const flaggedAt = Number(row.flagged_at ?? "0") || 0;
+            // Sentinel `0` when not flagged. The 24h flag-lock counts from
+            // `flaggedAt`; if the asset isn't currently flagged on-chain the
+            // lock window is moot, so we keep `0` and let the frontend hide
+            // the countdown badge.
+            const unlocksAt = row.is_collateral ? flaggedAt + 86_400 : 0;
             return {
                 assetId: row.asset_id,
+                tokenAddress: row.token_address,
                 symbol: row.symbol || "UNKNOWN",
                 name: row.name || "Unknown Token",
                 // `lockedInOrders` = 0 in A5; Phase B sources the
@@ -614,6 +621,9 @@ export class PortfolioService {
                 walletBalance,
                 amountInUsd: calculateUsdAmount(walletBalance, price),
                 isCollateral: row.is_collateral,
+                pendingCollateralFlag: row.pending_collateral_flag,
+                flaggedAt,
+                unlocksAt,
                 imageUrl: row.image_url,
                 ltv: risk ? Number(risk.avg_ltv) / 10000 : 0,
                 liquidationThreshold: risk ? Number(risk.avg_lt) / 10000 : 0,

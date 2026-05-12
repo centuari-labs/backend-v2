@@ -26,12 +26,9 @@ import {
 
 jest.mock("@centuari-labs/on-chain-effects");
 
-const applyOnChainEffectFn =
-    applyOnChainEffectMock as jest.MockedFunction<
-        <T>(
-            args: ApplyOnChainEffectArgs<T>,
-        ) => Promise<ApplyOnChainEffectResult>
-    >;
+const applyOnChainEffectFn = applyOnChainEffectMock as jest.MockedFunction<
+    <T>(args: ApplyOnChainEffectArgs<T>) => Promise<ApplyOnChainEffectResult>
+>;
 
 const TOPIC_REPAID = keccak256(toHex("Repaid(bytes32,address,uint256)"));
 const TOPIC_DEBITED = keccak256(
@@ -111,9 +108,7 @@ function makeDebitedLog(
         removed: false,
         topics: [
             TOPIC_DEBITED,
-            padAddress(
-                "0x3333333333333333333333333333333333333333" as Address,
-            ),
+            padAddress("0x3333333333333333333333333333333333333333" as Address),
             padAddress(user),
             padAddress(ASSET),
         ],
@@ -122,9 +117,7 @@ function makeDebitedLog(
     } as TransactionReceipt["logs"][number];
 }
 
-function makeReceipt(
-    logs: TransactionReceipt["logs"],
-): TransactionReceipt {
+function makeReceipt(logs: TransactionReceipt["logs"]): TransactionReceipt {
     return {
         blockHash: "0x" + "bb".repeat(32),
         blockNumber: 1n,
@@ -168,9 +161,7 @@ describe("applyRepayEffects", () => {
     });
 
     it("invokes applyOnChainEffect once per Debited log", async () => {
-        const receipt = makeReceipt([
-            makeDebitedLog(5, BORROWER, 200n),
-        ]);
+        const receipt = makeReceipt([makeDebitedLog(5, BORROWER, 200n)]);
 
         await applyRepayEffects({
             pool: {} as never,

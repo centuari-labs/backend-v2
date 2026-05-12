@@ -1,9 +1,4 @@
-import {
-    Column,
-    CreateDateColumn,
-    Entity,
-    PrimaryColumn,
-} from "typeorm";
+import { Column, CreateDateColumn, Entity, PrimaryColumn } from "typeorm";
 import { BYTEA_HEX } from "../../common/transformers/bytea-hex.transformer";
 
 /**

@@ -60,7 +60,7 @@ export type ApplyOnChainEffectResult =
  * `jest.mock("@centuari-labs/on-chain-effects")` and override this mock.
  */
 export const applyOnChainEffect = jest.fn(
-    async <_TArgs,>(
+    async <_TArgs>(
         _args: ApplyOnChainEffectArgs<_TArgs>,
     ): Promise<ApplyOnChainEffectResult> => ({
         applied: false,

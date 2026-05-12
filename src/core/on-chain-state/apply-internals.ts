@@ -27,11 +27,7 @@ export function hexToBytea(hex: string): Buffer {
  */
 export async function alreadyStamped(
     tx: PoolClient,
-    table:
-        | "user_balance"
-        | "lend_position"
-        | "borrow_position"
-        | "market",
+    table: "user_balance" | "lend_position" | "borrow_position" | "market",
     pkCondition: string,
     pkValues: readonly unknown[],
     stamp: IdempotencyStamp,

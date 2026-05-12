@@ -168,19 +168,14 @@ export async function applyRepayEffects(args: ApplyRepayArgs): Promise<void> {
             logIndex: event.logIndex,
             abi: [DEBITED_EVENT],
             expectedArgsPredicate: (decoded) =>
-                decoded.user.toLowerCase() ===
-                    event.args.user.toLowerCase() &&
-                decoded.asset.toLowerCase() ===
-                    event.args.asset.toLowerCase(),
+                decoded.user.toLowerCase() === event.args.user.toLowerCase() &&
+                decoded.asset.toLowerCase() === event.args.asset.toLowerCase(),
             alreadyAppliedCheck: (tx, stamp) =>
                 alreadyStamped(
                     tx,
                     "user_balance",
                     "user_address = $1 AND asset = $2",
-                    [
-                        hexToBytea(event.args.user),
-                        hexToBytea(event.args.asset),
-                    ],
+                    [hexToBytea(event.args.user), hexToBytea(event.args.asset)],
                     stamp,
                 ),
             mutation: async (tx, decoded, stamp) => {

@@ -168,12 +168,16 @@ describe("PortfolioService (A5)", () => {
                 data: [
                     {
                         asset_id: USDC_UUID,
+                        token_address:
+                            "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
                         symbol: "USDC",
                         name: "USD Coin",
                         image_url: null,
                         decimals: 6,
                         amount: "1000000",
                         is_collateral: true,
+                        pending_collateral_flag: false,
+                        flagged_at: "1700000000",
                     },
                 ],
             });
@@ -185,6 +189,71 @@ describe("PortfolioService (A5)", () => {
             expect(result.data).toHaveLength(1);
             expect(result.data[0].walletBalance).toBe(1);
             expect(result.data[0].isCollateral).toBe(true);
+            expect(result.data[0].tokenAddress).toBe(
+                "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            );
+            expect(result.data[0].pendingCollateralFlag).toBe(false);
+            expect(result.data[0].flaggedAt).toBe(1700000000);
+            expect(result.data[0].unlocksAt).toBe(1700000000 + 86400);
+        });
+
+        it("derives unlocksAt=0 when row is not on-chain flagged", async () => {
+            portfolioRepository.getUserAssets.mockResolvedValue({
+                total: 1,
+                data: [
+                    {
+                        asset_id: USDC_UUID,
+                        token_address:
+                            "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+                        symbol: "USDC",
+                        name: "USD Coin",
+                        image_url: null,
+                        decimals: 6,
+                        amount: "1000000",
+                        is_collateral: false,
+                        pending_collateral_flag: true,
+                        flagged_at: "0",
+                    },
+                ],
+            });
+
+            const result = await service.getMyAssets(wallet, {
+                page: 1,
+                limit: 10,
+            });
+            expect(result.data[0].pendingCollateralFlag).toBe(true);
+            expect(result.data[0].isCollateral).toBe(false);
+            expect(result.data[0].flaggedAt).toBe(0);
+            expect(result.data[0].unlocksAt).toBe(0);
+        });
+
+        it("surfaces both pending and on-chain state when the user re-flags a dequeued asset", async () => {
+            portfolioRepository.getUserAssets.mockResolvedValue({
+                total: 1,
+                data: [
+                    {
+                        asset_id: USDC_UUID,
+                        token_address:
+                            "0xcccccccccccccccccccccccccccccccccccccccc",
+                        symbol: "USDC",
+                        name: "USD Coin",
+                        image_url: null,
+                        decimals: 6,
+                        amount: "1000000",
+                        is_collateral: true,
+                        pending_collateral_flag: true,
+                        flagged_at: "1700000000",
+                    },
+                ],
+            });
+
+            const result = await service.getMyAssets(wallet, {
+                page: 1,
+                limit: 10,
+            });
+            expect(result.data[0].isCollateral).toBe(true);
+            expect(result.data[0].pendingCollateralFlag).toBe(true);
+            expect(result.data[0].unlocksAt).toBe(1700000000 + 86400);
         });
     });
 

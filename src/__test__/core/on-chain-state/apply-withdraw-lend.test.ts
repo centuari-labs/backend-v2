@@ -22,12 +22,9 @@ import {
 
 jest.mock("@centuari-labs/on-chain-effects");
 
-const applyOnChainEffectFn =
-    applyOnChainEffectMock as jest.MockedFunction<
-        <T>(
-            args: ApplyOnChainEffectArgs<T>,
-        ) => Promise<ApplyOnChainEffectResult>
-    >;
+const applyOnChainEffectFn = applyOnChainEffectMock as jest.MockedFunction<
+    <T>(args: ApplyOnChainEffectArgs<T>) => Promise<ApplyOnChainEffectResult>
+>;
 
 const TOPIC_WITHDRAWN = keccak256(
     toHex("LendPositionWithdrawn(bytes32,address,uint256,uint256)"),
@@ -94,9 +91,7 @@ function makeCreditedLog(
     } as TransactionReceipt["logs"][number];
 }
 
-function makeReceipt(
-    logs: TransactionReceipt["logs"],
-): TransactionReceipt {
+function makeReceipt(logs: TransactionReceipt["logs"]): TransactionReceipt {
     return {
         blockHash: "0x" + "ee".repeat(32),
         blockNumber: 1n,

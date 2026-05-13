@@ -139,10 +139,11 @@ export class WithdrawService {
                     }
                 }
 
-                // Call HubDepositor.withdraw on-chain
+                // Call HubDepositor.payout on-chain
+                // Signature: payout(user, asset, amount) — note arg order vs. legacy Treasury.withdraw(token, to, amount)
                 const amountInBaseUnits = parseUnits(amount, decimals);
                 this.logger.log(
-                    `Executing withdraw: token=${token.tokenAddress}, to=${walletAddress}, amount=${amountInBaseUnits}`,
+                    `Executing payout: user=${walletAddress}, asset=${token.tokenAddress}, amount=${amountInBaseUnits}`,
                 );
 
                 const receipt = (await this.viemService.writeContract(
@@ -150,8 +151,8 @@ export class WithdrawService {
                     this.chainConfig.operatorPrivateKey,
                     this.chainConfig.hubDepositorAddress,
                     HubDepositorAbi,
-                    "withdraw",
-                    [token.tokenAddress, walletAddress, amountInBaseUnits],
+                    "payout",
+                    [walletAddress, token.tokenAddress, amountInBaseUnits],
                     { waitForReceipt: true },
                 )) as TransactionReceipt;
 

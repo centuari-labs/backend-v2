@@ -160,8 +160,8 @@ describe("WithdrawService", () => {
                 "0xabc123",
                 "0xHubDepositor",
                 expect.anything(), // HubDepositorAbi
-                "withdraw",
-                ["0xTokenAddr", walletAddress, 100000000n], // parseUnits("100", 6)
+                "payout",
+                [walletAddress, "0xTokenAddr", 100000000n], // payout(user, asset, amount)
                 { waitForReceipt: true },
             );
         });

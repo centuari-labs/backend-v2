@@ -8,10 +8,12 @@ import { ViemService } from "../core/viem/viem.service";
 import { ChainConfigService } from "../core/chain-config/chain-config.service";
 import { FaucetService } from "../faucet/faucet.service";
 import HubDepositorAbiJson from "../abi/HubDepositor.json";
+import BalanceLedgerAbiJson from "../abi/BalanceLedger.json";
 import { privateKeyToAccount } from "viem/accounts";
 import { keccak256, parseEventLogs, toHex } from "viem";
 
 const HubDepositorAbi = HubDepositorAbiJson as Abi;
+const BalanceLedgerAbi = BalanceLedgerAbiJson as Abi;
 import { OrderRepository } from "./repositories/order.repository";
 import { PortfolioRepository } from "../portfolio/repositories/portfolio.repository";
 import { portfolioUuidFor } from "../common/utils/uuid.utils";
@@ -297,7 +299,7 @@ export class OrdersWorker implements OnModuleInit {
                         this.chainConfig.chainId,
                         this.chainConfig.hubDepositorAddress,
                         HubDepositorAbi,
-                        "supportedToken",
+                        "isSupportedAsset",
                         [s.tokenAddress],
                     )
                     .then((supported) => ({ ...s, supported }))
@@ -494,7 +496,7 @@ export class OrdersWorker implements OnModuleInit {
     }
 
     /**
-     * Syncs portfolio DB row from on-chain HubDepositor balance.
+     * Syncs portfolio DB row from on-chain BalanceLedger.available slot.
      * Ensures DB reflects on-chain state regardless of event parsing.
      */
     private async syncPortfolioFromOnChainBalance(
@@ -506,9 +508,9 @@ export class OrdersWorker implements OnModuleInit {
         try {
             const onChainBalance = await this.viemService.readContract<bigint>(
                 this.chainConfig.chainId,
-                this.chainConfig.hubDepositorAddress,
-                HubDepositorAbi,
-                "balanceOf",
+                this.chainConfig.balanceLedgerAddress,
+                BalanceLedgerAbi,
+                "available",
                 [bot.wallet, tokenAddress],
             );
             if (onChainBalance === 0n) return;
@@ -619,7 +621,7 @@ export class OrdersWorker implements OnModuleInit {
                 },
             ];
 
-            await this.faucetAndDeposit(bot, specs, []);
+            await this.faucetAndDeposit(bot, specs);
             this.logger.log(
                 `[topUpLoanToken] Topped up loan token ${token.symbol} for bot ${bot.wallet}`,
             );

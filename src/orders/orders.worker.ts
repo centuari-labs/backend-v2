@@ -265,12 +265,10 @@ export class OrdersWorker implements OnModuleInit {
             });
         }
 
-        const collateralAssetIds = collateralTokens.map((t) => t.id);
-
         for (const bot of this.botAccounts) {
             try {
                 await this.ensureGasForBot(formattedKey, bot.wallet);
-                await this.faucetAndDeposit(bot, allSpecs, collateralAssetIds);
+                await this.faucetAndDeposit(bot, allSpecs);
             } catch (e) {
                 this.logger.error(
                     `Failed seed funding for bot ${bot.wallet}: ${(e as Error).message}`,
@@ -288,7 +286,6 @@ export class OrdersWorker implements OnModuleInit {
     private async faucetAndDeposit(
         bot: BotAccount,
         specs: TokenFundingSpec[],
-        collateralAssetIds: string[] = [],
     ): Promise<void> {
         if (specs.length === 0) return;
 
@@ -578,8 +575,7 @@ export class OrdersWorker implements OnModuleInit {
                     isCollateral: true,
                 }));
 
-            const collateralAssetIds = collateralTokens.map((t) => t.id);
-            await this.faucetAndDeposit(bot, specs, collateralAssetIds);
+            await this.faucetAndDeposit(bot, specs);
             this.logger.log(
                 `[topUpCollateral] Topped up collateral for bot ${bot.wallet}`,
             );

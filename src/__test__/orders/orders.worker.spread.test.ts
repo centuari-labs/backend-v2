@@ -106,7 +106,7 @@ describe("OrdersWorker — spread cancel after placement", () => {
                     useValue: {
                         chainId: 421614,
                         operatorPrivateKey: "0x123",
-                        treasuryAddress: "0xTreasury",
+                        hubDepositorAddress: "0xHubDepositor",
                     },
                 },
                 {

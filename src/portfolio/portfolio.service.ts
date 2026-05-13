@@ -7,7 +7,7 @@ import {
 } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
-import type { TransactionReceipt } from "viem";
+import type { Abi, TransactionReceipt } from "viem";
 import { Token } from "../tokens/entities/token.entity";
 import { PriceService } from "../price/price.service";
 import { TokensService } from "../tokens/tokens.service";
@@ -15,7 +15,9 @@ import { ViemService } from "../core/viem/viem.service";
 import { ChainConfigService } from "../core/chain-config/chain-config.service";
 import { DatabaseService } from "../core/database/database.service";
 import { applyWithdrawLendEffects } from "../core/on-chain-state/apply-withdraw-lend";
-import { centuariAbi } from "../../abis/centuari";
+import CentuariAbiJson from "../abi/Centuari.json";
+
+const CentuariAbi = CentuariAbiJson as Abi;
 import {
     WithdrawLendPositionDto,
     WithdrawLendPositionResponseDto,
@@ -913,7 +915,7 @@ export class PortfolioService {
                 this.chainConfig.chainId,
                 this.chainConfig.operatorPrivateKey,
                 this.chainConfig.centuariAddress,
-                centuariAbi,
+                CentuariAbi,
                 "withdrawLendPosition",
                 [marketId, loanToken, maturity, cbtAmount],
                 { waitForReceipt: true },

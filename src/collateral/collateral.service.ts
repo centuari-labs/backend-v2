@@ -1,6 +1,7 @@
 import { HttpException, HttpStatus, Injectable, Logger } from "@nestjs/common";
 import { applyOnChainEffect } from "@centuari-labs/on-chain-effects";
 import {
+    type Abi,
     type Hex,
     type TransactionReceipt,
     BaseError,
@@ -10,16 +11,18 @@ import { ChainConfigService } from "../core/chain-config/chain-config.service";
 import { DatabaseService } from "../core/database/database.service";
 import { ViemService } from "../core/viem/viem.service";
 import { RedisRateLimiterService } from "../common/rate-limit/redis-rate-limiter.service";
+import CollateralManagerAbiJson from "../abi/CollateralManager.json";
 import {
     COLLATERAL_FLAG_SET_ABI,
     COLLATERAL_FLAG_SET_TOPIC0,
-    COLLATERAL_MANAGER_WRITE_ABI,
     COLLATERAL_QUEUE_CAP_PER_WALLET,
     type CollateralFlagSetArgs,
     RATE_LIMIT_BUDGET,
     RATE_LIMIT_WINDOW_SECONDS,
     RISK_MODULE_VIEW_ABI,
 } from "./constants";
+
+const CollateralManagerAbi = CollateralManagerAbiJson as Abi;
 import type {
     CollateralMutationResponse,
     FlagCollateralDto,
@@ -132,7 +135,7 @@ export class CollateralService {
                 this.chainConfig.chainId,
                 this.chainConfig.operatorPrivateKey,
                 this.chainConfig.collateralManagerAddress,
-                COLLATERAL_MANAGER_WRITE_ABI,
+                CollateralManagerAbi,
                 "unflagFor",
                 [walletAddress, asset],
                 { waitForReceipt: true },

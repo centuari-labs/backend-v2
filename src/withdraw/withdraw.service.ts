@@ -5,7 +5,7 @@ import {
     Logger,
     NotFoundException,
 } from "@nestjs/common";
-import { parseUnits } from "viem";
+import { parseUnits, type Abi } from "viem";
 import type { TransactionReceipt } from "viem";
 import { DataSource } from "typeorm";
 import { ViemService } from "../core/viem/viem.service";
@@ -16,7 +16,9 @@ import { PortfolioService } from "../portfolio/portfolio.service";
 import { OrderRepository } from "../orders/repositories/order.repository";
 import { LegacyPortfolio } from "../portfolio/entities/legacy-portfolio.entity";
 import { HEALTH_FACTOR_NO_DEBT } from "../portfolio/helpers/health-factor.helpers";
-import { treasuryAbi } from "../../abis/treasury";
+import HubDepositorAbiJson from "../abi/HubDepositor.json";
+
+const HubDepositorAbi = HubDepositorAbiJson as Abi;
 import { humanToBaseUnits } from "../common/utils/number.utils";
 import { parseContractError } from "../common/utils/contract-errors.utils";
 import { withTransaction } from "../common/utils/transaction.utils";
@@ -137,7 +139,7 @@ export class WithdrawService {
                     }
                 }
 
-                // Call Treasury.withdraw on-chain
+                // Call HubDepositor.withdraw on-chain
                 const amountInBaseUnits = parseUnits(amount, decimals);
                 this.logger.log(
                     `Executing withdraw: token=${token.tokenAddress}, to=${walletAddress}, amount=${amountInBaseUnits}`,
@@ -146,8 +148,8 @@ export class WithdrawService {
                 const receipt = (await this.viemService.writeContract(
                     this.chainConfig.chainId,
                     this.chainConfig.operatorPrivateKey,
-                    this.chainConfig.treasuryAddress,
-                    treasuryAbi,
+                    this.chainConfig.hubDepositorAddress,
+                    HubDepositorAbi,
                     "withdraw",
                     [token.tokenAddress, walletAddress, amountInBaseUnits],
                     { waitForReceipt: true },

@@ -56,47 +56,6 @@ export interface CollateralFlagSetArgs {
     flaggedAt: bigint;
 }
 
-// ============ CollateralManager write ABI (operator path only) ============
-
-/**
- * Write fragments the backend uses against `CollateralManager`. Backend only
- * ever calls `unflagFor` (operator path) — `flag(asset)` and `unflag(asset)`
- * direct paths are reserved for frontend wagmi calls (Phase 5). `flagFor` is
- * defined here for completeness even though Phase 2 backend never calls it
- * (queue-only flag).
- */
-export const COLLATERAL_MANAGER_WRITE_ABI = [
-    {
-        type: "function",
-        name: "flagFor",
-        stateMutability: "nonpayable",
-        inputs: [
-            { name: "user", type: "address" },
-            { name: "asset", type: "address" },
-        ],
-        outputs: [],
-    },
-    {
-        type: "function",
-        name: "unflagFor",
-        stateMutability: "nonpayable",
-        inputs: [
-            { name: "user", type: "address" },
-            { name: "asset", type: "address" },
-        ],
-        outputs: [],
-    },
-    // Custom errors so viem can decode reverts off the on-chain trace.
-    { type: "error", name: "NotFlagged", inputs: [] },
-    {
-        type: "error",
-        name: "FlagLockActive",
-        inputs: [{ name: "unlocksAt", type: "uint64" }],
-    },
-    { type: "error", name: "WouldMakeUnhealthy", inputs: [] },
-    { type: "error", name: "NotOperator", inputs: [] },
-] as const;
-
 // ============ RiskModule view ABI (canUnflag pre-check) ============
 
 export const RISK_MODULE_VIEW_ABI = [

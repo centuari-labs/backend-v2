@@ -3,11 +3,13 @@ import { parseContractError } from "../common/utils/contract-errors.utils";
 import { InjectRepository } from "@nestjs/typeorm";
 import { In, Repository } from "typeorm";
 import { ViemService } from "../core/viem/viem.service";
-import { faucetAbi } from "../abis/Faucet";
+import FaucetAbiJson from "../abi/Faucet.json";
 import { ConfigService } from "@nestjs/config";
 import { Token } from "../tokens/entities/token.entity";
 import { FaucetResponseDto, TokenMintResultDto } from "./dto/faucet.dto";
-import type { TransactionReceipt } from "viem";
+import type { Abi, TransactionReceipt } from "viem";
+
+const FaucetAbi = FaucetAbiJson as Abi;
 
 interface MintOutcome {
     tokenAddress: string;
@@ -283,7 +285,7 @@ export class FaucetService {
                     .readContract<[boolean, bigint, bigint]>(
                         chainId,
                         faucetAddress,
-                        faucetAbi,
+                        FaucetAbi,
                         "configOf",
                         [tokenAddress],
                     )
@@ -373,7 +375,7 @@ export class FaucetService {
                 chainId,
                 operatorKey,
                 faucetAddress,
-                faucetAbi,
+                FaucetAbi,
                 "mintBatch",
                 [chunkTokens, chunkAmounts, recipientAddress],
             );
@@ -453,7 +455,7 @@ export class FaucetService {
     ): Promise<MintOutcome> {
         const [enabled, maxPerRequest] = await this.viemService.readContract<
             [boolean, bigint, bigint]
-        >(chainId, faucetAddress, faucetAbi, "configOf", [tokenAddress]);
+        >(chainId, faucetAddress, FaucetAbi, "configOf", [tokenAddress]);
 
         if (!enabled) {
             throw new BadRequestException(
@@ -465,7 +467,7 @@ export class FaucetService {
             chainId,
             operatorKey,
             faucetAddress,
-            faucetAbi,
+            FaucetAbi,
             "mintTo",
             [tokenAddress, recipientAddress, maxPerRequest],
         );

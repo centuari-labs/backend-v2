@@ -139,7 +139,7 @@ export function createMockChainConfigService() {
     return {
         chainId: 421614,
         operatorPrivateKey: "0xabc123",
-        treasuryAddress: "0xTreasuryAddress",
+        hubDepositorAddress: "0xHubDepositorAddress",
         centuariAddress: "0xCentuariAddress",
         settlementAddress: "0xSettlementAddress",
     };

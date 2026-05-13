@@ -3,7 +3,7 @@ import { ConfigService } from "@nestjs/config";
 import { Interval } from "@nestjs/schedule";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
-import { parseAbiItem, parseEventLogs, type Hash } from "viem";
+import { parseAbiItem, parseEventLogs, type Abi, type Hash } from "viem";
 import { ViemService } from "../core/viem/viem.service";
 import { ChainConfigService } from "../core/chain-config/chain-config.service";
 import { DatabaseService } from "../core/database/database.service";
@@ -11,7 +11,9 @@ import { PortfolioRepository } from "../portfolio/repositories/portfolio.reposit
 import { portfolioUuidFor } from "../common/utils/uuid.utils";
 import { Account } from "../orders/entities/account.entity";
 import { Token } from "../tokens/entities/token.entity";
-import { treasuryAbi } from "../abis/Treasury";
+import HubDepositorAbiJson from "../abi/HubDepositor.json";
+
+const HubDepositorAbi = HubDepositorAbiJson as Abi;
 
 const STATE_KEY = "treasury-deposited";
 const MAX_BLOCK_RANGE = 2000n;
@@ -55,16 +57,16 @@ export class ChainIndexerService implements OnModuleInit {
             return;
         }
 
-        if (!this.chainConfig.treasuryAddress) {
+        if (!this.chainConfig.hubDepositorAddress) {
             this.logger.warn(
-                "TREASURY_ADDRESS not set — chain indexer disabled",
+                "HUB_DEPOSITOR_ADDRESS not set — chain indexer disabled",
             );
             return;
         }
 
         await this.ensureStateRow();
         this.logger.log(
-            `Chain indexer initialized for Treasury ${this.chainConfig.treasuryAddress} on chain ${this.chainConfig.chainId}`,
+            `Chain indexer initialized for HubDepositor ${this.chainConfig.hubDepositorAddress} on chain ${this.chainConfig.chainId}`,
         );
     }
 
@@ -85,13 +87,13 @@ export class ChainIndexerService implements OnModuleInit {
         }
 
         const depositLogs = parseEventLogs({
-            abi: treasuryAbi,
+            abi: HubDepositorAbi,
             eventName: "Deposited",
             logs: receipt.logs,
         }).filter(
             (log) =>
                 log.address?.toLowerCase() ===
-                this.chainConfig.treasuryAddress.toLowerCase(),
+                this.chainConfig.hubDepositorAddress.toLowerCase(),
         );
 
         let processed = 0;
@@ -120,7 +122,11 @@ export class ChainIndexerService implements OnModuleInit {
 
     @Interval(DEFAULT_POLL_INTERVAL_MS)
     async poll() {
-        if (!this.enabled || !this.chainConfig.treasuryAddress || this.polling)
+        if (
+            !this.enabled ||
+            !this.chainConfig.hubDepositorAddress ||
+            this.polling
+        )
             return;
 
         this.polling = true;
@@ -154,7 +160,7 @@ export class ChainIndexerService implements OnModuleInit {
         this.logger.debug(`Polling blocks ${fromBlock} → ${toBlock}`);
 
         const logs = await publicClient.getLogs({
-            address: this.chainConfig.treasuryAddress as `0x${string}`,
+            address: this.chainConfig.hubDepositorAddress as `0x${string}`,
             event: depositedEvent,
             fromBlock,
             toBlock,

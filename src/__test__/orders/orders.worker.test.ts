@@ -83,7 +83,7 @@ describe("OrdersWorker", () => {
                     useValue: {
                         chainId: 421614,
                         operatorPrivateKey: "0xtest",
-                        treasuryAddress: "0xTreasury",
+                        hubDepositorAddress: "0xHubDepositor",
                         centuariAddress: "",
                     },
                 },

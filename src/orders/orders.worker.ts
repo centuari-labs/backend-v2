@@ -3,14 +3,15 @@ import { Interval } from "@nestjs/schedule";
 import { InjectRepository } from "@nestjs/typeorm";
 import { In, Repository } from "typeorm";
 import { ConfigService } from "@nestjs/config";
-import type { TransactionReceipt } from "viem";
+import { erc20Abi, type Abi, type TransactionReceipt } from "viem";
 import { ViemService } from "../core/viem/viem.service";
 import { ChainConfigService } from "../core/chain-config/chain-config.service";
 import { FaucetService } from "../faucet/faucet.service";
-import { erc20Abi } from "../abis/ERC20";
-import { treasuryAbi } from "../abis/Treasury";
+import HubDepositorAbiJson from "../abi/HubDepositor.json";
 import { privateKeyToAccount } from "viem/accounts";
 import { keccak256, parseEventLogs, toHex } from "viem";
+
+const HubDepositorAbi = HubDepositorAbiJson as Abi;
 import { OrderRepository } from "./repositories/order.repository";
 import { PortfolioRepository } from "../portfolio/repositories/portfolio.repository";
 import { portfolioUuidFor } from "../common/utils/uuid.utils";
@@ -106,8 +107,8 @@ export class OrdersWorker implements OnModuleInit {
             "OrdersWorker enabled — scheduling background initialization.",
         );
 
-        if (!this.chainConfig.treasuryAddress) {
-            throw new Error("TREASURY_ADDRESS is not configured");
+        if (!this.chainConfig.hubDepositorAddress) {
+            throw new Error("HUB_DEPOSITOR_ADDRESS is not configured");
         }
 
         this.botAccounts = this.deriveBotAccounts();
@@ -203,7 +204,7 @@ export class OrdersWorker implements OnModuleInit {
     // ─── Seed Funding (one-shot on init) ──────────────────────────────
 
     /**
-     * One-shot seed funding: call faucet once per bot, deposit everything into Treasury.
+     * One-shot seed funding: call faucet once per bot, deposit everything into HubDepositor.
      */
     private async seedBotFunding(): Promise<void> {
         const operatorKey = this.configService.get<string>(
@@ -281,7 +282,7 @@ export class OrdersWorker implements OnModuleInit {
     // ─── Faucet + Deposit (single round) ──────────────────────────────
 
     /**
-     * Call faucet once for all tokens, deposit whatever was received into Treasury,
+     * Call faucet once for all tokens, deposit whatever was received into HubDepositor,
      * sync portfolio, and set collateral.
      */
     private async faucetAndDeposit(
@@ -291,14 +292,14 @@ export class OrdersWorker implements OnModuleInit {
     ): Promise<void> {
         if (specs.length === 0) return;
 
-        // Filter to Treasury-supported tokens
+        // Filter to HubDepositor-supported tokens
         const supportedResults = await Promise.all(
             specs.map((s) =>
                 this.viemService
                     .readContract<boolean>(
                         this.chainConfig.chainId,
-                        this.chainConfig.treasuryAddress,
-                        treasuryAbi,
+                        this.chainConfig.hubDepositorAddress,
+                        HubDepositorAbi,
                         "supportedToken",
                         [s.tokenAddress],
                     )
@@ -310,7 +311,7 @@ export class OrdersWorker implements OnModuleInit {
 
         if (supportedSpecs.length === 0) {
             this.logger.debug(
-                `No Treasury-supported tokens to fund for bot ${bot.wallet}; skipping`,
+                `No HubDepositor-supported tokens to fund for bot ${bot.wallet}; skipping`,
             );
             return;
         }
@@ -327,7 +328,7 @@ export class OrdersWorker implements OnModuleInit {
                 spec.tokenAddress,
                 erc20Abi,
                 "allowance",
-                [bot.wallet, this.chainConfig.treasuryAddress],
+                [bot.wallet, this.chainConfig.hubDepositorAddress],
             );
             if (allowance === 0n) {
                 await this.writeContractWithNonceRetry(
@@ -336,7 +337,7 @@ export class OrdersWorker implements OnModuleInit {
                     erc20Abi,
                     "approve",
                     [
-                        this.chainConfig.treasuryAddress,
+                        this.chainConfig.hubDepositorAddress,
                         BigInt(
                             "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
                         ),
@@ -359,7 +360,7 @@ export class OrdersWorker implements OnModuleInit {
             );
         }
 
-        // Deposit whatever wallet balance we have into Treasury
+        // Deposit whatever wallet balance we have into HubDepositor
         const account = await this.orderRepository.findAccountByWallet(
             bot.wallet,
         );
@@ -378,8 +379,8 @@ export class OrdersWorker implements OnModuleInit {
 
                 const receipt = await this.writeContractWithNonceRetry(
                     bot.privateKey,
-                    this.chainConfig.treasuryAddress,
-                    treasuryAbi,
+                    this.chainConfig.hubDepositorAddress,
+                    HubDepositorAbi,
                     "deposit",
                     [spec.tokenAddress, walletBalance],
                 );
@@ -388,13 +389,13 @@ export class OrdersWorker implements OnModuleInit {
                 if (account) {
                     try {
                         const depositedLogs = parseEventLogs({
-                            abi: treasuryAbi,
+                            abi: HubDepositorAbi,
                             eventName: "Deposited",
                             logs: receipt.logs,
                         }).filter(
                             (log) =>
                                 log.address?.toLowerCase() ===
-                                this.chainConfig.treasuryAddress.toLowerCase(),
+                                this.chainConfig.hubDepositorAddress.toLowerCase(),
                         );
 
                         for (const log of depositedLogs) {
@@ -496,7 +497,7 @@ export class OrdersWorker implements OnModuleInit {
     }
 
     /**
-     * Syncs portfolio DB row from on-chain treasury balance.
+     * Syncs portfolio DB row from on-chain HubDepositor balance.
      * Ensures DB reflects on-chain state regardless of event parsing.
      */
     private async syncPortfolioFromOnChainBalance(
@@ -508,8 +509,8 @@ export class OrdersWorker implements OnModuleInit {
         try {
             const onChainBalance = await this.viemService.readContract<bigint>(
                 this.chainConfig.chainId,
-                this.chainConfig.treasuryAddress,
-                treasuryAbi,
+                this.chainConfig.hubDepositorAddress,
+                HubDepositorAbi,
                 "balanceOf",
                 [bot.wallet, tokenAddress],
             );

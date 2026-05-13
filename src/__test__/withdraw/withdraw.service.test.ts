@@ -55,7 +55,7 @@ const mockOrderRepository = {
 const mockChainConfig = {
     chainId: 421614,
     operatorPrivateKey: "0xabc123",
-    treasuryAddress: "0xTreasury",
+    hubDepositorAddress: "0xHubDepositor",
     centuariAddress: "",
 };
 
@@ -158,8 +158,8 @@ describe("WithdrawService", () => {
             expect(mockViemService.writeContract).toHaveBeenCalledWith(
                 421614,
                 "0xabc123",
-                "0xTreasury",
-                expect.anything(), // treasuryAbi
+                "0xHubDepositor",
+                expect.anything(), // HubDepositorAbi
                 "withdraw",
                 ["0xTokenAddr", walletAddress, 100000000n], // parseUnits("100", 6)
                 { waitForReceipt: true },

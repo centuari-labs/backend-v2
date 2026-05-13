@@ -6,8 +6,10 @@ import {
     NotFoundException,
 } from "@nestjs/common";
 import { parseUnits } from "viem";
-import type { TransactionReceipt } from "viem";
-import { centuariAbi } from "../../abis/centuari";
+import type { Abi, TransactionReceipt } from "viem";
+import CentuariAbiJson from "../abi/Centuari.json";
+
+const CentuariAbi = CentuariAbiJson as Abi;
 import { ChainConfigService } from "../core/chain-config/chain-config.service";
 import { DatabaseService } from "../core/database/database.service";
 import { applyRepayEffects } from "../core/on-chain-state/apply-repay";
@@ -138,7 +140,7 @@ export class RepayService {
                 this.chainConfig.chainId,
                 this.chainConfig.operatorPrivateKey,
                 this.chainConfig.centuariAddress,
-                centuariAbi,
+                CentuariAbi,
                 "repay",
                 [marketId, borrower, token, amount],
                 { waitForReceipt: true },
@@ -149,7 +151,7 @@ export class RepayService {
             this.logger.error(`Contract call failed: ${msg}`);
             const parsed = parseContractError(msg, {
                 InsufficientFunds:
-                    "Insufficient balance in Treasury. Please deposit tokens before repaying.",
+                    "Insufficient balance in HubDepositor. Please deposit tokens before repaying.",
             });
             if (parsed.isKnown) {
                 throw new BadRequestException(parsed.message);

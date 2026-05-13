@@ -21,6 +21,7 @@ import { EventsGateway } from "./core/websocket/websocket.gateway";
     imports: [
         ConfigModule.forRoot({
             isGlobal: true,
+            envFilePath: [".env.contracts", ".env"],
         }),
         ScheduleModule.forRoot(),
         ThrottlerModule.forRoot([

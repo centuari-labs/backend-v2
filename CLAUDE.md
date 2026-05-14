@@ -204,7 +204,7 @@ The `Match` TypeORM entity is a mirror with `synchronize: false` ([match.entity.
 
 #### Known cancel race window (unfixed in Phase 1)
 
-For the cancel-during-match race window and the planned engine-coordinated-cancel fix, see [../smart-contract-revamp/docs/order-lock-lifecycle-followups.md](../smart-contract-revamp/docs/order-lock-lifecycle-followups.md).
+For the cancel-during-match race window and the planned engine-coordinated-cancel fix, see [../smart-contract-revamp/docs/hub-only-launch-plan.md](../smart-contract-revamp/docs/hub-only-launch-plan.md) Track C (deep reference in [archive/order-lock-lifecycle-followups.md](../smart-contract-revamp/docs/archive/order-lock-lifecycle-followups.md)).
 
 ### Inter-Service Communication
 

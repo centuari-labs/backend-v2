@@ -135,6 +135,14 @@ export class OrderRepository extends Repository<Order> {
             .getOne();
     }
 
+    async findWalletByAccountId(accountId: string): Promise<string | null> {
+        const account = await this.accountRepository.findOne({
+            where: { id: accountId },
+            select: ["userWallet"],
+        });
+        return account?.userWallet ?? null;
+    }
+
     async getTotalOpenQuantity(
         accountId: string,
         assetId: string,

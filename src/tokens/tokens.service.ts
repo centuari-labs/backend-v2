@@ -17,6 +17,13 @@ export class TokensService implements OnModuleInit {
     private cache = new Map<string, Token>();
 
     /**
+     * Secondary index by lowercase `tokenAddress` so hot-path enrichment
+     * (portfolio reads off the shared on-chain-state schema) does not touch
+     * the DB. Kept in sync with `cache`.
+     */
+    private addressIndex = new Map<string, Token>();
+
+    /**
      * Lazy initialization guard so concurrent callers share the same init promise.
      */
     private initPromise: Promise<void> | null = null;
@@ -37,12 +44,16 @@ export class TokensService implements OnModuleInit {
         const tokens = await this.tokenRepository.getActiveTokens();
 
         const newCache = new Map<string, Token>();
+        const newAddressIndex = new Map<string, Token>();
         for (const token of tokens) {
-            const key = token.id.toLowerCase();
-            newCache.set(key, token);
+            newCache.set(token.id.toLowerCase(), token);
+            if (token.tokenAddress) {
+                newAddressIndex.set(token.tokenAddress.toLowerCase(), token);
+            }
         }
 
         this.cache = newCache;
+        this.addressIndex = newAddressIndex;
         this.logger.debug(`Token cache loaded with ${this.cache.size} assets`);
     }
 
@@ -116,5 +127,27 @@ export class TokensService implements OnModuleInit {
      */
     async getTokenByAssetId(assetId: string): Promise<Token> {
         return this.validateTokenByAssetId(assetId);
+    }
+
+    /**
+     * Cache-first lookup by on-chain token address (lowercase match).
+     * Returns `null` when the address is not a supported token — callers
+     * should skip the row with a warning rather than throw, so an unknown
+     * asset in the shared on-chain-state schema does not take down the
+     * whole portfolio response.
+     */
+    async findByTokenAddress(tokenAddress: string): Promise<Token | null> {
+        await this.ensureCacheInitialized();
+        const key = tokenAddress.toLowerCase();
+        const hit = this.addressIndex.get(key);
+        if (hit) return hit;
+
+        // Lazy fallback — handles tokens added after module init.
+        const dbHit = await this.tokenRepository.validateToken(tokenAddress);
+        if (dbHit) {
+            this.cache.set(dbHit.id.toLowerCase(), dbHit);
+            this.addressIndex.set(key, dbHit);
+        }
+        return dbHit;
     }
 }

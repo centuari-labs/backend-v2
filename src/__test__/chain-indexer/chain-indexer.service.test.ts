@@ -104,7 +104,7 @@ describe("ChainIndexerService", () => {
 
             (parseEventLogs as jest.Mock).mockReturnValue([
                 {
-                    address: chainConfig.treasuryAddress,
+                    address: chainConfig.hubDepositorAddress,
                     logIndex: 0,
                     args: {
                         user: "0xUser",
@@ -162,7 +162,7 @@ describe("ChainIndexerService", () => {
 
             (parseEventLogs as jest.Mock).mockReturnValue([
                 {
-                    address: chainConfig.treasuryAddress,
+                    address: chainConfig.hubDepositorAddress,
                     logIndex: 0,
                     args: {
                         user: "0xUser",
@@ -189,7 +189,7 @@ describe("ChainIndexerService", () => {
 
             (parseEventLogs as jest.Mock).mockReturnValue([
                 {
-                    address: chainConfig.treasuryAddress,
+                    address: chainConfig.hubDepositorAddress,
                     logIndex: 0,
                     args: {
                         user: "0xUnknownUser",
@@ -229,7 +229,7 @@ describe("ChainIndexerService", () => {
 
             (parseEventLogs as jest.Mock).mockReturnValue([
                 {
-                    address: chainConfig.treasuryAddress,
+                    address: chainConfig.hubDepositorAddress,
                     logIndex: 0,
                     args: {
                         user: "0xUser",
@@ -315,14 +315,14 @@ describe("ChainIndexerService", () => {
             expect(viemService.getPublicClient).not.toHaveBeenCalled();
         });
 
-        it("should skip when treasuryAddress not set", async () => {
+        it("should skip when hubDepositorAddress not set", async () => {
             const configOverrides: Record<string, any> = {
                 INDEXER_START_BLOCK: "0",
                 CHAIN_INDEXER_ENABLED: "true",
             };
-            const noTreasuryConfig = {
+            const noHubDepositorConfig = {
                 ...createMockChainConfigService(),
-                treasuryAddress: "",
+                hubDepositorAddress: "",
             };
 
             const module: TestingModule = await Test.createTestingModule({
@@ -351,14 +351,14 @@ describe("ChainIndexerService", () => {
                     },
                     {
                         provide: ChainConfigService,
-                        useValue: noTreasuryConfig,
+                        useValue: noHubDepositorConfig,
                     },
                 ],
             }).compile();
 
-            const noTreasuryService =
+            const noHubDepositorService =
                 module.get<ChainIndexerService>(ChainIndexerService);
-            await noTreasuryService.poll();
+            await noHubDepositorService.poll();
 
             expect(viemService.getPublicClient).not.toHaveBeenCalled();
         });

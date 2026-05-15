@@ -1,13 +1,12 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { parseUnits, formatUnits } from "viem";
+import { parseUnits, formatUnits, erc20Abi } from "viem";
 import { ViemService } from "../core/viem/viem.service";
 import { ChainConfigService } from "../core/chain-config/chain-config.service";
 import { TokensService } from "../tokens/tokens.service";
 import { TokensRepository } from "../tokens/repositories/tokens.repository";
 import { ChainIndexerService } from "../chain-indexer/chain-indexer.service";
 import { compareTokensByPriority } from "../tokens/token-order.config";
-import { erc20Abi } from "../abis/ERC20";
 import type {
     DepositTokenDto,
     BalanceResponseDto,

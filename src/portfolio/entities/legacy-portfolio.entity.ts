@@ -10,8 +10,18 @@ import {
     UpdateDateColumn,
 } from "typeorm";
 
+/**
+ * Legacy backend-v2 `portfolio` table — UUID-keyed balance + locked-amount
+ * + is-collateral rollup that predates the shared on-chain-state schema.
+ * Still written to by `ChainIndexerService` (legacy Treasury deposit
+ * indexer, Phase C) and the legacy `/withdraw` endpoint (Phase C).
+ *
+ * A6 drops this table + entity entirely. In the meantime the A5 read
+ * migration reads balances from the new `UserBalance` entity against
+ * `user_balance` instead.
+ */
 @Entity("portfolio")
-export class Portfolio {
+export class LegacyPortfolio {
     @PrimaryColumn("uuid")
     id: string;
 

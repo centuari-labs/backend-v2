@@ -69,6 +69,7 @@ export function createMockPortfolioService(): Partial<
         getHealthFactorForAccount: jest
             .fn()
             .mockResolvedValue({ healthFactor: 2 }),
+        getBorrowBufferBps: jest.fn().mockResolvedValue(100),
         calculateOpenBorrowOrdersUsd: jest.fn().mockResolvedValue(0),
         checkAvailableBalanceForLend: jest.fn().mockResolvedValue(undefined),
         checkAvailableBalanceForBorrowFees: jest
@@ -138,7 +139,7 @@ export function createMockChainConfigService() {
     return {
         chainId: 421614,
         operatorPrivateKey: "0xabc123",
-        treasuryAddress: "0xTreasuryAddress",
+        hubDepositorAddress: "0xHubDepositorAddress",
         centuariAddress: "0xCentuariAddress",
         settlementAddress: "0xSettlementAddress",
     };

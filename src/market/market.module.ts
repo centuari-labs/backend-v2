@@ -3,6 +3,8 @@ import { TypeOrmModule } from "@nestjs/typeorm";
 import { MarketController } from "./market.controller";
 import { MarketService } from "./market.service";
 import { Market } from "./entities/market.entity";
+import { LendPosition } from "../portfolio/entities/lend-position.entity";
+import { UserBalance } from "../portfolio/entities/user-balance.entity";
 import { TokensModule } from "../tokens/tokens.module";
 import { CoreModule } from "../core/core.module";
 import { Token } from "../tokens/entities/token.entity";
@@ -14,7 +16,7 @@ import { MarketWorker } from "./market.worker";
 
 @Module({
     imports: [
-        TypeOrmModule.forFeature([Market, Token]),
+        TypeOrmModule.forFeature([Market, Token, UserBalance, LendPosition]),
         TokensModule,
         forwardRef(() => CoreModule),
         PriceModule,

@@ -9,7 +9,7 @@ describe("ChainConfigService", () => {
                 const config: Record<string, string> = {
                     DEPOSIT_CHAIN_ID: "11155111",
                     OPERATOR_PRIVATE_KEY: "0xprivkey",
-                    TREASURY_ADDRESS: "0xtreasury",
+                    HUB_DEPOSITOR_ADDRESS: "0xhubdepositor",
                     CENTUARI_ADDRESS: "0xcentuari",
                 };
                 return config[key];
@@ -27,7 +27,7 @@ describe("ChainConfigService", () => {
 
         expect(service.chainId).toBe(11155111);
         expect(service.operatorPrivateKey).toBe("0xprivkey");
-        expect(service.treasuryAddress).toBe("0xtreasury");
+        expect(service.hubDepositorAddress).toBe("0xhubdepositor");
         expect(service.centuariAddress).toBe("0xcentuari");
     });
 
@@ -47,7 +47,7 @@ describe("ChainConfigService", () => {
 
         expect(service.chainId).toBe(421614);
         expect(service.operatorPrivateKey).toBe("");
-        expect(service.treasuryAddress).toBe("");
+        expect(service.hubDepositorAddress).toBe("");
         expect(service.centuariAddress).toBe("");
     });
 });

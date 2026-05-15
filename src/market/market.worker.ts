@@ -1,35 +1,44 @@
 import { Injectable, Logger, OnModuleInit } from "@nestjs/common";
-import { Interval } from "@nestjs/schedule";
 import { InjectRepository } from "@nestjs/typeorm";
+import { Interval } from "@nestjs/schedule";
 import { Repository } from "typeorm";
-import { Market } from "./entities/market.entity";
 import { Token } from "../tokens/entities/token.entity";
-import { getAllowedMaturitiesUtcSeconds } from "../orders/utils/maturity.utils";
-import { computeMarketId } from "./utils/market-id.utils";
+import { MarketRepositories } from "./repository/market.repository";
 
-const MARKET_MATURITIES_REFRESH_INTERVAL_MS = 24 * 60 * 60 * 1000; // once per day
+const MARKET_MATURITIES_REFRESH_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24h
+const ONE_DAY_SECONDS = 24 * 60 * 60;
+const ONE_MONTH_SECONDS = 30 * ONE_DAY_SECONDS;
+
+/**
+ * MarketWorker — daily cron that auto-ensures future maturities exist in
+ * the shared `market` (BYTEA) registry for every known loan token. Without
+ * this, the bot orderbook would starve on new tenors until an operator
+ * manually called `POST /market/register`.
+ *
+ * Post-C4: this writes to the new `market` table via
+ * `MarketRepositories.ensureMarketsForLoanToken` (BYTEA-keyed; mirrors the
+ * C3 "backend writes first, indexer tail-writes with stamps" pattern). The
+ * `applied_by_*` stamps stay NULL until the first `Centuari.MarketCreated`
+ * event fires, after which the indexer's `ON CONFLICT (market_id) DO
+ * NOTHING` clause makes the tail-write a safe no-op.
+ *
+ * The set of target maturities is computed dynamically (1, 3, 6, 12 months
+ * out from now). Operator can still drive ad-hoc registrations via the
+ * `POST /market/register` admin endpoint.
+ */
 @Injectable()
 export class MarketWorker implements OnModuleInit {
     private readonly logger = new Logger(MarketWorker.name);
 
     constructor(
-        @InjectRepository(Market)
-        private readonly marketRepository: Repository<Market>,
         @InjectRepository(Token)
         private readonly tokenRepository: Repository<Token>,
+        private readonly marketRepository: MarketRepositories,
     ) {}
 
     async onModuleInit(): Promise<void> {
-        this.logger.debug(
-            "Running initial market maturities refresh on startup",
-        );
-
         try {
-            const createdCount =
-                await this.ensureFutureMaturitiesForLoanTokens();
-            this.logger.debug(
-                `Initial market maturities refresh completed, created ${createdCount} new market(s)`,
-            );
+            await this.ensureFutureMaturitiesForLoanTokens();
         } catch (error) {
             this.logger.error(
                 `Initial market maturities refresh failed: ${(error as Error).message}`,
@@ -38,14 +47,27 @@ export class MarketWorker implements OnModuleInit {
     }
 
     @Interval(MARKET_MATURITIES_REFRESH_INTERVAL_MS)
-    async handleInterval(): Promise<void> {
-        this.logger.debug("Running scheduled market maturities refresh");
-
+    async ensureFutureMaturitiesForLoanTokens(): Promise<void> {
         try {
-            const createdCount =
-                await this.ensureFutureMaturitiesForLoanTokens();
-            this.logger.debug(
-                `Scheduled market maturities refresh completed, created ${createdCount} new market(s)`,
+            const loanTokens = await this.tokenRepository.find({
+                where: { isLoanToken: true },
+            });
+
+            const targetMaturities = this.computeTargetMaturities();
+
+            for (const token of loanTokens) {
+                const registered =
+                    await this.marketRepository.ensureMarketsForLoanToken(
+                        token.tokenAddress,
+                        targetMaturities,
+                    );
+                this.logger.debug(
+                    `ensured ${registered.length} maturities for ${token.symbol} (${token.tokenAddress})`,
+                );
+            }
+
+            this.logger.log(
+                `Market maturities refreshed for ${loanTokens.length} loan tokens`,
             );
         } catch (error) {
             this.logger.error(
@@ -54,75 +76,18 @@ export class MarketWorker implements OnModuleInit {
         }
     }
 
-    private async ensureFutureMaturitiesForLoanTokens(): Promise<number> {
-        const loanTokens = await this.tokenRepository.find({
-            where: { isLoanToken: true },
-        });
-
-        if (loanTokens.length === 0) {
-            this.logger.debug(
-                "No loan tokens found, skipping market maturities refresh",
-            );
-            return 0;
-        }
-
-        const allowedMaturitiesSeconds = getAllowedMaturitiesUtcSeconds();
-        const allowedMaturitiesDates = allowedMaturitiesSeconds.map(
-            (seconds) => new Date(seconds * 1000),
-        );
-
-        // Batch-fetch all existing markets to avoid N+1 queries
-        const existingMarkets = await this.marketRepository.find({
-            select: ["assetId", "maturity"],
-        });
-
-        const existingKeys = new Set(
-            existingMarkets.map((m) => `${m.assetId}_${m.maturity.getTime()}`),
-        );
-
-        let createdCount = 0;
-
-        for (const token of loanTokens) {
-            for (const maturity of allowedMaturitiesDates) {
-                const key = `${token.id}_${maturity.getTime()}`;
-
-                if (existingKeys.has(key)) {
-                    continue;
-                }
-
-                try {
-                    const maturityUnixSeconds = Math.floor(
-                        maturity.getTime() / 1000,
-                    );
-                    const market = this.marketRepository.create({
-                        id: computeMarketId(
-                            token.tokenAddress,
-                            maturityUnixSeconds,
-                        ),
-                        assetId: token.id,
-                        maturity,
-                    });
-
-                    await this.marketRepository.save(market);
-                    createdCount += 1;
-                } catch (error) {
-                    // Handle race condition: another process may have
-                    // inserted the same (assetId, maturity) between
-                    // our check and insert
-                    if (
-                        (error as Error).message?.includes("duplicate key") ||
-                        (error as Error).message?.includes("unique constraint")
-                    ) {
-                        this.logger.debug(
-                            `Market already exists for asset ${token.id} maturity ${maturity.toISOString()}, skipping`,
-                        );
-                        continue;
-                    }
-                    throw error;
-                }
-            }
-        }
-
-        return createdCount;
+    /**
+     * Rolling set of target maturities anchored to `now`. The 1/3/6/12-month
+     * pattern matches what the bot orderbook needs to quote across the full
+     * tenor curve at any given time.
+     */
+    private computeTargetMaturities(): number[] {
+        const nowUnix = Math.floor(Date.now() / 1000);
+        return [
+            nowUnix + ONE_MONTH_SECONDS,
+            nowUnix + 3 * ONE_MONTH_SECONDS,
+            nowUnix + 6 * ONE_MONTH_SECONDS,
+            nowUnix + 12 * ONE_MONTH_SECONDS,
+        ];
     }
 }

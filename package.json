@@ -12,7 +12,7 @@
         "start": "nest start",
         "start:dev": "nest start --watch",
         "start:debug": "nest start --debug --watch",
-        "start:prod": "node dist/src/main",
+        "start:prod": "node dist/main",
         "test": "jest",
         "test:watch": "jest --watch",
         "test:cov": "jest --coverage",
@@ -25,6 +25,7 @@
         "db": "ts-node src/core/database/scripts/db.ts"
     },
     "dependencies": {
+        "@centuari-labs/on-chain-effects": "file:../on-chain-effects",
         "@nestjs/common": "^11.0.1",
         "@nestjs/config": "^4.0.3",
         "@nestjs/core": "^11.0.1",
@@ -98,7 +99,8 @@
         ],
         "moduleNameMapper": {
             "^@/(.*)$": "<rootDir>/src/$1",
-            "^src/(.*)$": "<rootDir>/src/$1"
+            "^src/(.*)$": "<rootDir>/src/$1",
+            "^@centuari-labs/on-chain-effects$": "<rootDir>/src/__test__/stubs/on-chain-effects.stub.ts"
         },
         "collectCoverageFrom": [
             "src/**/*.(t|j)s"

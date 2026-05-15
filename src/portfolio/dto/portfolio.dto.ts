@@ -73,11 +73,27 @@ export class GetMyAssetsQueryDto {
 
 export class MyAssetItemDto {
     assetId: string;
+    /** Hex address (`0x…`). Echoed verbatim by the frontend into
+     *  `POST /collateral/flag` + the wagmi-direct `CollateralManager.flag(asset)`
+     *  call. Hub-chain address for bridgeable tokens, spoke-chain address
+     *  for SPOKE_NATIVE tokens — sourced from `tokens.token_address`. */
+    tokenAddress: string;
     symbol: string;
     name: string;
     walletBalance: number;
     amountInUsd: number;
+    /** True if the asset is on-chain flagged as collateral. Mirrors
+     *  `user_balance.used_as_collateral`. */
     isCollateral: boolean;
+    /** True if the user has a queued (pre-settlement) collateral flag for
+     *  this asset. Mirrors a row in `pending_collateral_flags`. */
+    pendingCollateralFlag: boolean;
+    /** Unix seconds — the moment the on-chain flag was set. `0` sentinel
+     *  when the asset is not currently flagged. */
+    flaggedAt: number;
+    /** Unix seconds — when the 24h flag-lock unlocks (`flaggedAt + 86400`).
+     *  `0` sentinel when not flagged. */
+    unlocksAt: number;
     imageUrl?: string | null;
     ltv: number;
     liquidationThreshold: number;
@@ -122,7 +138,18 @@ export class MyPositionQueryDto {
 }
 
 export class MyPositionItemDto {
+    /**
+     * Synthetic identifier `${marketId}:${side}`. Stable per user + market
+     * + side since the shared on-chain-state schema aggregates rows per
+     * `(marketId, lender|borrower)`. Frontend uses it as a React key only.
+     */
     id: string;
+    /**
+     * Market UUID, for backward compatibility with the frontend. The
+     * indexer-v3 schema stores this as a 32-byte hex; `bytes32ToUuid` in
+     * `common/utils/uuid.utils.ts` round-trips it back to the UUID form
+     * that `uuidToBytes32` originally produced for the on-chain call.
+     */
     marketId: string;
     symbol: string;
     name: string;
@@ -132,6 +159,7 @@ export class MyPositionItemDto {
     isCollateral: boolean;
     imageUrl?: string | null;
     side: "LEND" | "BORROW";
+    /** Unix seconds — surfaced from `market.maturity` on the shared schema. */
     maturity?: number | null;
     apr: number;
 }
@@ -142,15 +170,6 @@ export class GetMyPositionResponseDto {
     limit: number;
     totalData: number;
     totalPages: number;
-}
-
-export class SetAssetAsCollateralDto {
-    @IsArray()
-    @IsString({ each: true })
-    assetIds: string[];
-
-    @IsBoolean()
-    isCollateral: boolean;
 }
 
 export class UserAssetDetailDto {

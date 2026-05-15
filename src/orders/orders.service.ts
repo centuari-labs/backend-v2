@@ -46,8 +46,6 @@ import {
 import { UpdateOrderDto } from "./dto/update-order.dto";
 import { OrderMarket } from "./entities/order-market.entity";
 
-const MIN_HEALTH_FACTOR = 1;
-
 interface PreparedOrderContext {
     accountId: string;
     decimals: number;
@@ -326,22 +324,29 @@ export class OrdersService {
                 }
                 const newOrderUsd = Number(dto.amount) * assetPrice;
 
-                const hfResult =
-                    await this.portfolioService.getHealthFactorForAccount(
+                const [hfResult, bufferBps] = await Promise.all([
+                    this.portfolioService.getHealthFactorForAccount(
                         order.accountId,
                         {
                             additionalBorrowUsd: newOrderUsd,
                             includeOpenOrders: true,
                         },
-                    );
+                    ),
+                    this.portfolioService.getBorrowBufferBps(
+                        order.accountId,
+                        order.assetId,
+                    ),
+                ]);
+                const threshold = 1 + bufferBps / 10000;
 
                 if (
                     hfResult.healthFactor !== HEALTH_FACTOR_NO_DEBT &&
                     Number.isFinite(hfResult.healthFactor) &&
-                    hfResult.healthFactor < MIN_HEALTH_FACTOR
+                    hfResult.healthFactor < threshold
                 ) {
                     throw new BadRequestException(
-                        "Update would reduce health factor below 1",
+                        `Update would reduce health factor to ${hfResult.healthFactor.toFixed(4)}, ` +
+                            `below required ${threshold.toFixed(4)} (1.0 + ${bufferBps}bps buffer).`,
                     );
                 }
             }
@@ -440,20 +445,22 @@ export class OrdersService {
             throw new BadRequestException("Price not available for this asset");
         }
         const newOrderUsd = Number(dto.amount) * assetPrice;
-        const hfResult = await this.portfolioService.getHealthFactorForAccount(
-            accountId,
-            {
+        const [hfResult, bufferBps] = await Promise.all([
+            this.portfolioService.getHealthFactorForAccount(accountId, {
                 additionalBorrowUsd: newOrderUsd,
                 includeOpenOrders: true,
-            },
-        );
+            }),
+            this.portfolioService.getBorrowBufferBps(accountId, dto.assetId),
+        ]);
+        const threshold = 1 + bufferBps / 10000;
         if (
             hfResult.healthFactor !== HEALTH_FACTOR_NO_DEBT &&
             Number.isFinite(hfResult.healthFactor) &&
-            hfResult.healthFactor < MIN_HEALTH_FACTOR
+            hfResult.healthFactor < threshold
         ) {
             throw new BadRequestException(
-                "Borrow would reduce health factor below 1 (considering open orders); position not allowed.",
+                `Borrow would reduce health factor to ${hfResult.healthFactor.toFixed(4)}, ` +
+                    `below required ${threshold.toFixed(4)} (1.0 + ${bufferBps}bps buffer).`,
             );
         }
     }
@@ -504,14 +511,12 @@ export class OrdersService {
     private async resolveMarketMaturities(
         marketIds: string[],
     ): Promise<Map<string, number>> {
-        const marketEntities =
-            await this.marketRepository.getMarketsByIds(marketIds);
+        const marketEntities = await this.marketRepository.getMarketsByIds(
+            marketIds as `0x${string}`[],
+        );
         const maturityByMarketId = new Map<string, number>();
         for (const market of marketEntities) {
-            const maturityUnix = market.maturity
-                ? Math.floor(market.maturity.getTime() / 1000)
-                : 0;
-            maturityByMarketId.set(market.id, maturityUnix);
+            maturityByMarketId.set(market.id, market.maturity);
         }
         return maturityByMarketId;
     }

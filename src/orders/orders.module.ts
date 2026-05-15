@@ -10,17 +10,18 @@ import { FaucetModule } from "../faucet/faucet.module";
 import { Order } from "./entities/order.entity";
 import { OrderMarket } from "./entities/order-market.entity";
 import { Account } from "./entities/account.entity";
+import { Match } from "./entities/match.entity";
 import { Token } from "../tokens/entities/token.entity";
-import { Market } from "../market/entities/market.entity";
 import { WalletThrottlerGuard } from "../common/guards/wallet-throttler.guard";
 import { OrdersController } from "./orders.controller";
 import { OrdersService } from "./orders.service";
 import { OrderRepository } from "./repositories/order.repository";
+import { MatchRepository } from "./repositories/match.repository";
 import { OrdersWorker } from "./orders.worker";
 
 @Module({
     imports: [
-        TypeOrmModule.forFeature([Order, OrderMarket, Account, Token, Market]),
+        TypeOrmModule.forFeature([Order, OrderMarket, Account, Match, Token]),
         ConfigModule,
         forwardRef(() => CoreModule),
         PriceModule,
@@ -33,9 +34,10 @@ import { OrdersWorker } from "./orders.worker";
     providers: [
         OrdersService,
         OrderRepository,
+        MatchRepository,
         OrdersWorker,
         WalletThrottlerGuard,
     ],
-    exports: [OrdersService, OrderRepository],
+    exports: [OrdersService, OrderRepository, MatchRepository],
 })
 export class OrdersModule {}

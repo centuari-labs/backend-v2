@@ -1,24 +1,24 @@
 import {
-    Injectable,
-    Logger,
     BadRequestException,
-    NotFoundException,
+    Injectable,
     InternalServerErrorException,
+    Logger,
+    NotFoundException,
 } from "@nestjs/common";
-import { DataSource } from "typeorm";
-import { OrderRepository } from "../orders/repositories/order.repository";
-import { ViemService } from "../core/viem/viem.service";
-import { TokensService } from "../tokens/tokens.service";
-import { MarketRepositories } from "../market/repository/market.repository";
+import { parseUnits } from "viem";
+import type { Abi, TransactionReceipt } from "viem";
+import CentuariAbiJson from "../abi/Centuari.json";
+
+const CentuariAbi = CentuariAbiJson as Abi;
 import { ChainConfigService } from "../core/chain-config/chain-config.service";
+import { DatabaseService } from "../core/database/database.service";
+import { applyRepayEffects } from "../core/on-chain-state/apply-repay";
+import { ViemService } from "../core/viem/viem.service";
+import { parseContractError } from "../common/utils/contract-errors.utils";
+import { uuidToBytes32 } from "../common/utils/uuid.utils";
+import { PortfolioRepository } from "./repositories/portfolio.repository";
 import { RepayRepository } from "./repositories/repay.repository";
 import { RepayRequestDto, RepayResponseDto } from "./dto/repay.dto";
-import { parseUnits } from "viem";
-import type { TransactionReceipt } from "viem";
-import { centuariAbi } from "../../abis/centuari";
-import { uuidToBytes32, portfolioUuidFor } from "../common/utils/uuid.utils";
-import { parseContractError } from "../common/utils/contract-errors.utils";
-import { PortfolioRepository } from "./repositories/portfolio.repository";
 
 @Injectable()
 export class RepayService {
@@ -26,33 +26,30 @@ export class RepayService {
 
     constructor(
         private readonly viemService: ViemService,
-        private readonly orderRepository: OrderRepository,
         private readonly repayRepository: RepayRepository,
         private readonly portfolioRepository: PortfolioRepository,
         private readonly chainConfig: ChainConfigService,
-        private readonly dataSource: DataSource,
+        private readonly databaseService: DatabaseService,
     ) {}
 
     async repay(
         dto: RepayRequestDto,
         walletAddress: string,
-        privyUserId: string,
+        _privyUserId: string,
     ): Promise<RepayResponseDto> {
         const { marketId, amount } = dto;
-
-        const accountId = await this.orderRepository
-            .getOrCreateAccount(walletAddress, privyUserId)
-            .then((a) => a.id);
 
         const market = await this.repayRepository.getMarketWithAsset(marketId);
         if (!market) throw new NotFoundException("Market not found");
 
-        // Sum total debt across all positions for this (account, market)
-        const totalDebtStr = await this.repayRepository.getUserTotalDebt(
-            accountId,
-            marketId,
+        // Convert backend UUID → bytes32 for on-chain + shared-schema lookup.
+        const marketIdBytes32 = uuidToBytes32(marketId);
+
+        const position = await this.portfolioRepository.getBorrowPosition(
+            marketIdBytes32,
+            walletAddress,
         );
-        const totalDebt = BigInt(totalDebtStr);
+        const totalDebt = position ? BigInt(position.debt) : 0n;
         if (totalDebt <= 0n) {
             throw new NotFoundException("No active borrow positions found");
         }
@@ -63,60 +60,42 @@ export class RepayService {
             totalDebt,
         );
 
-        // Convert DB market UUID to on-chain bytes32 (matches settlement engine encoding)
-        const marketIdBytes32 = uuidToBytes32(marketId);
-
         this.logger.log(
             `Repay diagnostics: marketId=${marketId}, marketIdBytes32=${marketIdBytes32}, ` +
                 `token=${market.tokenAddress}, borrower=${walletAddress}, ` +
                 `amount=${repayAmountBaseUnits}, totalDebt=${totalDebt}, decimals=${market.decimals}`,
         );
 
-        // Pre-check: verify on-chain debt exists before attempting repay
-        const onChainDebt = await this.getOnChainDebt(
+        const receipt = await this.executeBlockchainRepay(
             marketIdBytes32,
             walletAddress,
+            market.tokenAddress,
+            repayAmountBaseUnits,
         );
-        this.logger.log(
-            `On-chain debt check: onChainDebt=${onChainDebt}, dbDebt=${totalDebt}`,
-        );
-        if (onChainDebt === 0n) {
-            // On-chain debt is 0 but DB has debt — sync the DB now.
-            if (totalDebt > 0n) {
-                this.logger.warn(
-                    `On-chain debt is 0 but DB debt is ${totalDebt}. Syncing DB to match on-chain state.`,
-                );
-                await this.syncAllPositionsToZero(
-                    accountId,
-                    marketId,
-                    walletAddress,
-                    market.assetId,
-                    market.tokenAddress,
-                );
-            }
-            throw new BadRequestException(
-                "This position has already been fully repaid.",
+
+        try {
+            await applyRepayEffects({
+                pool: this.databaseService.getPool(),
+                client: this.viemService.getPublicClient(
+                    this.chainConfig.chainId,
+                ),
+                receipt,
+                expectedBorrower: walletAddress as `0x${string}`,
+            });
+            this.logger.log(
+                `Repay applied to shared schema for tx ${receipt.transactionHash}`,
+            );
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            this.logger.error(
+                `CRITICAL: repay on-chain success (${receipt.transactionHash}) but applyOnChainEffect failed: ${msg}`,
+            );
+            throw new InternalServerErrorException(
+                "Repay finalized on-chain but failed local state update.",
             );
         }
 
-        const txHash = await this.executeBlockchainRepay(
-            marketIdBytes32,
-            walletAddress,
-            market.tokenAddress,
-            repayAmountBaseUnits,
-        );
-
-        await this.updateDatabaseState(
-            repayAmountBaseUnits,
-            txHash,
-            accountId,
-            marketId,
-            walletAddress,
-            market.assetId,
-            market.tokenAddress,
-        );
-
-        return { txHash, status: "success" };
+        return { txHash: receipt.transactionHash, status: "success" };
     }
 
     private parseRepayAmount(
@@ -155,147 +134,29 @@ export class RepayService {
         borrower: string,
         token: string,
         amount: bigint,
-    ): Promise<string> {
+    ): Promise<TransactionReceipt> {
         try {
             const receipt = (await this.viemService.writeContract(
                 this.chainConfig.chainId,
                 this.chainConfig.operatorPrivateKey,
                 this.chainConfig.centuariAddress,
-                centuariAbi,
+                CentuariAbi,
                 "repay",
                 [marketId, borrower, token, amount],
                 { waitForReceipt: true },
             )) as TransactionReceipt;
-            return receipt.transactionHash;
-        } catch (error: any) {
-            this.logger.error(`Contract call failed: ${error.message}`);
-            const parsed = parseContractError(error.message, {
+            return receipt;
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            this.logger.error(`Contract call failed: ${msg}`);
+            const parsed = parseContractError(msg, {
                 InsufficientFunds:
-                    "Insufficient balance in Treasury. Please deposit tokens before repaying.",
+                    "Insufficient balance in HubDepositor. Please deposit tokens before repaying.",
             });
             if (parsed.isKnown) {
                 throw new BadRequestException(parsed.message);
             }
             throw new InternalServerErrorException(parsed.message);
         }
-    }
-
-    private async getOnChainDebt(
-        marketId: `0x${string}`,
-        borrower: string,
-    ): Promise<bigint> {
-        const debt = await this.viemService.readContract<bigint>(
-            this.chainConfig.chainId,
-            this.chainConfig.centuariAddress,
-            centuariAbi,
-            "getBorrowPosition",
-            [marketId, borrower],
-        );
-        return debt;
-    }
-
-    /**
-     * FIFO deduction: deduct repay amount from oldest positions first.
-     */
-    private async updateDatabaseState(
-        repayAmount: bigint,
-        txHash: string,
-        accountId: string,
-        marketId: string,
-        walletAddress: string,
-        assetId: string,
-        tokenAddress: string,
-    ): Promise<void> {
-        try {
-            await this.dataSource.transaction(async (manager) => {
-                const positions = await this.repayRepository.getBorrowPositions(
-                    accountId,
-                    marketId,
-                    manager,
-                );
-
-                let remaining = repayAmount;
-                for (const pos of positions) {
-                    if (remaining <= 0n) break;
-                    const posDebt = BigInt(pos.debt);
-                    const deduction =
-                        remaining >= posDebt ? posDebt : remaining;
-                    const newDebt = posDebt - deduction;
-                    await this.repayRepository.updateBorrowPositionDebt(
-                        manager,
-                        pos.id,
-                        newDebt.toString(),
-                    );
-                    remaining -= deduction;
-                }
-            });
-
-            // Deduct repay amount from portfolio balance (mirrors on-chain Treasury.repay)
-            const portfolioId = portfolioUuidFor(
-                walletAddress.toLowerCase(),
-                tokenAddress.toLowerCase(),
-            );
-            await this.portfolioRepository.upsertPortfolio(
-                portfolioId,
-                accountId,
-                assetId,
-                (-repayAmount).toString(),
-            );
-
-            this.logger.log(
-                `Repay DB state updated for tx: ${txHash}, portfolio deducted: ${repayAmount}`,
-            );
-        } catch (error: any) {
-            this.logger.error(
-                `CRITICAL: Blockchain tx succeeded (${txHash}) but DB update failed: ${error.message}`,
-            );
-            throw new InternalServerErrorException(
-                "Repay finalized on-chain but failed local state update.",
-            );
-        }
-    }
-
-    /**
-     * Sync all borrow positions for a market to zero debt when on-chain debt is 0.
-     */
-    private async syncAllPositionsToZero(
-        accountId: string,
-        marketId: string,
-        walletAddress: string,
-        assetId: string,
-        tokenAddress: string,
-    ): Promise<void> {
-        await this.dataSource.transaction(async (manager) => {
-            const positions = await this.repayRepository.getBorrowPositions(
-                accountId,
-                marketId,
-                manager,
-            );
-            let totalSynced = 0n;
-            for (const pos of positions) {
-                const posDebt = BigInt(pos.debt);
-                if (posDebt > 0n) {
-                    totalSynced += posDebt;
-                    await this.repayRepository.updateBorrowPositionDebt(
-                        manager,
-                        pos.id,
-                        "0",
-                    );
-                }
-            }
-
-            if (totalSynced > 0n) {
-                const portfolioId = portfolioUuidFor(
-                    walletAddress.toLowerCase(),
-                    tokenAddress.toLowerCase(),
-                );
-                await this.portfolioRepository.upsertPortfolio(
-                    portfolioId,
-                    accountId,
-                    assetId,
-                    (-totalSynced).toString(),
-                );
-            }
-        });
     }
 }

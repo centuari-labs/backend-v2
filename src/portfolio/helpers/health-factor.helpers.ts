@@ -38,6 +38,14 @@ export const HEALTH_FACTOR_NO_DEBT = Number.POSITIVE_INFINITY;
 export const MIN_HEALTH_FACTOR = 1.0;
 
 /**
+ * Fallback HF buffer (in basis points) for borrow place/update when no
+ * `risk` row covers the user's collateral × loan-token pair, or when the
+ * user has no flagged collateral at all. 100 bps = 1% margin above the
+ * 1.0 liquidation cutoff. Per-pair overrides live in `risk.borrow_buffer_bps`.
+ */
+export const DEFAULT_BORROW_BUFFER_BPS = 100;
+
+/**
  * Compute decimal-aware, weighted-LTV-based health factor.
  *
  * When additionalDebtPositions is omitted or empty:

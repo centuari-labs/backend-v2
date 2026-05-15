@@ -3,19 +3,22 @@ import { Interval } from "@nestjs/schedule";
 import { InjectRepository } from "@nestjs/typeorm";
 import { In, Repository } from "typeorm";
 import { ConfigService } from "@nestjs/config";
-import type { TransactionReceipt } from "viem";
+import { erc20Abi, type Abi, type TransactionReceipt } from "viem";
 import { ViemService } from "../core/viem/viem.service";
 import { ChainConfigService } from "../core/chain-config/chain-config.service";
 import { FaucetService } from "../faucet/faucet.service";
-import { erc20Abi } from "../abis/ERC20";
-import { treasuryAbi } from "../abis/Treasury";
+import HubDepositorAbiJson from "../abi/HubDepositor.json";
+import BalanceLedgerAbiJson from "../abi/BalanceLedger.json";
 import { privateKeyToAccount } from "viem/accounts";
 import { keccak256, parseEventLogs, toHex } from "viem";
+
+const HubDepositorAbi = HubDepositorAbiJson as Abi;
+const BalanceLedgerAbi = BalanceLedgerAbiJson as Abi;
 import { OrderRepository } from "./repositories/order.repository";
 import { PortfolioRepository } from "../portfolio/repositories/portfolio.repository";
 import { portfolioUuidFor } from "../common/utils/uuid.utils";
 import { OrdersService } from "./orders.service";
-import { Market } from "../market/entities/market.entity";
+import { MarketRepositories } from "../market/repository/market.repository";
 import { Token } from "../tokens/entities/token.entity";
 import { PortfolioService } from "../portfolio/portfolio.service";
 import { TokensService } from "../tokens/tokens.service";
@@ -76,8 +79,7 @@ export class OrdersWorker implements OnModuleInit {
 
     constructor(
         private readonly orderRepository: OrderRepository,
-        @InjectRepository(Market)
-        private readonly marketRepository: Repository<Market>,
+        private readonly marketRepository: MarketRepositories,
         @InjectRepository(Token)
         private readonly tokenRepository: Repository<Token>,
         private readonly ordersService: OrdersService,
@@ -106,8 +108,8 @@ export class OrdersWorker implements OnModuleInit {
             "OrdersWorker enabled — scheduling background initialization.",
         );
 
-        if (!this.chainConfig.treasuryAddress) {
-            throw new Error("TREASURY_ADDRESS is not configured");
+        if (!this.chainConfig.hubDepositorAddress) {
+            throw new Error("HUB_DEPOSITOR_ADDRESS is not configured");
         }
 
         this.botAccounts = this.deriveBotAccounts();
@@ -203,7 +205,7 @@ export class OrdersWorker implements OnModuleInit {
     // ─── Seed Funding (one-shot on init) ──────────────────────────────
 
     /**
-     * One-shot seed funding: call faucet once per bot, deposit everything into Treasury.
+     * One-shot seed funding: call faucet once per bot, deposit everything into HubDepositor.
      */
     private async seedBotFunding(): Promise<void> {
         const operatorKey = this.configService.get<string>(
@@ -264,12 +266,10 @@ export class OrdersWorker implements OnModuleInit {
             });
         }
 
-        const collateralAssetIds = collateralTokens.map((t) => t.id);
-
         for (const bot of this.botAccounts) {
             try {
                 await this.ensureGasForBot(formattedKey, bot.wallet);
-                await this.faucetAndDeposit(bot, allSpecs, collateralAssetIds);
+                await this.faucetAndDeposit(bot, allSpecs);
             } catch (e) {
                 this.logger.error(
                     `Failed seed funding for bot ${bot.wallet}: ${(e as Error).message}`,
@@ -281,25 +281,24 @@ export class OrdersWorker implements OnModuleInit {
     // ─── Faucet + Deposit (single round) ──────────────────────────────
 
     /**
-     * Call faucet once for all tokens, deposit whatever was received into Treasury,
+     * Call faucet once for all tokens, deposit whatever was received into HubDepositor,
      * sync portfolio, and set collateral.
      */
     private async faucetAndDeposit(
         bot: BotAccount,
         specs: TokenFundingSpec[],
-        collateralAssetIds: string[] = [],
     ): Promise<void> {
         if (specs.length === 0) return;
 
-        // Filter to Treasury-supported tokens
+        // Filter to HubDepositor-supported tokens
         const supportedResults = await Promise.all(
             specs.map((s) =>
                 this.viemService
                     .readContract<boolean>(
                         this.chainConfig.chainId,
-                        this.chainConfig.treasuryAddress,
-                        treasuryAbi,
-                        "supportedToken",
+                        this.chainConfig.hubDepositorAddress,
+                        HubDepositorAbi,
+                        "isSupportedAsset",
                         [s.tokenAddress],
                     )
                     .then((supported) => ({ ...s, supported }))
@@ -310,7 +309,7 @@ export class OrdersWorker implements OnModuleInit {
 
         if (supportedSpecs.length === 0) {
             this.logger.debug(
-                `No Treasury-supported tokens to fund for bot ${bot.wallet}; skipping`,
+                `No HubDepositor-supported tokens to fund for bot ${bot.wallet}; skipping`,
             );
             return;
         }
@@ -327,7 +326,7 @@ export class OrdersWorker implements OnModuleInit {
                 spec.tokenAddress,
                 erc20Abi,
                 "allowance",
-                [bot.wallet, this.chainConfig.treasuryAddress],
+                [bot.wallet, this.chainConfig.hubDepositorAddress],
             );
             if (allowance === 0n) {
                 await this.writeContractWithNonceRetry(
@@ -336,7 +335,7 @@ export class OrdersWorker implements OnModuleInit {
                     erc20Abi,
                     "approve",
                     [
-                        this.chainConfig.treasuryAddress,
+                        this.chainConfig.hubDepositorAddress,
                         BigInt(
                             "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
                         ),
@@ -359,7 +358,7 @@ export class OrdersWorker implements OnModuleInit {
             );
         }
 
-        // Deposit whatever wallet balance we have into Treasury
+        // Deposit whatever wallet balance we have into HubDepositor
         const account = await this.orderRepository.findAccountByWallet(
             bot.wallet,
         );
@@ -378,8 +377,8 @@ export class OrdersWorker implements OnModuleInit {
 
                 const receipt = await this.writeContractWithNonceRetry(
                     bot.privateKey,
-                    this.chainConfig.treasuryAddress,
-                    treasuryAbi,
+                    this.chainConfig.hubDepositorAddress,
+                    HubDepositorAbi,
                     "deposit",
                     [spec.tokenAddress, walletBalance],
                 );
@@ -388,13 +387,13 @@ export class OrdersWorker implements OnModuleInit {
                 if (account) {
                     try {
                         const depositedLogs = parseEventLogs({
-                            abi: treasuryAbi,
+                            abi: HubDepositorAbi,
                             eventName: "Deposited",
                             logs: receipt.logs,
                         }).filter(
                             (log) =>
                                 log.address?.toLowerCase() ===
-                                this.chainConfig.treasuryAddress.toLowerCase(),
+                                this.chainConfig.hubDepositorAddress.toLowerCase(),
                         );
 
                         for (const log of depositedLogs) {
@@ -449,19 +448,14 @@ export class OrdersWorker implements OnModuleInit {
             `Faucet + deposit complete for bot ${bot.wallet} (${supportedSpecs.length} token(s))`,
         );
 
-        // Set collateral
-        if (collateralAssetIds.length > 0) {
-            try {
-                await this.portfolioService.setAssetAsCollateral(bot.wallet, {
-                    assetIds: collateralAssetIds,
-                    isCollateral: true,
-                });
-            } catch (e) {
-                this.logger.error(
-                    `Failed to set collateral for bot ${bot.wallet}: ${(e as Error).message}`,
-                );
-            }
-        }
+        // Note: legacy off-chain `setAssetAsCollateral` was removed in
+        // Phase 2 of the loophole-fix work. Bot collateral is no longer
+        // marked off-chain. If a future test scenario needs bots to have
+        // on-chain `usedAsCollateral=true`, route through
+        // `CollateralService.flag` (which enqueues, then settlement engine
+        // applies on-chain) or call `CollateralManager.flagFor` directly
+        // with the operator key. The current bot orders work without it
+        // because Phase 1 matching engine does not HF-gate at order time.
     }
 
     private async ensureGasForBot(
@@ -501,7 +495,7 @@ export class OrdersWorker implements OnModuleInit {
     }
 
     /**
-     * Syncs portfolio DB row from on-chain treasury balance.
+     * Syncs portfolio DB row from on-chain BalanceLedger.available slot.
      * Ensures DB reflects on-chain state regardless of event parsing.
      */
     private async syncPortfolioFromOnChainBalance(
@@ -513,9 +507,9 @@ export class OrdersWorker implements OnModuleInit {
         try {
             const onChainBalance = await this.viemService.readContract<bigint>(
                 this.chainConfig.chainId,
-                this.chainConfig.treasuryAddress,
-                treasuryAbi,
-                "balanceOf",
+                this.chainConfig.balanceLedgerAddress,
+                BalanceLedgerAbi,
+                "available",
                 [bot.wallet, tokenAddress],
             );
             if (onChainBalance === 0n) return;
@@ -582,8 +576,7 @@ export class OrdersWorker implements OnModuleInit {
                     isCollateral: true,
                 }));
 
-            const collateralAssetIds = collateralTokens.map((t) => t.id);
-            await this.faucetAndDeposit(bot, specs, collateralAssetIds);
+            await this.faucetAndDeposit(bot, specs);
             this.logger.log(
                 `[topUpCollateral] Topped up collateral for bot ${bot.wallet}`,
             );
@@ -627,7 +620,7 @@ export class OrdersWorker implements OnModuleInit {
                 },
             ];
 
-            await this.faucetAndDeposit(bot, specs, []);
+            await this.faucetAndDeposit(bot, specs);
             this.logger.log(
                 `[topUpLoanToken] Topped up loan token ${token.symbol} for bot ${bot.wallet}`,
             );
@@ -643,7 +636,7 @@ export class OrdersWorker implements OnModuleInit {
         if (!this.isEnabled) return;
 
         try {
-            const markets = await this.marketRepository.find();
+            const markets = await this.marketRepository.findAllMarketsForCache();
             const tokens = await this.tokenRepository.find();
             const tokenSymbolMap = new Map<string, string>();
             for (const t of tokens) {
@@ -653,7 +646,7 @@ export class OrdersWorker implements OnModuleInit {
             const grouped = new Map<string, string[]>();
             for (const m of markets) {
                 const arr = grouped.get(m.assetId) ?? [];
-                arr.push(m.id);
+                arr.push(m.marketId);
                 grouped.set(m.assetId, arr);
             }
             this.assetMarketCache = Array.from(grouped.entries()).map(

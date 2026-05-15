@@ -73,7 +73,7 @@ describe("DepositService", () => {
         const mockChainConfig: Partial<ChainConfigService> = {
             chainId: 421614,
             operatorPrivateKey: "",
-            treasuryAddress: "",
+            hubDepositorAddress: "",
             centuariAddress: "",
         };
 

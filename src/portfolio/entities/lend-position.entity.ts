@@ -1,50 +1,37 @@
-import {
-    Entity,
-    PrimaryGeneratedColumn,
-    Column,
-    CreateDateColumn,
-    UpdateDateColumn,
-} from "typeorm";
+import { Column, Entity, PrimaryColumn, UpdateDateColumn } from "typeorm";
+import { BYTEA_HEX } from "../../common/transformers/bytea-hex.transformer";
 
-@Entity("lend_positions")
+/**
+ * Mirrors the shared `lend_position` table. Read-only from backend —
+ * mutations go through `applyOnChainEffect` in
+ * `apply-withdraw-lend.ts` + settlement-engine's `applySettlementResult`,
+ * both of which stamp `applied_by_*`.
+ */
+@Entity({ name: "lend_position", synchronize: false })
 export class LendPosition {
-    @PrimaryGeneratedColumn("uuid")
-    id: string;
-
-    @Column({ name: "account_id", type: "uuid" })
-    accountId: string;
-
-    @Column({ name: "asset_id", type: "uuid" })
-    assetId: string;
-
-    @Column({ name: "market_id", type: "uuid" })
+    @PrimaryColumn({ name: "market_id", type: "bytea", transformer: BYTEA_HEX })
     marketId: string;
 
-    @Column({ name: "shares", type: "numeric" })
-    shares: string;
+    @PrimaryColumn({ type: "bytea", transformer: BYTEA_HEX })
+    lender: string;
 
-    @Column({ name: "original_shares", type: "numeric" })
-    originalShares: string;
-
-    @Column({ name: "amount", type: "numeric" })
-    amount: string;
-
-    @Column({ name: "apr", type: "numeric", default: 0 })
-    apr: string;
-
-    @Column({ name: "cbt_asset_id", type: "uuid", nullable: true })
-    cbtAssetId: string;
+    @Column({ name: "bond_token", type: "bytea", transformer: BYTEA_HEX })
+    bondToken: string;
 
     @Column({
-        name: "settlement_batch_id",
-        type: "uuid",
-        nullable: true,
+        name: "cbt_balance",
+        type: "numeric",
+        precision: 78,
+        scale: 0,
     })
-    settlementBatchId: string;
+    cbtBalance: string;
 
-    @CreateDateColumn({ name: "created_at" })
-    createdAt: Date;
+    @Column({ type: "numeric", precision: 78, scale: 0 })
+    principal: string;
 
-    @UpdateDateColumn({ name: "updated_at" })
+    @Column({ type: "numeric", precision: 78, scale: 0 })
+    rate: string;
+
+    @UpdateDateColumn({ name: "updated_at", type: "timestamptz" })
     updatedAt: Date;
 }

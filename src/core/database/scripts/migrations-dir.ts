@@ -26,14 +26,6 @@ export function getMigrationsDir(callerDirname: string): string {
 export function getSeedsDir(callerDirname: string): string {
     const isCompiled = callerDirname.includes(`${sep}dist${sep}`);
     return isCompiled
-        ? join(
-              callerDirname,
-              "..",
-              "..",
-              "..",
-              "core",
-              "database",
-              "seeds",
-          )
+        ? join(callerDirname, "..", "..", "..", "core", "database", "seeds")
         : join(callerDirname, "..", "seeds");
 }

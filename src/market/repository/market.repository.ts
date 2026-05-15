@@ -1,14 +1,25 @@
 import { Injectable } from "@nestjs/common";
+import { InjectRepository } from "@nestjs/typeorm";
 import { DataSource, In, Repository } from "typeorm";
-import { LegacyMarket as Market } from "../entities/legacy-market.entity";
+import { LendPosition } from "../../portfolio/entities/lend-position.entity";
+import { UserBalance } from "../../portfolio/entities/user-balance.entity";
+import { Token } from "../../tokens/entities/token.entity";
+import { LegacyMarket } from "../entities/legacy-market.entity";
+import { Market } from "../entities/market.entity";
 
 @Injectable()
-export class MarketRepositories extends Repository<Market> {
-    constructor(private dataSource: DataSource) {
-        super(Market, dataSource.createEntityManager());
+export class MarketRepositories extends Repository<LegacyMarket> {
+    constructor(
+        private dataSource: DataSource,
+        @InjectRepository(UserBalance)
+        private readonly userBalanceRepo: Repository<UserBalance>,
+        @InjectRepository(LendPosition)
+        private readonly lendRepo: Repository<LendPosition>,
+    ) {
+        super(LegacyMarket, dataSource.createEntityManager());
     }
 
-    async getMarketsByIds(marketIds: string[]): Promise<Market[]> {
+    async getMarketsByIds(marketIds: string[]): Promise<LegacyMarket[]> {
         if (marketIds.length === 0) {
             return [];
         }
@@ -20,24 +31,37 @@ export class MarketRepositories extends Repository<Market> {
     async getTotalDepositUsd(): Promise<
         { asset_id: string; total_amount: string }[]
     > {
-        return this.dataSource
-            .createQueryBuilder()
-            .select("portfolio.asset_id", "asset_id")
-            .addSelect("SUM(portfolio.amount)", "total_amount")
-            .from("portfolio", "portfolio")
-            .groupBy("portfolio.asset_id")
+        return this.userBalanceRepo
+            .createQueryBuilder("ub")
+            .innerJoin(
+                Token,
+                "t",
+                "LOWER(t.token_address) = '0x' || encode(ub.asset, 'hex')",
+            )
+            .select("t.id", "asset_id")
+            .addSelect(
+                "SUM(ub.available + ub.in_orders + ub.in_yield_router)::text",
+                "total_amount",
+            )
+            .groupBy("t.id")
             .getRawMany();
     }
 
     async getActiveLoans(): Promise<
         { asset_id: string; total_amount: string }[]
     > {
-        return this.dataSource
-            .createQueryBuilder()
-            .select("lend_positions.asset_id", "asset_id")
-            .addSelect("SUM(lend_positions.amount)", "total_amount")
-            .from("lend_positions", "lend_positions")
-            .groupBy("lend_positions.asset_id")
+        return this.lendRepo
+            .createQueryBuilder("lp")
+            .innerJoin(Market, "m", "m.market_id = lp.market_id")
+            .innerJoin(
+                Token,
+                "t",
+                "LOWER(t.token_address) = '0x' || encode(m.loan_token, 'hex')",
+            )
+            .select("t.id", "asset_id")
+            .addSelect("SUM(lp.principal)::text", "total_amount")
+            .where("lp.cbt_balance > 0")
+            .groupBy("t.id")
             .getRawMany();
     }
 
@@ -81,21 +105,34 @@ export class MarketRepositories extends Repository<Market> {
     }
 
     async getSumDepositByAssetId(assetId: string): Promise<string> {
-        const result = await this.dataSource
-            .createQueryBuilder()
-            .select("SUM(portfolio.amount)", "total_amount")
-            .from("portfolio", "portfolio")
-            .where("portfolio.asset_id = :assetId", { assetId })
+        const result = await this.userBalanceRepo
+            .createQueryBuilder("ub")
+            .innerJoin(
+                Token,
+                "t",
+                "LOWER(t.token_address) = '0x' || encode(ub.asset, 'hex')",
+            )
+            .select(
+                "COALESCE(SUM(ub.available + ub.in_orders + ub.in_yield_router), 0)::text",
+                "total_amount",
+            )
+            .where("t.id = :assetId", { assetId })
             .getRawOne();
         return result?.total_amount || "0";
     }
 
     async getSumLoansByAssetId(assetId: string): Promise<string> {
-        const result = await this.dataSource
-            .createQueryBuilder()
-            .select("SUM(lend_positions.amount)", "total_amount")
-            .from("lend_positions", "lend_positions")
-            .where("lend_positions.asset_id = :assetId", { assetId })
+        const result = await this.lendRepo
+            .createQueryBuilder("lp")
+            .innerJoin(Market, "m", "m.market_id = lp.market_id")
+            .innerJoin(
+                Token,
+                "t",
+                "LOWER(t.token_address) = '0x' || encode(m.loan_token, 'hex')",
+            )
+            .select("COALESCE(SUM(lp.principal), 0)::text", "total_amount")
+            .where("t.id = :assetId", { assetId })
+            .andWhere("lp.cbt_balance > 0")
             .getRawOne();
         return result?.total_amount || "0";
     }
@@ -122,7 +159,7 @@ export class MarketRepositories extends Repository<Market> {
     async getUpcomingMarkets(
         assetId: string,
         limit: number,
-    ): Promise<Market[]> {
+    ): Promise<LegacyMarket[]> {
         return this.createQueryBuilder("market")
             .where("market.asset_id = :assetId", { assetId })
             .andWhere("market.maturity > :now", { now: new Date() })

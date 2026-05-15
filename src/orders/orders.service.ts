@@ -511,14 +511,12 @@ export class OrdersService {
     private async resolveMarketMaturities(
         marketIds: string[],
     ): Promise<Map<string, number>> {
-        const marketEntities =
-            await this.marketRepository.getMarketsByIds(marketIds);
+        const marketEntities = await this.marketRepository.getMarketsByIds(
+            marketIds as `0x${string}`[],
+        );
         const maturityByMarketId = new Map<string, number>();
         for (const market of marketEntities) {
-            const maturityUnix = market.maturity
-                ? Math.floor(market.maturity.getTime() / 1000)
-                : 0;
-            maturityByMarketId.set(market.id, maturityUnix);
+            maturityByMarketId.set(market.id, market.maturity);
         }
         return maturityByMarketId;
     }

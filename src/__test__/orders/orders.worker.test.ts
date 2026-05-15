@@ -5,7 +5,7 @@ import { ConfigService } from "@nestjs/config";
 import { OrdersWorker } from "../../orders/orders.worker";
 import { OrderRepository } from "../../orders/repositories/order.repository";
 import { OrdersService } from "../../orders/orders.service";
-import { LegacyMarket as Market } from "../../market/entities/legacy-market.entity";
+import { Market } from "../../market/entities/market.entity";
 import { Token } from "../../tokens/entities/token.entity";
 import { ViemService } from "../../core/viem/viem.service";
 import { ChainConfigService } from "../../core/chain-config/chain-config.service";

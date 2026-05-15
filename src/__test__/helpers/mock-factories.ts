@@ -1,6 +1,6 @@
 import { Order } from "../../orders/entities/order.entity";
 import { Account } from "../../orders/entities/account.entity";
-import { LegacyMarket } from "../../market/entities/legacy-market.entity";
+import { Market } from "../../market/entities/market.entity";
 import { Token } from "../../tokens/entities/token.entity";
 import { OrderMarket } from "../../orders/entities/order-market.entity";
 import {
@@ -12,7 +12,9 @@ import {
 export const MOCK_IDS = {
     accountId: "a0000000-0000-0000-0000-000000000001",
     assetId: "b0000000-0000-0000-0000-000000000001",
-    marketId: "c0000000-0000-0000-0000-000000000001",
+    // bytes32 hex marketId (post-C4 — `uuidToBytes32(legacyUuid)` shape).
+    marketId:
+        "0xc0000000000000000000000000000001" + "0".repeat(32),
     orderId: "d0000000-0000-0000-0000-000000000001",
     tokenAddress: "0x1234567890abcdef1234567890abcdef12345678",
     walletAddress: "0xAbCdEf1234567890abcdef1234567890AbCdEf12",
@@ -51,14 +53,11 @@ export function createMockAccount(overrides: Partial<Account> = {}): Account {
     };
 }
 
-export function createMockMarket(
-    overrides: Partial<LegacyMarket> = {},
-): LegacyMarket {
+export function createMockMarket(overrides: Partial<Market> = {}): Market {
     return {
-        id: MOCK_IDS.marketId,
-        assetId: MOCK_IDS.assetId,
-        asset: undefined as any,
-        maturity: new Date("2025-06-01T00:00:00.000Z"),
+        marketId: MOCK_IDS.marketId,
+        loanToken: MOCK_IDS.tokenAddress,
+        maturity: "1748736000", // 2025-06-01T00:00:00.000Z unix seconds
         createdAt: new Date("2025-01-01T00:00:00.000Z"),
         ...overrides,
     };

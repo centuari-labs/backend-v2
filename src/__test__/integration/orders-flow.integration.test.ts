@@ -8,7 +8,7 @@ import { Order } from "../../orders/entities/order.entity";
 import { OrderMarket } from "../../orders/entities/order-market.entity";
 import { Account } from "../../orders/entities/account.entity";
 import { Token } from "../../tokens/entities/token.entity";
-import { LegacyMarket as Market } from "../../market/entities/legacy-market.entity";
+import { Market } from "../../market/entities/market.entity";
 import { TokensService } from "../../tokens/tokens.service";
 import { NatsService } from "../../core/nats/nats.service";
 import { PriceService } from "../../price/price.service";

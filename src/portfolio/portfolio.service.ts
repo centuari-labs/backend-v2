@@ -42,7 +42,7 @@ import { PortfolioRepository } from "./repositories/portfolio.repository";
 import { OrderRepository } from "../orders/repositories/order.repository";
 import { MatchRepository } from "../orders/repositories/match.repository";
 import { MarketRepositories } from "../market/repository/market.repository";
-import { bytes32ToUuid, uuidToBytes32 } from "../common/utils/uuid.utils";
+import { bytes32ToUuid } from "../common/utils/uuid.utils";
 import { parseContractError } from "../common/utils/contract-errors.utils";
 import {
     calculateUsdAmount,
@@ -834,8 +834,10 @@ export class PortfolioService {
         _privyUserId: string,
     ): Promise<WithdrawLendPositionResponseDto> {
         const { marketId } = dto;
+        const marketIdHex = marketId as `0x${string}`;
 
-        const market = await this.marketRepository.getMarketWithAsset(marketId);
+        const market =
+            await this.marketRepository.getMarketWithAsset(marketIdHex);
         if (!market) {
             throw new NotFoundException("Market not found");
         }
@@ -851,10 +853,8 @@ export class PortfolioService {
             throw new BadRequestException("Position has not matured yet");
         }
 
-        // Convert backend UUID → bytes32 for on-chain call + shared-schema
-        // lookup (matching-engine / settlement-engine use the same encoding,
-        // so indexer-v3's `market_id` stores this bytes32 as well).
-        const marketIdBytes32 = uuidToBytes32(marketId);
+        // marketIdHex is already bytes32 — no UUID translation needed post-C4.
+        const marketIdBytes32 = marketIdHex;
 
         const position = await this.portfolioRepository.getLendPosition(
             marketIdBytes32,

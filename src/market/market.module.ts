@@ -2,7 +2,6 @@ import { Module, forwardRef } from "@nestjs/common";
 import { TypeOrmModule } from "@nestjs/typeorm";
 import { MarketController } from "./market.controller";
 import { MarketService } from "./market.service";
-import { LegacyMarket } from "./entities/legacy-market.entity";
 import { Market } from "./entities/market.entity";
 import { LendPosition } from "../portfolio/entities/lend-position.entity";
 import { UserBalance } from "../portfolio/entities/user-balance.entity";
@@ -17,13 +16,7 @@ import { MarketWorker } from "./market.worker";
 
 @Module({
     imports: [
-        TypeOrmModule.forFeature([
-            LegacyMarket,
-            Market,
-            Token,
-            UserBalance,
-            LendPosition,
-        ]),
+        TypeOrmModule.forFeature([Market, Token, UserBalance, LendPosition]),
         TokensModule,
         forwardRef(() => CoreModule),
         PriceModule,

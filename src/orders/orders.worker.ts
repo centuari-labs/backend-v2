@@ -18,7 +18,7 @@ import { OrderRepository } from "./repositories/order.repository";
 import { PortfolioRepository } from "../portfolio/repositories/portfolio.repository";
 import { portfolioUuidFor } from "../common/utils/uuid.utils";
 import { OrdersService } from "./orders.service";
-import { LegacyMarket } from "../market/entities/legacy-market.entity";
+import { MarketRepositories } from "../market/repository/market.repository";
 import { Token } from "../tokens/entities/token.entity";
 import { PortfolioService } from "../portfolio/portfolio.service";
 import { TokensService } from "../tokens/tokens.service";
@@ -79,8 +79,7 @@ export class OrdersWorker implements OnModuleInit {
 
     constructor(
         private readonly orderRepository: OrderRepository,
-        @InjectRepository(LegacyMarket)
-        private readonly marketRepository: Repository<LegacyMarket>,
+        private readonly marketRepository: MarketRepositories,
         @InjectRepository(Token)
         private readonly tokenRepository: Repository<Token>,
         private readonly ordersService: OrdersService,
@@ -637,7 +636,7 @@ export class OrdersWorker implements OnModuleInit {
         if (!this.isEnabled) return;
 
         try {
-            const markets = await this.marketRepository.find();
+            const markets = await this.marketRepository.findAllMarketsForCache();
             const tokens = await this.tokenRepository.find();
             const tokenSymbolMap = new Map<string, string>();
             for (const t of tokens) {
@@ -647,7 +646,7 @@ export class OrdersWorker implements OnModuleInit {
             const grouped = new Map<string, string[]>();
             for (const m of markets) {
                 const arr = grouped.get(m.assetId) ?? [];
-                arr.push(m.id);
+                arr.push(m.marketId);
                 grouped.set(m.assetId, arr);
             }
             this.assetMarketCache = Array.from(grouped.entries()).map(

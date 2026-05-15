@@ -12,7 +12,6 @@ import { OrderMarket } from "./entities/order-market.entity";
 import { Account } from "./entities/account.entity";
 import { Match } from "./entities/match.entity";
 import { Token } from "../tokens/entities/token.entity";
-import { LegacyMarket } from "../market/entities/legacy-market.entity";
 import { WalletThrottlerGuard } from "../common/guards/wallet-throttler.guard";
 import { OrdersController } from "./orders.controller";
 import { OrdersService } from "./orders.service";
@@ -22,14 +21,7 @@ import { OrdersWorker } from "./orders.worker";
 
 @Module({
     imports: [
-        TypeOrmModule.forFeature([
-            Order,
-            OrderMarket,
-            Account,
-            Match,
-            Token,
-            LegacyMarket,
-        ]),
+        TypeOrmModule.forFeature([Order, OrderMarket, Account, Match, Token]),
         ConfigModule,
         forwardRef(() => CoreModule),
         PriceModule,

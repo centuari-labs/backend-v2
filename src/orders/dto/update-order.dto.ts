@@ -5,7 +5,6 @@ import {
     IsNotEmpty,
     IsOptional,
     IsString,
-    IsUUID,
     Max,
     Min,
     ArrayMinSize,
@@ -14,6 +13,7 @@ import {
     IsMinAmount,
     IsPositiveNumericString,
 } from "../../common/validators/amount.validator";
+import { IsBytes32Hex } from "../../common/validators/bytes32-hex.validator";
 
 export class UpdateOrderDto {
     @IsString()
@@ -25,12 +25,12 @@ export class UpdateOrderDto {
     amount: string;
 
     /**
-     * List of market IDs (UUIDs) this order targets.
+     * List of market IDs (bytes32 hex) this order targets.
      */
     @IsArray()
     @IsString({ each: true })
     @IsNotEmpty({ each: true })
-    @IsUUID(undefined, { each: true })
+    @IsBytes32Hex({ each: true })
     @ArrayMinSize(1, {
         message: "At least one marketId is required",
     })

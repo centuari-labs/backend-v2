@@ -1,24 +1,28 @@
-import { keccak256, encodeAbiParameters, type Address } from "viem";
+import { encodeAbiParameters, keccak256, type Address } from "viem";
 
 /**
- * Compute a deterministic market UUID that matches the on-chain marketId.
+ * Compute the canonical bytes32 marketId for a (loanToken, maturity) pair.
  *
- * On-chain: `marketId = keccak256(abi.encode(loanToken, maturity))`
- * Off-chain: take first 32 hex chars of the bytes32 → format as UUID.
+ * Encoding: `uuidToBytes32(legacyUuid)` semantics — take the first 16 bytes
+ * of `keccak256(abi.encode(loanToken, maturity))` and zero-pad to 32 bytes.
+ * This is the calldata-verbatim value `Centuari.settleMatch` re-emits via
+ * `MarketCreated` (see [Centuari.sol:81-102, 295]). The on-chain marketId
+ * stored in indexer-v3's `market.market_id` is byte-identical to this.
  *
- * @param loanTokenAddress - ERC-20 loan token contract address.
- * @param maturityUnixSeconds - Maturity as Unix timestamp in seconds.
- * @returns UUID string matching the on-chain derived marketId.
+ * Do NOT change to full-width `keccak256(abi.encode(loanToken, maturity))`
+ * without migrating every existing row in `market`, `order_markets`,
+ * `matches`, `lend_position`, `borrow_position`, and `pending_collateral_flags`
+ * — see C4 plan §Phase 2 §A.
  */
-export function computeMarketId(
+export function computeMarketIdBytes32(
     loanTokenAddress: string,
     maturityUnixSeconds: number,
-): string {
+): `0x${string}` {
     const encoded = encodeAbiParameters(
         [{ type: "address" }, { type: "uint256" }],
         [loanTokenAddress as Address, BigInt(maturityUnixSeconds)],
     );
-    const hash = keccak256(encoded); // 0x + 64 hex chars
-    const hex = hash.slice(2, 34); // first 32 hex chars (16 bytes)
-    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+    const hash = keccak256(encoded); // 0x + 64 hex chars (32 bytes)
+    // First 16 bytes (32 hex chars) zero-padded to 32 bytes (64 hex chars).
+    return `0x${hash.slice(2, 34)}${"0".repeat(32)}` as `0x${string}`;
 }

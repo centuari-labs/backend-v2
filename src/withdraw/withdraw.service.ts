@@ -5,23 +5,21 @@ import {
     Logger,
     NotFoundException,
 } from "@nestjs/common";
-import { parseUnits, type Abi } from "viem";
-import type { TransactionReceipt } from "viem";
-import { DataSource } from "typeorm";
+import { parseUnits, type Abi, type TransactionReceipt } from "viem";
 import { ViemService } from "../core/viem/viem.service";
 import { ChainConfigService } from "../core/chain-config/chain-config.service";
+import { DatabaseService } from "../core/database/database.service";
 import { TokensService } from "../tokens/tokens.service";
 import { PortfolioRepository } from "../portfolio/repositories/portfolio.repository";
 import { PortfolioService } from "../portfolio/portfolio.service";
 import { OrderRepository } from "../orders/repositories/order.repository";
-import { LegacyPortfolio } from "../portfolio/entities/legacy-portfolio.entity";
 import { HEALTH_FACTOR_NO_DEBT } from "../portfolio/helpers/health-factor.helpers";
 import HubDepositorAbiJson from "../abi/HubDepositor.json";
 
 const HubDepositorAbi = HubDepositorAbiJson as Abi;
+import { applyWithdrawEffects } from "../core/on-chain-state/apply-withdraw";
 import { humanToBaseUnits } from "../common/utils/number.utils";
 import { parseContractError } from "../common/utils/contract-errors.utils";
-import { withTransaction } from "../common/utils/transaction.utils";
 import type {
     WithdrawRequestDto,
     WithdrawResponseDto,
@@ -32,13 +30,13 @@ export class WithdrawService {
     private readonly logger = new Logger(WithdrawService.name);
 
     constructor(
-        private readonly dataSource: DataSource,
         private readonly viemService: ViemService,
         private readonly tokensService: TokensService,
         private readonly portfolioRepository: PortfolioRepository,
         private readonly portfolioService: PortfolioService,
         private readonly orderRepository: OrderRepository,
         private readonly chainConfig: ChainConfigService,
+        private readonly databaseService: DatabaseService,
     ) {}
 
     async withdraw(
@@ -47,20 +45,17 @@ export class WithdrawService {
     ): Promise<WithdrawResponseDto> {
         const { assetId, amount } = dto;
 
-        // Validate amount is positive
         const amountNum = Number(amount);
         if (Number.isNaN(amountNum) || amountNum <= 0) {
             throw new BadRequestException("Amount must be a positive number");
         }
 
-        // Resolve account
         const account =
             await this.orderRepository.findAccountByWallet(walletAddress);
         if (!account) {
             throw new NotFoundException("Account not found");
         }
 
-        // Resolve token
         const token = await this.tokensService.getTokenByAssetId(assetId);
         if (!token) {
             throw new NotFoundException("Token not found");
@@ -68,142 +63,107 @@ export class WithdrawService {
 
         const decimals = token.decimals ?? 18;
         const amountInBaseStr = humanToBaseUnits(amount, decimals);
-        const amountBaseNum = Number(amountInBaseStr);
+        const amountInBaseUnits = BigInt(amountInBaseStr);
+
+        const balance = await this.portfolioRepository.getUserBalanceForAsset(
+            walletAddress,
+            assetId,
+        );
+        const available = balance ? BigInt(balance.available) : 0n;
+        if (!balance || available <= 0n) {
+            throw new BadRequestException("No balance found for this asset");
+        }
+
+        if (amountInBaseUnits > available) {
+            throw new BadRequestException(
+                `Insufficient balance. Available: ${available.toString()}, Requested: ${amountInBaseStr}`,
+            );
+        }
+
+        if (balance.isCollateral) {
+            const simulated =
+                await this.portfolioService.simulateHealthFactorAfterWithdrawal(
+                    account.id,
+                    assetId,
+                    amountInBaseUnits.toString(),
+                );
+
+            if (
+                simulated.healthFactor !== HEALTH_FACTOR_NO_DEBT &&
+                simulated.healthFactor <= 1.0
+            ) {
+                throw new BadRequestException(
+                    `Withdrawal would reduce health factor below 1.0 (projected: ${simulated.healthFactor.toFixed(4)})`,
+                );
+            }
+        }
+
+        this.logger.log(
+            `Executing payout: user=${walletAddress}, asset=${token.tokenAddress}, amount=${amountInBaseUnits}`,
+        );
+
+        const receipt = await this.executeBlockchainPayout(
+            walletAddress,
+            token.tokenAddress,
+            amountInBaseUnits,
+        );
 
         try {
-            return await withTransaction(this.dataSource, async (manager) => {
-                // Lock all portfolio rows for this account + asset (both collateral and non-collateral)
-                const portfolioRows = await manager
-                    .createQueryBuilder(LegacyPortfolio, "p")
-                    .setLock("pessimistic_write")
-                    .where("p.accountId = :accountId", {
-                        accountId: account.id,
-                    })
-                    .andWhere("p.assetId = :assetId", { assetId })
-                    .getMany();
-
-                if (!portfolioRows || portfolioRows.length === 0) {
-                    throw new BadRequestException(
-                        "No balance found for this asset",
-                    );
-                }
-
-                // Separate collateral and non-collateral rows
-                const nonCollateralRow = portfolioRows.find(
-                    (p) => !p.isCollateral,
-                );
-                const collateralRow = portfolioRows.find((p) => p.isCollateral);
-
-                const nonCollateralAmount = nonCollateralRow
-                    ? Number(nonCollateralRow.amount)
-                    : 0;
-                const collateralAmount = collateralRow
-                    ? Number(collateralRow.amount)
-                    : 0;
-                const lockedAmount = nonCollateralRow
-                    ? Number(nonCollateralRow.lockedAmount ?? 0)
-                    : 0;
-                const totalAvailable =
-                    nonCollateralAmount + collateralAmount - lockedAmount;
-
-                if (amountBaseNum > totalAvailable) {
-                    throw new BadRequestException(
-                        `Insufficient balance. Available: ${totalAvailable}, Requested: ${amountNum}`,
-                    );
-                }
-
-                // Deduct from non-collateral first, then collateral
-                const nonCollateralDeduction = Math.min(
-                    amountBaseNum,
-                    nonCollateralAmount,
-                );
-                const collateralDeduction =
-                    amountBaseNum - nonCollateralDeduction;
-
-                // Health factor check when touching collateral
-                if (collateralDeduction > 0) {
-                    const simulated =
-                        await this.portfolioService.simulateHealthFactorAfterWithdrawal(
-                            account.id,
-                            assetId,
-                            collateralDeduction.toString(),
-                        );
-
-                    if (
-                        simulated.healthFactor !== HEALTH_FACTOR_NO_DEBT &&
-                        simulated.healthFactor <= 1.0
-                    ) {
-                        throw new BadRequestException(
-                            `Withdrawal would reduce health factor below 1.0 (projected: ${simulated.healthFactor.toFixed(4)})`,
-                        );
-                    }
-                }
-
-                // Call HubDepositor.payout on-chain
-                // Signature: payout(user, asset, amount) — note arg order vs. legacy Treasury.withdraw(token, to, amount)
-                const amountInBaseUnits = parseUnits(amount, decimals);
-                this.logger.log(
-                    `Executing payout: user=${walletAddress}, asset=${token.tokenAddress}, amount=${amountInBaseUnits}`,
-                );
-
-                const receipt = (await this.viemService.writeContract(
+            await applyWithdrawEffects({
+                pool: this.databaseService.getPool(),
+                client: this.viemService.getPublicClient(
                     this.chainConfig.chainId,
-                    this.chainConfig.operatorPrivateKey,
-                    this.chainConfig.hubDepositorAddress,
-                    HubDepositorAbi,
-                    "payout",
-                    [walletAddress, token.tokenAddress, amountInBaseUnits],
-                    { waitForReceipt: true },
-                )) as TransactionReceipt;
-
-                // Deduct from non-collateral row
-                if (nonCollateralDeduction > 0 && nonCollateralRow) {
-                    const newAmount =
-                        nonCollateralAmount - nonCollateralDeduction;
-                    if (newAmount <= 0) {
-                        await manager.remove(nonCollateralRow);
-                    } else {
-                        nonCollateralRow.amount = newAmount.toString();
-                        await manager.save(nonCollateralRow);
-                    }
-                }
-
-                // Deduct from collateral row
-                if (collateralDeduction > 0 && collateralRow) {
-                    const newAmount = collateralAmount - collateralDeduction;
-                    if (newAmount <= 0) {
-                        await manager.remove(collateralRow);
-                    } else {
-                        collateralRow.amount = newAmount.toString();
-                        await manager.save(collateralRow);
-                    }
-                }
-
-                this.logger.log(
-                    `Withdraw successful: txHash=${receipt.transactionHash}, amount=${amount} ${token.symbol}`,
-                );
-
-                return {
-                    txHash: receipt.transactionHash,
-                    status: "success",
-                };
+                ),
+                receipt,
+                expectedUser: walletAddress as `0x${string}`,
             });
-        } catch (error: any) {
-            // Re-throw if it's already a NestJS exception
-            if (error.status >= 400 || error.getStatus) {
-                throw error;
-            }
+            this.logger.log(
+                `Withdraw applied to shared schema for tx ${receipt.transactionHash}`,
+            );
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            this.logger.error(
+                `CRITICAL: withdraw on-chain success (${receipt.transactionHash}) but applyOnChainEffect failed: ${msg}`,
+            );
+            throw new InternalServerErrorException(
+                "Withdraw finalized on-chain but failed local state update.",
+            );
+        }
 
-            this.logger.error(`Withdraw failed: ${error.message}`, error.stack);
+        this.logger.log(
+            `Withdraw successful: txHash=${receipt.transactionHash}, amount=${amount} ${token.symbol}`,
+        );
 
-            const parsed = parseContractError(error.message, {
+        return {
+            txHash: receipt.transactionHash,
+            status: "success",
+        };
+    }
+
+    private async executeBlockchainPayout(
+        user: string,
+        token: string,
+        amount: bigint,
+    ): Promise<TransactionReceipt> {
+        try {
+            return (await this.viemService.writeContract(
+                this.chainConfig.chainId,
+                this.chainConfig.operatorPrivateKey,
+                this.chainConfig.hubDepositorAddress,
+                HubDepositorAbi,
+                "payout",
+                [user, token, amount],
+                { waitForReceipt: true },
+            )) as TransactionReceipt;
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            this.logger.error(`Contract call failed: ${msg}`);
+            const parsed = parseContractError(msg, {
                 InsufficientFunds: "Insufficient balance for withdrawal.",
             });
-
             if (parsed.isKnown) {
                 throw new BadRequestException(parsed.message);
             }
-
             throw new InternalServerErrorException(parsed.message);
         }
     }

@@ -199,6 +199,35 @@ export class PortfolioRepository extends Repository<LegacyPortfolio> {
             .getRawMany();
     }
 
+    async getUserBalanceForAsset(
+        wallet: string,
+        assetId: string,
+    ): Promise<{
+        available: string;
+        isCollateral: boolean;
+        decimals: number;
+    } | null> {
+        const row = await this.userBalanceRepo
+            .createQueryBuilder("ub")
+            .innerJoin(
+                Token,
+                "t",
+                "LOWER(t.token_address) = '0x' || encode(ub.asset, 'hex')",
+            )
+            .select("ub.available::text", "available")
+            .addSelect("ub.used_as_collateral", "is_collateral")
+            .addSelect("COALESCE(t.decimals, 0)", "decimals")
+            .where("ub.user_address = :w", { w: BYTEA_HEX.to(wallet) })
+            .andWhere("t.id = :assetId", { assetId })
+            .getRawOne();
+        if (!row) return null;
+        return {
+            available: row.available,
+            isCollateral: row.is_collateral,
+            decimals: Number(row.decimals),
+        };
+    }
+
     async getUserSuppliedAssets(
         wallet: string,
     ): Promise<{ asset_id: string; amount: string; decimals: number }[]> {

@@ -59,8 +59,7 @@ export class MarketRepositories extends Repository<Market> {
             id: `0x${row.market_id.toString("hex")}` as `0x${string}`,
             assetId: row.asset_id,
             maturity: Number(row.maturity),
-            loanToken:
-                `0x${row.loan_token.toString("hex")}` as `0x${string}`,
+            loanToken: `0x${row.loan_token.toString("hex")}` as `0x${string}`,
         }));
     }
 
@@ -110,9 +109,7 @@ export class MarketRepositories extends Repository<Market> {
     async getEarliestMarketByAssetIds(
         assetIds: string[],
         minMaturity: Date = new Date(),
-    ): Promise<
-        { assetId: string; marketId: `0x${string}`; maturity: Date }[]
-    > {
+    ): Promise<{ assetId: string; marketId: `0x${string}`; maturity: Date }[]> {
         if (assetIds.length === 0) return [];
         const minMaturityUnix = Math.floor(minMaturity.getTime() / 1000);
         const rows = await this.createQueryBuilder("m")
@@ -136,8 +133,7 @@ export class MarketRepositories extends Repository<Market> {
             }>();
         return rows.map((row) => ({
             assetId: row.asset_id,
-            marketId:
-                `0x${row.market_id.toString("hex")}` as `0x${string}`,
+            marketId: `0x${row.market_id.toString("hex")}` as `0x${string}`,
             maturity: new Date(Number(row.maturity) * 1000),
         }));
     }
@@ -224,9 +220,7 @@ export class MarketRepositories extends Repository<Market> {
     async getUpcomingMarkets(
         assetId: string,
         limit: number,
-    ): Promise<
-        { id: `0x${string}`; assetId: string; maturity: Date }[]
-    > {
+    ): Promise<{ id: `0x${string}`; assetId: string; maturity: Date }[]> {
         const nowUnix = Math.floor(Date.now() / 1000);
         const rows = await this.createQueryBuilder("m")
             .innerJoin(
@@ -285,10 +279,8 @@ export class MarketRepositories extends Repository<Market> {
             }>();
         return rows.map((row) => ({
             assetId: row.asset_id,
-            marketId:
-                `0x${row.market_id.toString("hex")}` as `0x${string}`,
-            loanToken:
-                `0x${row.loan_token.toString("hex")}` as `0x${string}`,
+            marketId: `0x${row.market_id.toString("hex")}` as `0x${string}`,
+            loanToken: `0x${row.loan_token.toString("hex")}` as `0x${string}`,
             maturity: Number(row.maturity),
         }));
     }

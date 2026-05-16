@@ -636,7 +636,8 @@ export class OrdersWorker implements OnModuleInit {
         if (!this.isEnabled) return;
 
         try {
-            const markets = await this.marketRepository.findAllMarketsForCache();
+            const markets =
+                await this.marketRepository.findAllMarketsForCache();
             const tokens = await this.tokenRepository.find();
             const tokenSymbolMap = new Map<string, string>();
             for (const t of tokens) {

@@ -14,6 +14,7 @@ import { FaucetModule } from "./faucet/faucet.module";
 import { DepositModule } from "./deposit/deposit.module";
 import { WithdrawModule } from "./withdraw/withdraw.module";
 import { ChainIndexerModule } from "./chain-indexer/chain-indexer.module";
+import { HealthModule } from "./health/health.module";
 import { EventsGateway } from "./core/websocket/websocket.gateway";
 
 @Module({
@@ -52,6 +53,7 @@ import { EventsGateway } from "./core/websocket/websocket.gateway";
         DepositModule,
         WithdrawModule,
         ChainIndexerModule,
+        HealthModule,
     ],
     controllers: [],
     providers: [],

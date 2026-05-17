@@ -13,8 +13,7 @@ export const MOCK_IDS = {
     accountId: "a0000000-0000-0000-0000-000000000001",
     assetId: "b0000000-0000-0000-0000-000000000001",
     // bytes32 hex marketId (post-C4 — `uuidToBytes32(legacyUuid)` shape).
-    marketId:
-        "0xc0000000000000000000000000000001" + "0".repeat(32),
+    marketId: "0xc0000000000000000000000000000001" + "0".repeat(32),
     orderId: "d0000000-0000-0000-0000-000000000001",
     tokenAddress: "0x1234567890abcdef1234567890abcdef12345678",
     walletAddress: "0xAbCdEf1234567890abcdef1234567890AbCdEf12",

@@ -15,6 +15,7 @@ import { DepositModule } from "./deposit/deposit.module";
 import { WithdrawModule } from "./withdraw/withdraw.module";
 import { ChainIndexerModule } from "./chain-indexer/chain-indexer.module";
 import { CollateralModule } from "./collateral/collateral.module";
+import { HealthModule } from "./health/health.module";
 import { EventsGateway } from "./core/websocket/websocket.gateway";
 
 @Module({
@@ -55,6 +56,7 @@ import { EventsGateway } from "./core/websocket/websocket.gateway";
         WithdrawModule,
         ChainIndexerModule,
         CollateralModule,
+        HealthModule,
     ],
     controllers: [],
     providers: [],

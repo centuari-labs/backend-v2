@@ -90,9 +90,11 @@ describe("MarketRepositories", () => {
         };
         lendRepo = { createQueryBuilder: jest.fn().mockReturnValue(lpQb) };
         marketRepo = {
-            createQueryBuilder: jest.fn().mockImplementation((alias?: string) =>
-                alias ? mQb : mInsertQb,
-            ),
+            createQueryBuilder: jest
+                .fn()
+                .mockImplementation((alias?: string) =>
+                    alias ? mQb : mInsertQb,
+                ),
         };
 
         const mockEntityManager = { getRepository: jest.fn() };
@@ -261,10 +263,9 @@ describe("MarketRepositories", () => {
             );
 
             expect(mQb.distinctOn).toHaveBeenCalledWith(["m.loan_token"]);
-            expect(mQb.where).toHaveBeenCalledWith(
-                "t.id IN (:...assetIds)",
-                { assetIds: ["uuid-usdc"] },
-            );
+            expect(mQb.where).toHaveBeenCalledWith("t.id IN (:...assetIds)", {
+                assetIds: ["uuid-usdc"],
+            });
             expect(mQb.andWhere).toHaveBeenCalledWith("m.maturity >= :min", {
                 min: expectedMinUnix.toString(),
             });

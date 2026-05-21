@@ -3,8 +3,7 @@ import { getRepositoryToken } from "@nestjs/typeorm";
 import { DataSource } from "typeorm";
 import { Market } from "../../market/entities/market.entity";
 import { MarketRepositories } from "../../market/repository/market.repository";
-import { computeMarketId as computeLegacyMarketUuid } from "../../market/utils/market-id.utils";
-import { uuidToBytes32 } from "../../common/utils/uuid.utils";
+import { computeMarketIdBytes32 } from "../../market/utils/market-id.utils";
 import { LendPosition } from "../../portfolio/entities/lend-position.entity";
 import { UserBalance } from "../../portfolio/entities/user-balance.entity";
 
@@ -63,10 +62,8 @@ const LOAN_TOKEN_USDT = "0x2222222222222222222222222222222222222222";
 const MATURITY_A = 1735689600; // 2024-12-31
 const MATURITY_B = 1740000000;
 
-const MARKET_UUID_A = computeLegacyMarketUuid(LOAN_TOKEN_USDC, MATURITY_A);
-const MARKET_UUID_B = computeLegacyMarketUuid(LOAN_TOKEN_USDT, MATURITY_B);
-const MARKET_HEX_A = uuidToBytes32(MARKET_UUID_A);
-const MARKET_HEX_B = uuidToBytes32(MARKET_UUID_B);
+const MARKET_HEX_A = computeMarketIdBytes32(LOAN_TOKEN_USDC, MATURITY_A);
+const MARKET_HEX_B = computeMarketIdBytes32(LOAN_TOKEN_USDT, MATURITY_B);
 const MARKET_ID_BUF_A = Buffer.from(MARKET_HEX_A.slice(2), "hex");
 const MARKET_ID_BUF_B = Buffer.from(MARKET_HEX_B.slice(2), "hex");
 
@@ -78,7 +75,6 @@ describe("MarketRepositories", () => {
     let mInsertQb: MockInsertQb;
     let userBalanceRepo: { createQueryBuilder: jest.Mock };
     let lendRepo: { createQueryBuilder: jest.Mock };
-    let marketRepo: { createQueryBuilder: jest.Mock };
 
     beforeEach(async () => {
         ubQb = createMockQb();
@@ -89,13 +85,6 @@ describe("MarketRepositories", () => {
             createQueryBuilder: jest.fn().mockReturnValue(ubQb),
         };
         lendRepo = { createQueryBuilder: jest.fn().mockReturnValue(lpQb) };
-        marketRepo = {
-            createQueryBuilder: jest
-                .fn()
-                .mockImplementation((alias?: string) =>
-                    alias ? mQb : mInsertQb,
-                ),
-        };
 
         const mockEntityManager = { getRepository: jest.fn() };
         const mockDataSource = {
@@ -114,37 +103,40 @@ describe("MarketRepositories", () => {
                     provide: getRepositoryToken(LendPosition),
                     useValue: lendRepo,
                 },
-                {
-                    provide: getRepositoryToken(Market),
-                    useValue: marketRepo,
-                },
             ],
         }).compile();
 
         repository = module.get<MarketRepositories>(MarketRepositories);
+
+        // `MarketRepositories extends Repository<Market>`, so `this.createQueryBuilder`
+        // is TypeORM's real inherited method, which needs entity metadata the mock
+        // DataSource can't provide. Stub it on the instance so the mQb/mInsertQb
+        // mocks back the query/insert paths.
+        jest.spyOn(repository, "createQueryBuilder").mockImplementation(
+            ((alias?: string) => (alias ? mQb : mInsertQb)) as never,
+        );
     });
 
     describe("getMarketsByIds", () => {
         it("returns [] for empty input without hitting the repo", async () => {
             const result = await repository.getMarketsByIds([]);
             expect(result).toEqual([]);
-            expect(marketRepo.createQueryBuilder).not.toHaveBeenCalled();
+            expect(repository.createQueryBuilder).not.toHaveBeenCalled();
         });
 
-        it("translates UUID input via uuidToBytes32, joins market→assets, decodes BYTEA market_id back to UUID, maps maturity bigint→Date", async () => {
-            const createdAt = new Date("2024-01-01T00:00:00.000Z");
+        it("translates hex input to BYTEA, joins market→assets, decodes BYTEA market_id back to hex, maps maturity bigint→number", async () => {
             mQb.getRawMany.mockResolvedValue([
                 {
                     market_id: MARKET_ID_BUF_A,
+                    loan_token: Buffer.from(LOAN_TOKEN_USDC.slice(2), "hex"),
                     asset_id: "uuid-usdc",
                     maturity: MATURITY_A.toString(),
-                    created_at: createdAt,
                 },
             ]);
 
-            const result = await repository.getMarketsByIds([MARKET_UUID_A]);
+            const result = await repository.getMarketsByIds([MARKET_HEX_A]);
 
-            expect(marketRepo.createQueryBuilder).toHaveBeenCalledWith("m");
+            expect(repository.createQueryBuilder).toHaveBeenCalledWith("m");
             expect(mQb.innerJoin).toHaveBeenCalledWith(
                 expect.anything(),
                 "t",
@@ -159,10 +151,10 @@ describe("MarketRepositories", () => {
             );
 
             expect(result).toHaveLength(1);
-            expect(result[0].id).toBe(MARKET_UUID_A);
+            expect(result[0].id).toBe(MARKET_HEX_A);
             expect(result[0].assetId).toBe("uuid-usdc");
-            expect(result[0].maturity?.getTime()).toBe(MATURITY_A * 1000);
-            expect(result[0].createdAt).toBe(createdAt);
+            expect(result[0].maturity).toBe(MATURITY_A);
+            expect(result[0].loanToken).toBe(LOAN_TOKEN_USDC);
         });
     });
 
@@ -243,7 +235,7 @@ describe("MarketRepositories", () => {
         it("returns [] for empty input without hitting the repo", async () => {
             const result = await repository.getEarliestMarketByAssetIds([]);
             expect(result).toEqual([]);
-            expect(marketRepo.createQueryBuilder).not.toHaveBeenCalled();
+            expect(repository.createQueryBuilder).not.toHaveBeenCalled();
         });
 
         it("DISTINCT ON loan_token ordered by maturity ASC, joins assets, filters by minMaturity unix seconds", async () => {
@@ -274,7 +266,7 @@ describe("MarketRepositories", () => {
             expect(result).toEqual([
                 {
                     assetId: "uuid-usdc",
-                    marketId: MARKET_UUID_A,
+                    marketId: MARKET_HEX_A,
                     maturity: new Date(MATURITY_A * 1000),
                 },
             ]);
@@ -362,11 +354,11 @@ describe("MarketRepositories", () => {
     describe("getMarketWithAsset", () => {
         it("returns null when the join finds nothing", async () => {
             mQb.getRawOne.mockResolvedValue(undefined);
-            const result = await repository.getMarketWithAsset(MARKET_UUID_A);
+            const result = await repository.getMarketWithAsset(MARKET_HEX_A);
             expect(result).toBeNull();
         });
 
-        it("translates UUID input via uuidToBytes32, joins assets via loan_token, and returns maturity as ISO string", async () => {
+        it("translates hex marketId to BYTEA, joins assets via loan_token, and returns maturity as ISO string", async () => {
             mQb.getRawOne.mockResolvedValue({
                 maturity: MATURITY_A.toString(),
                 asset_id: "uuid-usdc",
@@ -374,7 +366,7 @@ describe("MarketRepositories", () => {
                 token_address: "0x1111111111111111111111111111111111111111",
             });
 
-            const result = await repository.getMarketWithAsset(MARKET_UUID_A);
+            const result = await repository.getMarketWithAsset(MARKET_HEX_A);
 
             const whereCall = mQb.where.mock.calls[0];
             expect(whereCall[0]).toBe("m.market_id = :marketId");
@@ -384,7 +376,7 @@ describe("MarketRepositories", () => {
             );
 
             expect(result).toEqual({
-                id: MARKET_UUID_A,
+                id: MARKET_HEX_A,
                 assetId: "uuid-usdc",
                 maturity: new Date(MATURITY_A * 1000).toISOString(),
                 decimals: 6,
@@ -402,13 +394,11 @@ describe("MarketRepositories", () => {
         });
 
         it("filters by assetId, maturity > now (unix seconds), orders ASC, applies limit, decodes BYTEA market_id to UUID", async () => {
-            const createdAt = new Date("2024-01-01T00:00:00.000Z");
             mQb.getRawMany.mockResolvedValue([
                 {
                     market_id: MARKET_ID_BUF_A,
                     asset_id: "uuid-usdc",
                     maturity: MATURITY_A.toString(),
-                    created_at: createdAt,
                 },
             ]);
 
@@ -424,10 +414,9 @@ describe("MarketRepositories", () => {
             expect(mQb.limit).toHaveBeenCalledWith(3);
 
             expect(result).toHaveLength(1);
-            expect(result[0].id).toBe(MARKET_UUID_A);
+            expect(result[0].id).toBe(MARKET_HEX_A);
             expect(result[0].assetId).toBe("uuid-usdc");
             expect(result[0].maturity?.getTime()).toBe(MATURITY_A * 1000);
-            expect(result[0].createdAt).toBe(createdAt);
         });
     });
 
@@ -438,10 +427,10 @@ describe("MarketRepositories", () => {
                 [],
             );
             expect(result).toEqual([]);
-            expect(marketRepo.createQueryBuilder).not.toHaveBeenCalled();
+            expect(repository.createQueryBuilder).not.toHaveBeenCalled();
         });
 
-        it("computes marketId via uuidToBytes32(legacyUuid), lowercases loanToken, and inserts with ON CONFLICT DO NOTHING", async () => {
+        it("computes marketId via computeMarketIdBytes32, lowercases loanToken, and inserts with ON CONFLICT DO NOTHING", async () => {
             const result = await repository.ensureMarketsForLoanToken(
                 LOAN_TOKEN_USDC.toUpperCase(),
                 [MATURITY_A, MATURITY_B],
@@ -451,16 +440,12 @@ describe("MarketRepositories", () => {
             expect(mInsertQb.into).toHaveBeenCalledWith(Market);
             expect(mInsertQb.values).toHaveBeenCalledWith([
                 {
-                    marketId: uuidToBytes32(
-                        computeLegacyMarketUuid(LOAN_TOKEN_USDC, MATURITY_A),
-                    ),
+                    marketId: computeMarketIdBytes32(LOAN_TOKEN_USDC, MATURITY_A),
                     loanToken: LOAN_TOKEN_USDC,
                     maturity: MATURITY_A.toString(),
                 },
                 {
-                    marketId: uuidToBytes32(
-                        computeLegacyMarketUuid(LOAN_TOKEN_USDC, MATURITY_B),
-                    ),
+                    marketId: computeMarketIdBytes32(LOAN_TOKEN_USDC, MATURITY_B),
                     loanToken: LOAN_TOKEN_USDC,
                     maturity: MATURITY_B.toString(),
                 },
@@ -470,16 +455,12 @@ describe("MarketRepositories", () => {
 
             expect(result).toEqual([
                 {
-                    marketId: uuidToBytes32(
-                        computeLegacyMarketUuid(LOAN_TOKEN_USDC, MATURITY_A),
-                    ),
+                    marketId: computeMarketIdBytes32(LOAN_TOKEN_USDC, MATURITY_A),
                     loanToken: LOAN_TOKEN_USDC,
                     maturity: MATURITY_A,
                 },
                 {
-                    marketId: uuidToBytes32(
-                        computeLegacyMarketUuid(LOAN_TOKEN_USDC, MATURITY_B),
-                    ),
+                    marketId: computeMarketIdBytes32(LOAN_TOKEN_USDC, MATURITY_B),
                     loanToken: LOAN_TOKEN_USDC,
                     maturity: MATURITY_B,
                 },
@@ -495,7 +476,7 @@ describe("MarketRepositories", () => {
             ).rejects.toThrow("pg down");
         });
 
-        it("computeMarketId is deterministic and trailing 16 bytes are zero (zero-padded encoding invariant)", async () => {
+        it("computeMarketIdBytes32 is deterministic and trailing 16 bytes are zero (zero-padded encoding invariant)", async () => {
             // Indirectly verify via the values passed to insert()
             await repository.ensureMarketsForLoanToken(LOAN_TOKEN_USDC, [
                 MATURITY_A,

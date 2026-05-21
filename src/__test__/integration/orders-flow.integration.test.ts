@@ -22,7 +22,6 @@ import {
 import {
     createMockOrder,
     createMockAccount,
-    createMockMarket,
     createMockToken,
     MOCK_IDS,
 } from "../helpers/mock-factories";
@@ -115,10 +114,12 @@ describe("Orders Flow Integration", () => {
         };
 
         (mockMarkets as any).getMarketsByIds.mockResolvedValue([
-            createMockMarket({
+            {
                 id: MOCK_IDS.marketId,
-                maturity: mockMaturityDate,
-            }),
+                assetId: MOCK_IDS.assetId,
+                maturity: Math.floor(mockMaturityDate.getTime() / 1000),
+                loanToken: MOCK_IDS.tokenAddress,
+            },
         ]);
 
         const module: TestingModule = await Test.createTestingModule({
@@ -483,10 +484,12 @@ describe("Orders Flow Integration", () => {
             );
 
             (marketRepository as any).getMarketsByIds.mockResolvedValue([
-                createMockMarket({
+                {
                     id: MOCK_IDS.marketId,
-                    maturity: mockMaturityDate,
-                }),
+                    assetId: MOCK_IDS.assetId,
+                    maturity: Math.floor(mockMaturityDate.getTime() / 1000),
+                    loanToken: MOCK_IDS.tokenAddress,
+                },
             ]);
             (priceService as any).getPrice.mockResolvedValue(1);
             (tokensService as any).validateTokenByAssetId.mockResolvedValue(

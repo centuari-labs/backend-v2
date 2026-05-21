@@ -5,7 +5,7 @@ import { ConfigService } from "@nestjs/config";
 import { OrdersWorker } from "../../orders/orders.worker";
 import { OrderRepository } from "../../orders/repositories/order.repository";
 import { OrdersService } from "../../orders/orders.service";
-import { Market } from "../../market/entities/market.entity";
+import { MarketRepositories } from "../../market/repository/market.repository";
 import { Token } from "../../tokens/entities/token.entity";
 import { ViemService } from "../../core/viem/viem.service";
 import { ChainConfigService } from "../../core/chain-config/chain-config.service";
@@ -14,11 +14,12 @@ import { PortfolioService } from "../../portfolio/portfolio.service";
 import { TokensService } from "../../tokens/tokens.service";
 import { PriceService } from "../../price/price.service";
 import {
-    createMockMarket,
+    createMockMarketCacheEntry,
     createMockToken,
     MOCK_IDS,
 } from "../helpers/mock-factories";
 import {
+    createMockMarketRepository,
     createMockOrderRepository,
     createMockOrdersService,
     createMockRepository,
@@ -33,7 +34,7 @@ describe("OrdersWorker — spread cancel after placement", () => {
     let worker: OrdersWorker;
     let orderRepository: jest.Mocked<OrderRepository>;
     let ordersService: jest.Mocked<OrdersService>;
-    let marketRepository: jest.Mocked<Repository<Market>>;
+    let marketRepository: jest.Mocked<MarketRepositories>;
     let tokenRepository: jest.Mocked<Repository<Token>>;
 
     const MOCK_BOT_WALLET = "0xBotWallet";
@@ -46,7 +47,7 @@ describe("OrdersWorker — spread cancel after placement", () => {
         process.env.ORDER_WORKER_ENABLED = "true";
 
         const mockOrderRepo = createMockOrderRepository();
-        const mockMarketRepo = createMockRepository<Market>();
+        const mockMarketRepo = createMockMarketRepository();
         const mockTokenRepo = createMockRepository<Token>();
         const mockOrdersService = createMockOrdersService();
 
@@ -70,7 +71,7 @@ describe("OrdersWorker — spread cancel after placement", () => {
                 OrdersWorker,
                 { provide: OrderRepository, useValue: mockOrderRepo },
                 {
-                    provide: getRepositoryToken(Market),
+                    provide: MarketRepositories,
                     useValue: mockMarketRepo,
                 },
                 { provide: getRepositoryToken(Token), useValue: mockTokenRepo },
@@ -141,8 +142,8 @@ describe("OrdersWorker — spread cancel after placement", () => {
         ) as jest.Mocked<OrderRepository>;
         ordersService = module.get(OrdersService) as jest.Mocked<OrdersService>;
         marketRepository = module.get(
-            getRepositoryToken(Market),
-        ) as jest.Mocked<Repository<Market>>;
+            MarketRepositories,
+        ) as jest.Mocked<MarketRepositories>;
         tokenRepository = module.get(getRepositoryToken(Token)) as jest.Mocked<
             Repository<Token>
         >;
@@ -160,9 +161,10 @@ describe("OrdersWorker — spread cancel after placement", () => {
         // Force placeOrders to take the deterministic both-sides branch.
         jest.spyOn(Math, "random").mockReturnValue(0);
 
-        const market = createMockMarket({ id: "m1", assetId: MOCK_ASSET_ID });
         const token = createMockToken({ id: MOCK_ASSET_ID, symbol: "USDC" });
-        marketRepository.find.mockResolvedValue([market]);
+        marketRepository.findAllMarketsForCache.mockResolvedValue([
+            createMockMarketCacheEntry({ assetId: MOCK_ASSET_ID }),
+        ]);
         tokenRepository.find.mockResolvedValue([token]);
         await worker.refreshAssetMarketCache();
     });

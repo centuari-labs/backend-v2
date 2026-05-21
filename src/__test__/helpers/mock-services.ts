@@ -59,6 +59,7 @@ export function createMockMarketRepository(): Partial<
 > {
     return {
         getMarketsByIds: jest.fn().mockResolvedValue([]),
+        findAllMarketsForCache: jest.fn().mockResolvedValue([]),
     } as any;
 }
 

@@ -5,7 +5,7 @@ import { ConfigService } from "@nestjs/config";
 import { OrdersWorker } from "../../orders/orders.worker";
 import { OrderRepository } from "../../orders/repositories/order.repository";
 import { OrdersService } from "../../orders/orders.service";
-import { Market } from "../../market/entities/market.entity";
+import { MarketRepositories } from "../../market/repository/market.repository";
 import { Token } from "../../tokens/entities/token.entity";
 import { ViemService } from "../../core/viem/viem.service";
 import { ChainConfigService } from "../../core/chain-config/chain-config.service";
@@ -14,11 +14,12 @@ import { PortfolioService } from "../../portfolio/portfolio.service";
 import { TokensService } from "../../tokens/tokens.service";
 import { PriceService } from "../../price/price.service";
 import {
-    createMockMarket,
+    createMockMarketCacheEntry,
     createMockToken,
     MOCK_IDS,
 } from "../helpers/mock-factories";
 import {
+    createMockMarketRepository,
     createMockOrderRepository,
     createMockOrdersService,
     createMockRepository,
@@ -27,7 +28,7 @@ import {
 describe("OrdersWorker", () => {
     let worker: OrdersWorker;
     let orderRepository: jest.Mocked<OrderRepository>;
-    let marketRepository: jest.Mocked<Repository<Market>>;
+    let marketRepository: jest.Mocked<MarketRepositories>;
     let tokenRepository: jest.Mocked<Repository<Token>>;
     let ordersService: jest.Mocked<OrdersService>;
 
@@ -41,7 +42,7 @@ describe("OrdersWorker", () => {
         };
 
         const mockOrderRepo = createMockOrderRepository();
-        const mockMarketRepo = createMockRepository<Market>();
+        const mockMarketRepo = createMockMarketRepository();
         const mockTokenRepo = createMockRepository<Token>();
         const mockOrdersService = createMockOrdersService();
 
@@ -50,7 +51,7 @@ describe("OrdersWorker", () => {
                 OrdersWorker,
                 { provide: OrderRepository, useValue: mockOrderRepo },
                 {
-                    provide: getRepositoryToken(Market),
+                    provide: MarketRepositories,
                     useValue: mockMarketRepo,
                 },
                 { provide: getRepositoryToken(Token), useValue: mockTokenRepo },
@@ -126,8 +127,8 @@ describe("OrdersWorker", () => {
             OrderRepository,
         ) as jest.Mocked<OrderRepository>;
         marketRepository = module.get(
-            getRepositoryToken(Market),
-        ) as jest.Mocked<Repository<Market>>;
+            MarketRepositories,
+        ) as jest.Mocked<MarketRepositories>;
         tokenRepository = module.get(getRepositoryToken(Token)) as jest.Mocked<
             Repository<Token>
         >;
@@ -145,7 +146,7 @@ describe("OrdersWorker", () => {
 
             await worker.onModuleInit();
 
-            expect(marketRepository.find).not.toHaveBeenCalled();
+            expect(marketRepository.findAllMarketsForCache).not.toHaveBeenCalled();
         });
 
         it("should skip when ORDER_WORKER_ENABLED is not true", async () => {
@@ -153,42 +154,37 @@ describe("OrdersWorker", () => {
 
             await worker.onModuleInit();
 
-            expect(marketRepository.find).not.toHaveBeenCalled();
+            expect(marketRepository.findAllMarketsForCache).not.toHaveBeenCalled();
         });
     });
 
     describe("refreshAssetMarketCache", () => {
         it("should populate cache from markets and tokens", async () => {
-            const market1 = createMockMarket({
-                id: "c0000000-0000-0000-0000-000000000001",
-                assetId: MOCK_IDS.assetId,
-            });
-            const market2 = createMockMarket({
-                id: "c0000000-0000-0000-0000-000000000002",
-                assetId: MOCK_IDS.assetId,
-            });
             const token = createMockToken({ id: MOCK_IDS.assetId });
 
-            marketRepository.find.mockResolvedValue([market1, market2]);
+            marketRepository.findAllMarketsForCache.mockResolvedValue([
+                createMockMarketCacheEntry({ marketId: `0x${"c".repeat(64)}` }),
+                createMockMarketCacheEntry({ marketId: `0x${"d".repeat(64)}` }),
+            ]);
             tokenRepository.find.mockResolvedValue([token]);
 
             await worker.refreshAssetMarketCache();
 
-            expect(marketRepository.find).toHaveBeenCalled();
+            expect(marketRepository.findAllMarketsForCache).toHaveBeenCalled();
             expect(tokenRepository.find).toHaveBeenCalled();
         });
 
         it("should handle empty markets gracefully", async () => {
-            marketRepository.find.mockResolvedValue([]);
+            marketRepository.findAllMarketsForCache.mockResolvedValue([]);
             tokenRepository.find.mockResolvedValue([]);
 
             await worker.refreshAssetMarketCache();
 
-            expect(marketRepository.find).toHaveBeenCalled();
+            expect(marketRepository.findAllMarketsForCache).toHaveBeenCalled();
         });
 
         it("should log error on failure", async () => {
-            marketRepository.find.mockRejectedValue(
+            marketRepository.findAllMarketsForCache.mockRejectedValue(
                 new Error("DB connection failed"),
             );
 
@@ -202,22 +198,23 @@ describe("OrdersWorker", () => {
 
             await worker.refreshAssetMarketCache();
 
-            expect(marketRepository.find).not.toHaveBeenCalled();
+            expect(marketRepository.findAllMarketsForCache).not.toHaveBeenCalled();
         });
     });
 
     describe("placeOrders", () => {
         beforeEach(async () => {
-            const market = createMockMarket();
             const token = createMockToken();
-            marketRepository.find.mockResolvedValue([market]);
+            marketRepository.findAllMarketsForCache.mockResolvedValue([
+                createMockMarketCacheEntry(),
+            ]);
             tokenRepository.find.mockResolvedValue([token]);
             await worker.refreshAssetMarketCache();
             jest.clearAllMocks();
         });
 
         it("should skip when cache is empty", async () => {
-            marketRepository.find.mockResolvedValue([]);
+            marketRepository.findAllMarketsForCache.mockResolvedValue([]);
             tokenRepository.find.mockResolvedValue([]);
             await worker.refreshAssetMarketCache();
 

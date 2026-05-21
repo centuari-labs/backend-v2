@@ -7,7 +7,6 @@ import {
 } from "@nestjs/common";
 import { OrdersService } from "../../orders/orders.service";
 import { Order } from "../../orders/entities/order.entity";
-import { Market } from "../../market/entities/market.entity";
 import { MarketRepositories } from "../../market/repository/market.repository";
 import { PriceService } from "../../price/price.service";
 import { TokensService } from "../../tokens/tokens.service";
@@ -99,7 +98,7 @@ describe("OrdersService", () => {
             getMarketsByIds: jest
                 .fn()
                 .mockResolvedValue([
-                    { id: mockMarketId, maturity: mockMaturityUnix } as Market,
+                    { id: mockMarketId, maturity: mockMaturityUnix },
                 ]),
         };
 

@@ -62,6 +62,33 @@ export function createMockMarket(overrides: Partial<Market> = {}): Market {
     };
 }
 
+/**
+ * Projection returned by `MarketRepositories.findAllMarketsForCache()`
+ * (post-C4): `{ assetId, marketId (bytes32 hex), loanToken (hex), maturity
+ * (unix seconds, number) }`. Distinct from the `Market` entity shape.
+ */
+export function createMockMarketCacheEntry(
+    overrides: Partial<{
+        assetId: string;
+        marketId: `0x${string}`;
+        loanToken: `0x${string}`;
+        maturity: number;
+    }> = {},
+): {
+    assetId: string;
+    marketId: `0x${string}`;
+    loanToken: `0x${string}`;
+    maturity: number;
+} {
+    return {
+        assetId: MOCK_IDS.assetId,
+        marketId: MOCK_IDS.marketId as `0x${string}`,
+        loanToken: MOCK_IDS.tokenAddress as `0x${string}`,
+        maturity: 1748736000,
+        ...overrides,
+    };
+}
+
 export function createMockToken(overrides: Partial<Token> = {}): Token {
     return {
         id: MOCK_IDS.assetId,

@@ -607,7 +607,7 @@ export class PortfolioRepository extends Repository<UserBalance> {
         if (filters?.maturity) {
             whereClause += ` AND EXISTS (
                 SELECT 1 FROM order_markets om_filter 
-                JOIN markets m_filter ON om_filter.market_id = m_filter.id 
+                JOIN market m_filter ON m_filter.market_id = om_filter.market_id 
                 WHERE om_filter.order_id = o.id AND m_filter.maturity = $${paramIndex}
             )`;
             params.push(filters.maturity);
@@ -623,7 +623,7 @@ export class PortfolioRepository extends Repository<UserBalance> {
                    (
                        SELECT m.maturity
                        FROM order_markets om
-                       JOIN markets m ON om.market_id = m.id
+                       JOIN market m ON m.market_id = om.market_id
                        WHERE om.order_id = o.id
                        ORDER BY m.maturity DESC
                        LIMIT 1
@@ -726,7 +726,7 @@ export class PortfolioRepository extends Repository<UserBalance> {
             FROM orders o
             JOIN assets a ON o.asset_id = a.id
             LEFT JOIN order_markets om ON om.order_id = o.id
-            LEFT JOIN markets m ON om.market_id = m.id
+            LEFT JOIN market m ON m.market_id = om.market_id
             ${whereClause}
             ORDER BY o.created_at DESC
             LIMIT $${paramIndex} OFFSET $${paramIndex + 1}

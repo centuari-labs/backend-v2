@@ -735,7 +735,7 @@ export class PortfolioService {
                 tokenAddress: row.token_address,
             },
             maturity: row.maturity
-                ? new Date(row.maturity).toISOString()
+                ? new Date(Number(row.maturity) * 1000).toISOString()
                 : null,
             fee:
                 row.total_fee && row.total_fee !== "0"
@@ -792,7 +792,7 @@ export class PortfolioService {
             status: row.status,
             cancelReason: row.cancel_reason ?? null,
             maturity: row.maturity
-                ? new Date(row.maturity).toISOString()
+                ? new Date(Number(row.maturity) * 1000).toISOString()
                 : null,
             asset: {
                 id: row.asset_id,

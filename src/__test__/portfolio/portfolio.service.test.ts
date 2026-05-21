@@ -51,6 +51,10 @@ describe("PortfolioService (A5)", () => {
             getBorrowBufferBps: jest.fn().mockResolvedValue(null),
             getLendPosition: jest.fn().mockResolvedValue(null),
             getBorrowPosition: jest.fn().mockResolvedValue(null),
+            getOrderHistory: jest
+                .fn()
+                .mockResolvedValue({ data: [], total: 0 }),
+            getOpenOrders: jest.fn().mockResolvedValue({ data: [], total: 0 }),
         } as unknown as jest.Mocked<PortfolioRepository>;
 
         matchRepository = {
@@ -398,6 +402,71 @@ describe("PortfolioService (A5)", () => {
                 [USDC_UUID],
                 LOAN_TOKEN_UUID,
             );
+        });
+    });
+
+    describe("order maturity conversion", () => {
+        // Post-C4, maturity comes from the new `market` table as a BIGINT epoch
+        // (seconds), not the old `markets` timestamp. The service must convert
+        // seconds -> ms before building the ISO string.
+        const baseRow = {
+            id: "order-uuid",
+            side: "LEND",
+            order_type: "LIMIT",
+            rate: "500",
+            amount: "1000000",
+            filled_quantity: null,
+            status: "OPEN",
+            cancel_reason: null,
+            asset_id: USDC_UUID,
+            name: "USD Coin",
+            symbol: "USDC",
+            image_url: null,
+            decimals: "6",
+            token_address: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            created_at: "2025-01-01T00:00:00.000Z",
+        };
+
+        it("getOrderHistory maps epoch-seconds maturity to an ISO string", async () => {
+            portfolioRepository.getOrderHistory.mockResolvedValue({
+                total: 1,
+                data: [{ ...baseRow, maturity: "1735689600", total_fee: "0" }],
+            });
+
+            const result = await service.getOrderHistory(wallet, {
+                page: 1,
+                limit: 10,
+            });
+
+            expect(result.data[0].maturity).toBe("2025-01-01T00:00:00.000Z");
+        });
+
+        it("getOpenOrders maps epoch-seconds maturity to an ISO string", async () => {
+            portfolioRepository.getOpenOrders.mockResolvedValue({
+                total: 1,
+                data: [{ ...baseRow, maturity: "1735689600" }],
+            });
+
+            const result = await service.getOpenOrders(wallet, {
+                page: 1,
+                limit: 10,
+            });
+
+            expect(result.data[0].maturity).toBe("2025-01-01T00:00:00.000Z");
+        });
+
+        it("leaves maturity null when the order has no market row", async () => {
+            portfolioRepository.getOpenOrders.mockResolvedValue({
+                total: 1,
+                data: [{ ...baseRow, maturity: null }],
+            });
+
+            const result = await service.getOpenOrders(wallet, {
+                page: 1,
+                limit: 10,
+            });
+
+            expect(result.data[0].maturity).toBeNull();
         });
     });
 });

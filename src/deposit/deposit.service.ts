@@ -3,9 +3,10 @@ import { ConfigService } from "@nestjs/config";
 import { parseUnits, formatUnits, erc20Abi } from "viem";
 import { ViemService } from "../core/viem/viem.service";
 import { ChainConfigService } from "../core/chain-config/chain-config.service";
+import { DatabaseService } from "../core/database/database.service";
+import { applyDepositEffects } from "../core/on-chain-state/apply-deposit";
 import { TokensService } from "../tokens/tokens.service";
 import { TokensRepository } from "../tokens/repositories/tokens.repository";
-import { ChainIndexerService } from "../chain-indexer/chain-indexer.service";
 import { compareTokensByPriority } from "../tokens/token-order.config";
 import type {
     DepositTokenDto,
@@ -23,7 +24,7 @@ export class DepositService {
         private readonly tokensRepository: TokensRepository,
         private readonly viemService: ViemService,
         private readonly configService: ConfigService,
-        private readonly chainIndexerService: ChainIndexerService,
+        private readonly databaseService: DatabaseService,
         private readonly chainConfig: ChainConfigService,
     ) {
         this.isDevMode =
@@ -79,11 +80,27 @@ export class DepositService {
         }));
     }
 
-    async confirmDeposit(txHash: string): Promise<ConfirmDepositResponseDto> {
-        const processed =
-            await this.chainIndexerService.processTransactionDeposits(txHash);
+    async confirmDeposit(
+        txHash: string,
+        walletAddress: string,
+    ): Promise<ConfirmDepositResponseDto> {
+        const receipt = await this.viemService.getTransactionReceipt(
+            this.chainConfig.chainId,
+            txHash as `0x${string}`,
+        );
+        if (receipt.status !== "success") {
+            this.logger.warn(`Deposit tx ${txHash} reverted — skipping`);
+            return { processed: 0 };
+        }
+
+        const processed = await applyDepositEffects({
+            pool: this.databaseService.getPool(),
+            client: this.viemService.getPublicClient(this.chainConfig.chainId),
+            receipt,
+            expectedUser: walletAddress as `0x${string}`,
+        });
         this.logger.log(
-            `Deposit confirmed: txHash=${txHash}, processed=${processed}`,
+            `Deposit confirmed: txHash=${txHash}, wallet=${walletAddress}, processed=${processed}`,
         );
         return { processed };
     }

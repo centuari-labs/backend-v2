@@ -13,33 +13,34 @@ import { DatabaseService } from "../../core/database/database.service";
 import { ViemService } from "../../core/viem/viem.service";
 import { RepayService } from "../../portfolio/repay.service";
 import { PortfolioRepository } from "../../portfolio/repositories/portfolio.repository";
-import { RepayRepository } from "../../portfolio/repositories/repay.repository";
+import { MarketRepositories } from "../../market/repository/market.repository";
 
 jest.mock("../../core/on-chain-state/apply-repay", () => ({
     applyRepayEffects: jest.fn().mockResolvedValue(undefined),
 }));
 import { applyRepayEffects } from "../../core/on-chain-state/apply-repay";
 
-const MARKET_UUID = "cdcdcdcd-cdcd-cdcd-cdcd-cdcdcdcdcdcd";
+const MARKET_ID = "0x" + "cd".repeat(32);
 const WALLET = "0x1111111111111111111111111111111111111111";
 
 describe("RepayService (A5)", () => {
     let service: RepayService;
-    let repayRepository: jest.Mocked<RepayRepository>;
+    let marketRepository: jest.Mocked<MarketRepositories>;
     let portfolioRepository: jest.Mocked<PortfolioRepository>;
     let viemService: jest.Mocked<ViemService>;
 
     beforeEach(async () => {
         (applyRepayEffects as jest.Mock).mockClear();
 
-        repayRepository = {
+        marketRepository = {
             getMarketWithAsset: jest.fn().mockResolvedValue({
-                marketId: MARKET_UUID,
+                id: MARKET_ID,
                 assetId: "asset-uuid",
+                maturity: new Date().toISOString(),
                 tokenAddress: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
                 decimals: 6,
             }),
-        } as unknown as jest.Mocked<RepayRepository>;
+        } as unknown as jest.Mocked<MarketRepositories>;
 
         portfolioRepository = {
             getBorrowPosition: jest.fn().mockResolvedValue(null),
@@ -61,7 +62,7 @@ describe("RepayService (A5)", () => {
             providers: [
                 RepayService,
                 { provide: ViemService, useValue: viemService },
-                { provide: RepayRepository, useValue: repayRepository },
+                { provide: MarketRepositories, useValue: marketRepository },
                 {
                     provide: PortfolioRepository,
                     useValue: portfolioRepository,
@@ -86,10 +87,10 @@ describe("RepayService (A5)", () => {
     });
 
     it("throws NotFound when the market is unknown", async () => {
-        repayRepository.getMarketWithAsset.mockResolvedValue(null as never);
+        marketRepository.getMarketWithAsset.mockResolvedValue(null as never);
         await expect(
             service.repay(
-                { marketId: MARKET_UUID, amount: "1" },
+                { marketId: MARKET_ID, amount: "1" },
                 WALLET,
                 "privy-user",
             ),
@@ -100,7 +101,7 @@ describe("RepayService (A5)", () => {
         portfolioRepository.getBorrowPosition.mockResolvedValue(null);
         await expect(
             service.repay(
-                { marketId: MARKET_UUID, amount: "1" },
+                { marketId: MARKET_ID, amount: "1" },
                 WALLET,
                 "privy-user",
             ),
@@ -114,7 +115,7 @@ describe("RepayService (A5)", () => {
         });
         await expect(
             service.repay(
-                { marketId: MARKET_UUID, amount: "10" },
+                { marketId: MARKET_ID, amount: "10" },
                 WALLET,
                 "privy-user",
             ),
@@ -128,7 +129,7 @@ describe("RepayService (A5)", () => {
         });
 
         const result = await service.repay(
-            { marketId: MARKET_UUID, amount: "0.5" },
+            { marketId: MARKET_ID, amount: "0.5" },
             WALLET,
             "privy-user",
         );

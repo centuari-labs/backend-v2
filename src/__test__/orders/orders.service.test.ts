@@ -42,7 +42,7 @@ describe("OrdersService", () => {
     const mockPrivyUserId = "did:privy:mock-user-id";
     const mockAccountId = "uuid-account-001";
     const mockAssetId = "550e8400-e29b-41d4-a716-446655440003";
-    const mockMarketId = "550e8400-e29b-41d4-a716-446655440000";
+    const mockMarketId = "0x" + "ab".repeat(32);
     const mockMaturityDate = new Date("2025-06-01T00:00:00.000Z");
     const mockMaturityUnix = Math.floor(mockMaturityDate.getTime() / 1000);
 
@@ -99,7 +99,7 @@ describe("OrdersService", () => {
             getMarketsByIds: jest
                 .fn()
                 .mockResolvedValue([
-                    { id: mockMarketId, maturity: mockMaturityDate } as Market,
+                    { id: mockMarketId, maturity: mockMaturityUnix } as Market,
                 ]),
         };
 
@@ -199,7 +199,7 @@ describe("OrdersService", () => {
         const lendLimitDto: CreateLimitOrderDto = {
             assetId: mockAssetId,
             amount: "1000",
-            marketIds: ["550e8400-e29b-41d4-a716-446655440000"],
+            marketIds: [mockMarketId],
             rate: 500,
         };
 
@@ -440,7 +440,7 @@ describe("OrdersService", () => {
         const lendMarketDto: CreateMarketOrderDto = {
             assetId: mockAssetId,
             amount: "1000",
-            marketIds: ["550e8400-e29b-41d4-a716-446655440000"],
+            marketIds: [mockMarketId],
         };
 
         it("should create a lend market order with 0 rate", async () => {
@@ -570,7 +570,7 @@ describe("OrdersService", () => {
         const borrowLimitDto: CreateLimitOrderDto = {
             assetId: mockAssetId,
             amount: "5000",
-            marketIds: ["550e8400-e29b-41d4-a716-446655440000"],
+            marketIds: [mockMarketId],
             rate: 750,
         };
 
@@ -704,7 +704,7 @@ describe("OrdersService", () => {
         const borrowMarketDto: CreateMarketOrderDto = {
             assetId: mockAssetId,
             amount: "5000",
-            marketIds: ["550e8400-e29b-41d4-a716-446655440000"],
+            marketIds: [mockMarketId],
         };
 
         it("should create a borrow market order with 0 rate", async () => {

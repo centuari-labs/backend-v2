@@ -293,12 +293,12 @@ export class OrderRepository extends Repository<Order> {
             .addSelect("o.status", "status")
             .addSelect("a.user_wallet", "userWallet")
             .addSelect(
-                `json_agg(json_build_object('marketId', om.market_id, 'maturity', COALESCE(EXTRACT(EPOCH FROM m.maturity)::int, 0))) FILTER (WHERE om.market_id IS NOT NULL)`,
+                `json_agg(json_build_object('marketId', '0x' || encode(om.market_id, 'hex'), 'maturity', COALESCE(m.maturity, 0))) FILTER (WHERE om.market_id IS NOT NULL)`,
                 "markets",
             )
             .innerJoin("accounts", "a", "a.id = o.account_id")
             .leftJoin("order_markets", "om", "om.order_id = o.id")
-            .leftJoin("markets", "m", "m.id = om.market_id")
+            .leftJoin("market", "m", "m.market_id = om.market_id")
             .where("o.asset_id = :assetId", { assetId })
             .andWhere("o.type = :type", { type: OrderType.Limit })
             .andWhere("o.status IN (:...statuses)", {
@@ -335,12 +335,12 @@ export class OrderRepository extends Repository<Order> {
             .addSelect("o.status", "status")
             .addSelect("a.user_wallet", "userWallet")
             .addSelect(
-                `json_agg(json_build_object('marketId', om.market_id, 'maturity', COALESCE(EXTRACT(EPOCH FROM m.maturity)::int, 0))) FILTER (WHERE om.market_id IS NOT NULL)`,
+                `json_agg(json_build_object('marketId', '0x' || encode(om.market_id, 'hex'), 'maturity', COALESCE(m.maturity, 0))) FILTER (WHERE om.market_id IS NOT NULL)`,
                 "markets",
             )
             .innerJoin("accounts", "a", "a.id = o.account_id")
             .leftJoin("order_markets", "om", "om.order_id = o.id")
-            .leftJoin("markets", "m", "m.id = om.market_id")
+            .leftJoin("market", "m", "m.market_id = om.market_id")
             .where("o.id = :orderId", { orderId })
             .groupBy("o.id")
             .addGroupBy("a.user_wallet")

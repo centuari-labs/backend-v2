@@ -9,7 +9,9 @@ describe("CreateMarketOrderDto", () => {
     const validDto = {
         assetId: "b66a2641-3339-4a48-805c-6da248f33dee",
         amount: "1000",
-        marketIds: ["550e8400-e29b-41d4-a716-446655440000"],
+        marketIds: [
+            "0x1111111111111111111111111111111111111111111111111111111111111111",
+        ],
     };
 
     const createDto = (
@@ -120,10 +122,12 @@ describe("CreateMarketOrderDto", () => {
         });
     });
 
-    describe("marketIds validation (UUID array)", () => {
+    describe("marketIds validation (bytes32-hex array)", () => {
         it("should accept a single valid marketId", async () => {
             const dto = createDto({
-                marketIds: ["550e8400-e29b-41d4-a716-446655440000"],
+                marketIds: [
+                    "0x1111111111111111111111111111111111111111111111111111111111111111",
+                ],
             });
             const errors = await validate(dto);
             const marketIdErrors = errors.filter(
@@ -135,8 +139,8 @@ describe("CreateMarketOrderDto", () => {
         it("should accept multiple valid marketIds", async () => {
             const dto = createDto({
                 marketIds: [
-                    "550e8400-e29b-41d4-a716-446655440000",
-                    "123e4567-e89b-12d3-a456-426614174000",
+                    "0x1111111111111111111111111111111111111111111111111111111111111111",
+                    "0x2222222222222222222222222222222222222222222222222222222222222222",
                 ],
             });
             const errors = await validate(dto);
@@ -155,7 +159,7 @@ describe("CreateMarketOrderDto", () => {
             expect(marketIdErrors.length).toBeGreaterThan(0);
         });
 
-        it("should reject non-UUID marketIds", async () => {
+        it("should reject non-bytes32 marketIds", async () => {
             const dto = createDto({ marketIds: ["not-a-uuid"] as any });
             const errors = await validate(dto);
             const marketIdErrors = errors.filter(
@@ -178,7 +182,9 @@ describe("CreateLimitOrderDto", () => {
     const validDto = {
         assetId: "b66a2641-3339-4a48-805c-6da248f33dee",
         amount: "1000",
-        marketIds: ["550e8400-e29b-41d4-a716-446655440000"],
+        marketIds: [
+            "0x1111111111111111111111111111111111111111111111111111111111111111",
+        ],
         rate: 500, // 5% in basis points
     };
 
@@ -339,10 +345,12 @@ describe("CreateLimitOrderDto", () => {
         });
     });
 
-    describe("marketIds validation (UUID array)", () => {
+    describe("marketIds validation (bytes32-hex array)", () => {
         it("should accept a single valid marketId", async () => {
             const dto = createDto({
-                marketIds: ["550e8400-e29b-41d4-a716-446655440000"],
+                marketIds: [
+                    "0x1111111111111111111111111111111111111111111111111111111111111111",
+                ],
             });
             const errors = await validate(dto);
             const marketIdErrors = errors.filter(
@@ -354,8 +362,8 @@ describe("CreateLimitOrderDto", () => {
         it("should accept multiple valid marketIds", async () => {
             const dto = createDto({
                 marketIds: [
-                    "550e8400-e29b-41d4-a716-446655440000",
-                    "123e4567-e89b-12d3-a456-426614174000",
+                    "0x1111111111111111111111111111111111111111111111111111111111111111",
+                    "0x2222222222222222222222222222222222222222222222222222222222222222",
                 ],
             });
             const errors = await validate(dto);
@@ -374,7 +382,7 @@ describe("CreateLimitOrderDto", () => {
             expect(marketIdErrors.length).toBeGreaterThan(0);
         });
 
-        it("should reject non-UUID marketIds", async () => {
+        it("should reject non-bytes32 marketIds", async () => {
             const dto = createDto({ marketIds: ["not-a-uuid"] as any });
             const errors = await validate(dto);
             const marketIdErrors = errors.filter(

@@ -814,18 +814,21 @@ export class PortfolioService {
     }
 
     async getAssetBalance(accountId: string, assetId: string): Promise<string> {
-        const balances =
-            await this.portfolioRepository.getUserTotalBalances(accountId);
-        const match = balances.find((b) => b.asset_id === assetId);
-        return match ? match.total_amount : "0";
+        const balance =
+            await this.portfolioRepository.getAccountBalanceForAsset(
+                accountId,
+                assetId,
+            );
+        return balance.available;
     }
 
     async getLockedAmount(accountId: string, assetId: string): Promise<bigint> {
-        const result = await this.portfolioRepository.findOne({
-            where: { accountId, assetId },
-            select: ["lockedAmount"],
-        });
-        return safeBigInt(result?.lockedAmount ?? "0");
+        const balance =
+            await this.portfolioRepository.getAccountBalanceForAsset(
+                accountId,
+                assetId,
+            );
+        return safeBigInt(balance.inOrders);
     }
 
     async withdrawLendPosition(

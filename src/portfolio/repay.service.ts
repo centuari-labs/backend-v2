@@ -15,9 +15,8 @@ import { DatabaseService } from "../core/database/database.service";
 import { applyRepayEffects } from "../core/on-chain-state/apply-repay";
 import { ViemService } from "../core/viem/viem.service";
 import { parseContractError } from "../common/utils/contract-errors.utils";
-import { uuidToBytes32 } from "../common/utils/uuid.utils";
+import { MarketRepositories } from "../market/repository/market.repository";
 import { PortfolioRepository } from "./repositories/portfolio.repository";
-import { RepayRepository } from "./repositories/repay.repository";
 import { RepayRequestDto, RepayResponseDto } from "./dto/repay.dto";
 
 @Injectable()
@@ -26,7 +25,7 @@ export class RepayService {
 
     constructor(
         private readonly viemService: ViemService,
-        private readonly repayRepository: RepayRepository,
+        private readonly marketRepository: MarketRepositories,
         private readonly portfolioRepository: PortfolioRepository,
         private readonly chainConfig: ChainConfigService,
         private readonly databaseService: DatabaseService,
@@ -38,15 +37,14 @@ export class RepayService {
         _privyUserId: string,
     ): Promise<RepayResponseDto> {
         const { marketId, amount } = dto;
+        const marketIdHex = marketId as `0x${string}`;
 
-        const market = await this.repayRepository.getMarketWithAsset(marketId);
+        const market =
+            await this.marketRepository.getMarketWithAsset(marketIdHex);
         if (!market) throw new NotFoundException("Market not found");
 
-        // Convert backend UUID → bytes32 for on-chain + shared-schema lookup.
-        const marketIdBytes32 = uuidToBytes32(marketId);
-
         const position = await this.portfolioRepository.getBorrowPosition(
-            marketIdBytes32,
+            marketIdHex,
             walletAddress,
         );
         const totalDebt = position ? BigInt(position.debt) : 0n;
@@ -61,13 +59,13 @@ export class RepayService {
         );
 
         this.logger.log(
-            `Repay diagnostics: marketId=${marketId}, marketIdBytes32=${marketIdBytes32}, ` +
+            `Repay diagnostics: marketId=${marketIdHex}, ` +
                 `token=${market.tokenAddress}, borrower=${walletAddress}, ` +
                 `amount=${repayAmountBaseUnits}, totalDebt=${totalDebt}, decimals=${market.decimals}`,
         );
 
         const receipt = await this.executeBlockchainRepay(
-            marketIdBytes32,
+            marketIdHex,
             walletAddress,
             market.tokenAddress,
             repayAmountBaseUnits,

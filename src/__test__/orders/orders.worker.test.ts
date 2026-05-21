@@ -11,7 +11,6 @@ import { ViemService } from "../../core/viem/viem.service";
 import { ChainConfigService } from "../../core/chain-config/chain-config.service";
 import { FaucetService } from "../../faucet/faucet.service";
 import { PortfolioService } from "../../portfolio/portfolio.service";
-import { PortfolioRepository } from "../../portfolio/repositories/portfolio.repository";
 import { TokensService } from "../../tokens/tokens.service";
 import { PriceService } from "../../price/price.service";
 import {
@@ -103,13 +102,6 @@ describe("OrdersWorker", () => {
                         checkAvailableBalanceForBorrowFees: jest
                             .fn()
                             .mockResolvedValue(undefined),
-                    },
-                },
-                {
-                    provide: PortfolioRepository,
-                    useValue: {
-                        upsertPortfolio: jest.fn(),
-                        syncPortfolioBalance: jest.fn(),
                     },
                 },
                 {

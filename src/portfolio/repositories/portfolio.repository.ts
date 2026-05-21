@@ -1,13 +1,13 @@
 import { Injectable } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { DataSource, EntityManager, In, Repository } from "typeorm";
+import { DataSource, In, Repository } from "typeorm";
 import { BYTEA_HEX } from "../../common/transformers/bytea-hex.transformer";
 import { OrderSide, OrderStatus } from "../../orders/constants/order.constants";
 import { Token } from "../../tokens/entities/token.entity";
 import { Market } from "../../market/entities/market.entity";
 import type { RawOpenOrderRow } from "../dto/open-orders.dto";
+import { Account } from "../../orders/entities/account.entity";
 import { BorrowPosition } from "../entities/borrow-position.entity";
-import { LegacyPortfolio } from "../entities/legacy-portfolio.entity";
 import { LendPosition } from "../entities/lend-position.entity";
 import { UserBalance } from "../entities/user-balance.entity";
 
@@ -79,7 +79,7 @@ export interface LendPositionForApr {
 }
 
 @Injectable()
-export class PortfolioRepository extends Repository<LegacyPortfolio> {
+export class PortfolioRepository extends Repository<UserBalance> {
     constructor(
         private dataSource: DataSource,
         @InjectRepository(UserBalance)
@@ -89,23 +89,40 @@ export class PortfolioRepository extends Repository<LegacyPortfolio> {
         @InjectRepository(BorrowPosition)
         private readonly borrowRepo: Repository<BorrowPosition>,
     ) {
-        super(LegacyPortfolio, dataSource.createEntityManager());
+        super(UserBalance, dataSource.createEntityManager());
     }
 
-    async getUserTotalBalances(accountId: string): Promise<
-        {
-            asset_id: string;
-            total_amount: string;
-            total_locked_amount: string;
-        }[]
-    > {
-        return this.createQueryBuilder("portfolio")
-            .select("portfolio.asset_id", "asset_id")
-            .addSelect("SUM(portfolio.amount)", "total_amount")
-            .addSelect("SUM(portfolio.locked_amount)", "total_locked_amount")
-            .where("portfolio.account_id = :accountId", { accountId })
-            .groupBy("portfolio.asset_id")
-            .getRawMany();
+    /**
+     * Resolves an account's shared-schema `user_balance` row for one asset,
+     * bridging the backend's UUID `accountId`/`assetId` to the BYTEA-keyed
+     * `user_balance` via the `accounts` wallet and `tokens` address. Returns
+     * "0"/"0" when the user has no balance row for the asset.
+     */
+    async getAccountBalanceForAsset(
+        accountId: string,
+        assetId: string,
+    ): Promise<{ available: string; inOrders: string }> {
+        const row = await this.userBalanceRepo
+            .createQueryBuilder("ub")
+            .innerJoin(
+                Account,
+                "a",
+                "LOWER(a.user_wallet) = '0x' || encode(ub.user_address, 'hex')",
+            )
+            .innerJoin(
+                Token,
+                "t",
+                "LOWER(t.token_address) = '0x' || encode(ub.asset, 'hex')",
+            )
+            .select("ub.available::text", "available")
+            .addSelect("ub.in_orders::text", "in_orders")
+            .where("a.id = :accountId", { accountId })
+            .andWhere("t.id = :assetId", { assetId })
+            .getRawOne<{ available: string; in_orders: string }>();
+        return {
+            available: row?.available ?? "0",
+            inOrders: row?.in_orders ?? "0",
+        };
     }
 
     async getTokensByAssetIds(assetIds: string[]): Promise<Token[]> {
@@ -538,31 +555,6 @@ export class PortfolioRepository extends Repository<LegacyPortfolio> {
         return this.dataSource.query(query, [accountId, days]);
     }
 
-    /**
-     * Upserts portfolio: insert or on conflict add amount.
-     * Matches indexer Treasury:Deposited behavior.
-     */
-    async upsertPortfolio(
-        id: string,
-        accountId: string,
-        assetId: string,
-        amountDelta: string,
-    ): Promise<void> {
-        await this.dataSource.query(
-            `INSERT INTO portfolio (id, account_id, asset_id, amount, is_collateral)
-             VALUES ($1, $2, $3, $4, false)
-             ON CONFLICT (account_id, asset_id) DO UPDATE SET
-               amount = portfolio.amount + EXCLUDED.amount::numeric,
-               updated_at = NOW()`,
-            [id, accountId, assetId, amountDelta],
-        );
-    }
-
-    /**
-     * Syncs portfolio balance from on-chain treasury balance.
-     * Replaces amount on conflict (SET) rather than adding (upsertPortfolio).
-     * Used by OrdersWorker to ensure DB reflects on-chain state regardless of event parsing.
-     */
     async getOrderHistory(
         accountId: string,
         page: number,
@@ -756,47 +748,6 @@ export class PortfolioRepository extends Repository<LegacyPortfolio> {
             data: rows,
             total: Number.parseInt(countResult[0]?.count || "0", 10),
         };
-    }
-
-    async syncPortfolioBalance(
-        id: string,
-        accountId: string,
-        assetId: string,
-        amount: string,
-        isCollateral: boolean = false,
-    ): Promise<void> {
-        await this.dataSource.query(
-            `INSERT INTO portfolio (id, account_id, asset_id, amount, is_collateral)
-             VALUES ($1, $2, $3, $4, $5)
-             ON CONFLICT (account_id, asset_id) DO UPDATE SET
-               amount = $4::numeric,
-               is_collateral = CASE WHEN $5::boolean THEN true ELSE portfolio.is_collateral END,
-               updated_at = NOW()`,
-            [id, accountId, assetId, amount, isCollateral],
-        );
-    }
-
-    async getLendPositionById(
-        positionId: string,
-        accountId: string,
-        manager?: EntityManager,
-    ): Promise<any> {
-        const queryRunner = manager
-            ? manager.createQueryBuilder()
-            : this.dataSource.createQueryBuilder();
-
-        let qb = queryRunner
-            .select("lp")
-            .from("lend_positions", "lp")
-            .where("lp.id = :positionId", { positionId })
-            .andWhere("lp.account_id = :accountId", { accountId })
-            .andWhere("lp.shares > 0");
-
-        if (manager) {
-            qb = qb.setLock("pessimistic_write");
-        }
-
-        return qb.getRawOne();
     }
 
     async getTransactionHistory(

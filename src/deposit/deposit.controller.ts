@@ -39,7 +39,8 @@ export class DepositController {
     @UseGuards(AuthGuard)
     async confirmDeposit(
         @Body() dto: ConfirmDepositDto,
+        @Wallet() walletAddress: string,
     ): Promise<ConfirmDepositResponseDto> {
-        return this.depositService.confirmDeposit(dto.txHash);
+        return this.depositService.confirmDeposit(dto.txHash, walletAddress);
     }
 }

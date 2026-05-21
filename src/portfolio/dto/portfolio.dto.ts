@@ -200,7 +200,7 @@ export class UserDetailsResponseDto {
     assets: UserAssetDetailDto[];
     /** Total debt in USD = settled borrow debts + open borrow orders */
     totalDebtUsd: number;
-    /** Settled debt only (from borrow_positions) */
+    /** Settled debt only (from borrow_position) */
     settledDebtUsd: number;
     /** Pending debt from open borrow orders */
     pendingDebtUsd: number;

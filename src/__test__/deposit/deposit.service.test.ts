@@ -6,7 +6,7 @@ import { ViemService } from "../../core/viem/viem.service";
 import { ChainConfigService } from "../../core/chain-config/chain-config.service";
 import { TokensService } from "../../tokens/tokens.service";
 import { TokensRepository } from "../../tokens/repositories/tokens.repository";
-import { ChainIndexerService } from "../../chain-indexer/chain-indexer.service";
+import { DatabaseService } from "../../core/database/database.service";
 
 describe("DepositService", () => {
     let service: DepositService;
@@ -85,8 +85,8 @@ describe("DepositService", () => {
                 { provide: TokensRepository, useValue: mockTokensRepository },
                 { provide: ConfigService, useValue: mockConfigService },
                 {
-                    provide: ChainIndexerService,
-                    useValue: { processTransactionDeposits: jest.fn() },
+                    provide: DatabaseService,
+                    useValue: { getPool: jest.fn() },
                 },
                 { provide: ChainConfigService, useValue: mockChainConfig },
             ],

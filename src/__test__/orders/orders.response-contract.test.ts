@@ -11,7 +11,7 @@ describe("OrderResponse contract", () => {
     const mockOrderId = "d0000000-0000-0000-0000-000000000001";
     const mockWallet = "0xAbc123";
     const mockAssetId = "b0000000-0000-0000-0000-000000000001";
-    const mockMarketId = "c0000000-0000-0000-0000-000000000001";
+    const mockMarketId = "0x" + "c0".repeat(32);
 
     function buildOrderResponse(
         overrides: Partial<OrderResponse> = {},

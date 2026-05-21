@@ -1,7 +1,8 @@
-import { IsNotEmpty, IsString, IsUUID } from "class-validator";
+import { IsNotEmpty, IsString } from "class-validator";
+import { IsBytes32Hex } from "../../common/validators/bytes32-hex.validator";
 
 export class RepayRequestDto {
-    @IsUUID()
+    @IsBytes32Hex()
     @IsNotEmpty()
     marketId: string;
 

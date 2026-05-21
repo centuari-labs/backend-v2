@@ -13,7 +13,6 @@ import { PortfolioModule } from "./portfolio/portfolio.module";
 import { FaucetModule } from "./faucet/faucet.module";
 import { DepositModule } from "./deposit/deposit.module";
 import { WithdrawModule } from "./withdraw/withdraw.module";
-import { ChainIndexerModule } from "./chain-indexer/chain-indexer.module";
 import { CollateralModule } from "./collateral/collateral.module";
 import { EventsGateway } from "./core/websocket/websocket.gateway";
 
@@ -53,7 +52,6 @@ import { EventsGateway } from "./core/websocket/websocket.gateway";
         FaucetModule,
         DepositModule,
         WithdrawModule,
-        ChainIndexerModule,
         CollateralModule,
     ],
     controllers: [],

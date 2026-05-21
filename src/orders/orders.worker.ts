@@ -8,15 +8,11 @@ import { ViemService } from "../core/viem/viem.service";
 import { ChainConfigService } from "../core/chain-config/chain-config.service";
 import { FaucetService } from "../faucet/faucet.service";
 import HubDepositorAbiJson from "../abi/HubDepositor.json";
-import BalanceLedgerAbiJson from "../abi/BalanceLedger.json";
 import { privateKeyToAccount } from "viem/accounts";
-import { keccak256, parseEventLogs, toHex } from "viem";
+import { keccak256, toHex } from "viem";
 
 const HubDepositorAbi = HubDepositorAbiJson as Abi;
-const BalanceLedgerAbi = BalanceLedgerAbiJson as Abi;
 import { OrderRepository } from "./repositories/order.repository";
-import { PortfolioRepository } from "../portfolio/repositories/portfolio.repository";
-import { portfolioUuidFor } from "../common/utils/uuid.utils";
 import { OrdersService } from "./orders.service";
 import { MarketRepositories } from "../market/repository/market.repository";
 import { Token } from "../tokens/entities/token.entity";
@@ -88,7 +84,6 @@ export class OrdersWorker implements OnModuleInit {
         private readonly configService: ConfigService,
         private readonly chainConfig: ChainConfigService,
         private readonly portfolioService: PortfolioService,
-        private readonly portfolioRepository: PortfolioRepository,
         private readonly tokensService: TokensService,
         private readonly priceService: PriceService,
     ) {}
@@ -314,9 +309,6 @@ export class OrdersWorker implements OnModuleInit {
             return;
         }
 
-        const specByToken = new Map(
-            supportedSpecs.map((s) => [s.tokenAddress.toLowerCase(), s]),
-        );
         const tokenAddresses = supportedSpecs.map((s) => s.tokenAddress);
 
         // Ensure max approval for each token
@@ -358,11 +350,9 @@ export class OrdersWorker implements OnModuleInit {
             );
         }
 
-        // Deposit whatever wallet balance we have into HubDepositor
-        const account = await this.orderRepository.findAccountByWallet(
-            bot.wallet,
-        );
-
+        // Deposit whatever wallet balance we have into HubDepositor.
+        // indexer-v3 credits user_balance.available from the resulting
+        // BalanceLedger.Credited event; no eager DB write here.
         for (const spec of supportedSpecs) {
             try {
                 const walletBalance =
@@ -375,74 +365,19 @@ export class OrdersWorker implements OnModuleInit {
                     );
                 if (walletBalance === 0n) continue;
 
-                const receipt = await this.writeContractWithNonceRetry(
+                await this.writeContractWithNonceRetry(
                     bot.privateKey,
                     this.chainConfig.hubDepositorAddress,
                     HubDepositorAbi,
                     "deposit",
                     [spec.tokenAddress, walletBalance],
                 );
-
-                // Update portfolio from deposit event
-                if (account) {
-                    try {
-                        const depositedLogs = parseEventLogs({
-                            abi: HubDepositorAbi,
-                            eventName: "Deposited",
-                            logs: receipt.logs,
-                        }).filter(
-                            (log) =>
-                                log.address?.toLowerCase() ===
-                                this.chainConfig.hubDepositorAddress.toLowerCase(),
-                        );
-
-                        for (const log of depositedLogs) {
-                            const userWallet = (
-                                log.args as { user: string }
-                            ).user.toLowerCase();
-                            const tokenAddr = (
-                                log.args as { token: string }
-                            ).token.toLowerCase();
-                            const amount = (
-                                log.args as { amount: bigint }
-                            ).amount.toString();
-                            const specForLog = specByToken.get(tokenAddr);
-                            const assetId = specForLog?.assetId ?? spec.assetId;
-                            const portfolioId = portfolioUuidFor(
-                                userWallet,
-                                tokenAddr,
-                            );
-                            await this.portfolioRepository.upsertPortfolio(
-                                portfolioId,
-                                account.id,
-                                assetId,
-                                amount,
-                            );
-                        }
-                    } catch (e) {
-                        this.logger.error(
-                            `Failed to upsert portfolio after deposit for bot ${bot.wallet} token ${spec.tokenAddress}: ${(e as Error).message}`,
-                        );
-                    }
-                }
             } catch (e) {
                 this.logger.error(
                     `Failed to deposit token ${spec.tokenAddress} for bot ${bot.wallet}: ${(e as Error).message}`,
                 );
             }
         }
-
-        // Sync portfolio from on-chain balance for all supported tokens
-        await Promise.all(
-            supportedSpecs.map((s) =>
-                this.syncPortfolioFromOnChainBalance(
-                    bot,
-                    s.assetId,
-                    s.tokenAddress,
-                    s.isCollateral,
-                ),
-            ),
-        );
 
         this.logger.log(
             `Faucet + deposit complete for bot ${bot.wallet} (${supportedSpecs.length} token(s))`,
@@ -490,52 +425,6 @@ export class OrdersWorker implements OnModuleInit {
         } catch (e) {
             this.logger.error(
                 `Failed to fund gas for bot ${botAddress}: ${(e as Error).message}`,
-            );
-        }
-    }
-
-    /**
-     * Syncs portfolio DB row from on-chain BalanceLedger.available slot.
-     * Ensures DB reflects on-chain state regardless of event parsing.
-     */
-    private async syncPortfolioFromOnChainBalance(
-        bot: BotAccount,
-        assetId: string,
-        tokenAddress: string,
-        isCollateral: boolean = false,
-    ): Promise<void> {
-        try {
-            const onChainBalance = await this.viemService.readContract<bigint>(
-                this.chainConfig.chainId,
-                this.chainConfig.balanceLedgerAddress,
-                BalanceLedgerAbi,
-                "available",
-                [bot.wallet, tokenAddress],
-            );
-            if (onChainBalance === 0n) return;
-
-            const account = await this.orderRepository.findAccountByWallet(
-                bot.wallet,
-            );
-            if (!account) return;
-
-            const portfolioId = portfolioUuidFor(
-                bot.wallet.toLowerCase(),
-                tokenAddress.toLowerCase(),
-            );
-            await this.portfolioRepository.syncPortfolioBalance(
-                portfolioId,
-                account.id,
-                assetId,
-                onChainBalance.toString(),
-                isCollateral,
-            );
-            this.logger.debug(
-                `Synced portfolio for bot ${bot.wallet} token ${tokenAddress}: amount=${onChainBalance.toString()}`,
-            );
-        } catch (e) {
-            this.logger.error(
-                `Failed to sync portfolio from on-chain balance for bot ${bot.wallet} token ${tokenAddress}: ${(e as Error).message}`,
             );
         }
     }
@@ -636,7 +525,8 @@ export class OrdersWorker implements OnModuleInit {
         if (!this.isEnabled) return;
 
         try {
-            const markets = await this.marketRepository.findAllMarketsForCache();
+            const markets =
+                await this.marketRepository.findAllMarketsForCache();
             const tokens = await this.tokenRepository.find();
             const tokenSymbolMap = new Map<string, string>();
             for (const t of tokens) {

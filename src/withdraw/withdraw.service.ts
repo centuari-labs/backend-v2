@@ -15,8 +15,10 @@ import { PortfolioService } from "../portfolio/portfolio.service";
 import { OrderRepository } from "../orders/repositories/order.repository";
 import { HEALTH_FACTOR_NO_DEBT } from "../portfolio/helpers/health-factor.helpers";
 import HubDepositorAbiJson from "../abi/HubDepositor.json";
+import WithdrawalRegistryAbiJson from "../abi/WithdrawalRegistry.json";
 
 const HubDepositorAbi = HubDepositorAbiJson as Abi;
+const WithdrawalRegistryAbi = WithdrawalRegistryAbiJson as Abi;
 import { applyWithdrawEffects } from "../core/on-chain-state/apply-withdraw";
 import { humanToBaseUnits } from "../common/utils/number.utils";
 import { parseContractError } from "../common/utils/contract-errors.utils";
@@ -146,6 +148,18 @@ export class WithdrawService {
         amount: bigint,
     ): Promise<TransactionReceipt> {
         try {
+            if (this.chainConfig.withdrawViaRegistry) {
+                return (await this.viemService.writeContract(
+                    this.chainConfig.chainId,
+                    this.chainConfig.operatorPrivateKey,
+                    this.chainConfig.withdrawalRegistryAddress,
+                    WithdrawalRegistryAbi,
+                    "requestWithdrawalFor",
+                    [user, token, amount, this.chainConfig.chainId],
+                    { waitForReceipt: true },
+                )) as TransactionReceipt;
+            }
+
             return (await this.viemService.writeContract(
                 this.chainConfig.chainId,
                 this.chainConfig.operatorPrivateKey,
@@ -160,6 +174,10 @@ export class WithdrawService {
             this.logger.error(`Contract call failed: ${msg}`);
             const parsed = parseContractError(msg, {
                 InsufficientFunds: "Insufficient balance for withdrawal.",
+                WithdrawalBlockedByHF:
+                    "Withdrawal blocked: it would reduce your health factor below the safe threshold.",
+                InsufficientChainLiquidity:
+                    "Insufficient liquidity on this chain to fulfill the withdrawal right now.",
             });
             if (parsed.isKnown) {
                 throw new BadRequestException(parsed.message);

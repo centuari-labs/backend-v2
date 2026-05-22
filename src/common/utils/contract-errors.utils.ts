@@ -30,6 +30,12 @@ const CONTRACT_ERRORS: Record<string, string> = {
     InvalidMatchData: "Invalid match data.",
     EmptyBatch: "Empty batch provided.",
 
+    // ── WithdrawalRegistry ──────────────────────────────────────────────
+    WithdrawalBlockedByHF:
+        "Withdrawal blocked: it would reduce your health factor below the safe threshold.",
+    InsufficientChainLiquidity:
+        "Insufficient liquidity on this chain to fulfill the withdrawal right now.",
+
     // ── OpenZeppelin ────────────────────────────────────────────────────
     EnforcedPause: "The contract is currently paused. Please try again later.",
     ReentrancyGuardReentrantCall: "Transaction conflict. Please try again.",

@@ -29,6 +29,8 @@ import { applyWithdrawEffects } from "../../core/on-chain-state/apply-withdraw";
 
 const WALLET = "0x1111111111111111111111111111111111111111";
 const ASSET_ID = "asset-uuid-123";
+const HUB_DEPOSITOR = "0xdddddddddddddddddddddddddddddddddddddddd";
+const WITHDRAWAL_REGISTRY = "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
 const ACCOUNT = { id: "account-uuid-456" };
 const TOKEN = {
     id: ASSET_ID,
@@ -52,6 +54,13 @@ describe("WithdrawService (C3 Phase 2)", () => {
     let orderRepository: jest.Mocked<OrderRepository>;
     let tokensService: jest.Mocked<TokensService>;
     let viemService: jest.Mocked<ViemService>;
+    let chainConfig: {
+        chainId: number;
+        operatorPrivateKey: string;
+        hubDepositorAddress: string;
+        withdrawalRegistryAddress: string;
+        withdrawViaRegistry: boolean;
+    };
 
     beforeEach(async () => {
         (applyWithdrawEffects as jest.Mock).mockClear();
@@ -78,6 +87,14 @@ describe("WithdrawService (C3 Phase 2)", () => {
             getPublicClient: jest.fn().mockReturnValue({}),
         } as unknown as jest.Mocked<ViemService>;
 
+        chainConfig = {
+            chainId: 421614,
+            operatorPrivateKey: "0xabc123",
+            hubDepositorAddress: HUB_DEPOSITOR,
+            withdrawalRegistryAddress: WITHDRAWAL_REGISTRY,
+            withdrawViaRegistry: false,
+        };
+
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 WithdrawService,
@@ -91,12 +108,7 @@ describe("WithdrawService (C3 Phase 2)", () => {
                 { provide: OrderRepository, useValue: orderRepository },
                 {
                     provide: ChainConfigService,
-                    useValue: {
-                        chainId: 421614,
-                        operatorPrivateKey: "0xabc123",
-                        hubDepositorAddress:
-                            "0xdddddddddddddddddddddddddddddddddddddddd",
-                    },
+                    useValue: chainConfig,
                 },
                 {
                     provide: DatabaseService,
@@ -199,7 +211,7 @@ describe("WithdrawService (C3 Phase 2)", () => {
             expect(viemService.writeContract).toHaveBeenCalledWith(
                 421614,
                 "0xabc123",
-                "0xdddddddddddddddddddddddddddddddddddddddd",
+                HUB_DEPOSITOR,
                 expect.anything(),
                 "payout",
                 [WALLET, TOKEN.tokenAddress, 100000000n],
@@ -222,6 +234,56 @@ describe("WithdrawService (C3 Phase 2)", () => {
             expect(
                 portfolioService.simulateHealthFactorAfterWithdrawal,
             ).not.toHaveBeenCalled();
+        });
+    });
+
+    describe("withdrawal via registry (WITHDRAW_VIA_REGISTRY on)", () => {
+        beforeEach(() => {
+            chainConfig.withdrawViaRegistry = true;
+            portfolioRepository.getUserBalanceForAsset.mockResolvedValue({
+                available: "1000000000", // 1000 USDC
+                isCollateral: false,
+                decimals: 6,
+            });
+        });
+
+        it("routes through requestWithdrawalFor with the hub chain as target", async () => {
+            const result = await service.withdraw(
+                { assetId: ASSET_ID, amount: "100" },
+                WALLET,
+            );
+
+            expect(result).toEqual({
+                txHash: TX_RECEIPT.transactionHash,
+                status: "success",
+            });
+            expect(viemService.writeContract).toHaveBeenCalledWith(
+                421614,
+                "0xabc123",
+                WITHDRAWAL_REGISTRY,
+                expect.anything(),
+                "requestWithdrawalFor",
+                [WALLET, TOKEN.tokenAddress, 100000000n, 421614],
+                { waitForReceipt: true },
+            );
+            expect(applyWithdrawEffects).toHaveBeenCalledTimes(1);
+            expect(applyWithdrawEffects).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    receipt: TX_RECEIPT,
+                    expectedUser: WALLET,
+                }),
+            );
+        });
+
+        it("maps WithdrawalBlockedByHF to a BadRequestException", async () => {
+            viemService.writeContract.mockRejectedValue(
+                new Error("execution reverted: WithdrawalBlockedByHF()"),
+            );
+
+            await expect(
+                service.withdraw({ assetId: ASSET_ID, amount: "100" }, WALLET),
+            ).rejects.toBeInstanceOf(BadRequestException);
+            expect(applyWithdrawEffects).not.toHaveBeenCalled();
         });
     });
 

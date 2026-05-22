@@ -112,9 +112,9 @@ describe("MarketRepositories", () => {
         // is TypeORM's real inherited method, which needs entity metadata the mock
         // DataSource can't provide. Stub it on the instance so the mQb/mInsertQb
         // mocks back the query/insert paths.
-        jest.spyOn(repository, "createQueryBuilder").mockImplementation(
-            ((alias?: string) => (alias ? mQb : mInsertQb)) as never,
-        );
+        jest.spyOn(repository, "createQueryBuilder").mockImplementation(((
+            alias?: string,
+        ) => (alias ? mQb : mInsertQb)) as never);
     });
 
     describe("getMarketsByIds", () => {
@@ -440,12 +440,18 @@ describe("MarketRepositories", () => {
             expect(mInsertQb.into).toHaveBeenCalledWith(Market);
             expect(mInsertQb.values).toHaveBeenCalledWith([
                 {
-                    marketId: computeMarketIdBytes32(LOAN_TOKEN_USDC, MATURITY_A),
+                    marketId: computeMarketIdBytes32(
+                        LOAN_TOKEN_USDC,
+                        MATURITY_A,
+                    ),
                     loanToken: LOAN_TOKEN_USDC,
                     maturity: MATURITY_A.toString(),
                 },
                 {
-                    marketId: computeMarketIdBytes32(LOAN_TOKEN_USDC, MATURITY_B),
+                    marketId: computeMarketIdBytes32(
+                        LOAN_TOKEN_USDC,
+                        MATURITY_B,
+                    ),
                     loanToken: LOAN_TOKEN_USDC,
                     maturity: MATURITY_B.toString(),
                 },
@@ -455,12 +461,18 @@ describe("MarketRepositories", () => {
 
             expect(result).toEqual([
                 {
-                    marketId: computeMarketIdBytes32(LOAN_TOKEN_USDC, MATURITY_A),
+                    marketId: computeMarketIdBytes32(
+                        LOAN_TOKEN_USDC,
+                        MATURITY_A,
+                    ),
                     loanToken: LOAN_TOKEN_USDC,
                     maturity: MATURITY_A,
                 },
                 {
-                    marketId: computeMarketIdBytes32(LOAN_TOKEN_USDC, MATURITY_B),
+                    marketId: computeMarketIdBytes32(
+                        LOAN_TOKEN_USDC,
+                        MATURITY_B,
+                    ),
                     loanToken: LOAN_TOKEN_USDC,
                     maturity: MATURITY_B,
                 },

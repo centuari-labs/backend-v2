@@ -146,7 +146,9 @@ describe("OrdersWorker", () => {
 
             await worker.onModuleInit();
 
-            expect(marketRepository.findAllMarketsForCache).not.toHaveBeenCalled();
+            expect(
+                marketRepository.findAllMarketsForCache,
+            ).not.toHaveBeenCalled();
         });
 
         it("should skip when ORDER_WORKER_ENABLED is not true", async () => {
@@ -154,7 +156,9 @@ describe("OrdersWorker", () => {
 
             await worker.onModuleInit();
 
-            expect(marketRepository.findAllMarketsForCache).not.toHaveBeenCalled();
+            expect(
+                marketRepository.findAllMarketsForCache,
+            ).not.toHaveBeenCalled();
         });
     });
 
@@ -198,7 +202,9 @@ describe("OrdersWorker", () => {
 
             await worker.refreshAssetMarketCache();
 
-            expect(marketRepository.findAllMarketsForCache).not.toHaveBeenCalled();
+            expect(
+                marketRepository.findAllMarketsForCache,
+            ).not.toHaveBeenCalled();
         });
     });
 

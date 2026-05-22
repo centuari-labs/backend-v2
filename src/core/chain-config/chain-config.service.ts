@@ -11,6 +11,7 @@ export class ChainConfigService {
     readonly riskModuleAddress: string;
     readonly balanceLedgerAddress: string;
     readonly withdrawalRegistryAddress: string;
+    readonly withdrawViaRegistry: boolean;
 
     constructor(configService: ConfigService) {
         this.chainId = Number(
@@ -30,5 +31,9 @@ export class ChainConfigService {
             configService.get<string>("BALANCE_LEDGER_ADDRESS") ?? "";
         this.withdrawalRegistryAddress =
             configService.get<string>("WITHDRAWAL_REGISTRY_ADDRESS") ?? "";
+        this.withdrawViaRegistry =
+            (
+                configService.get<string>("WITHDRAW_VIA_REGISTRY") ?? "false"
+            ).toLowerCase() === "true";
     }
 }

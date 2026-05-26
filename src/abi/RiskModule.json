@@ -6,54 +6,111 @@
   },
   {
     "type": "function",
-    "name": "getRecord",
-    "inputs": [
-      {
-        "name": "depositId",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "tuple",
-        "internalType": "struct ISettlementLedger.ReimbursementRecord",
-        "components": [
-          {
-            "name": "solver",
-            "type": "address",
-            "internalType": "address"
-          },
-          {
-            "name": "asset",
-            "type": "address",
-            "internalType": "address"
-          },
-          {
-            "name": "amount",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "status",
-            "type": "uint8",
-            "internalType": "enum ISettlementLedger.ReimbursementStatus"
-          }
-        ]
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "hubIntentSettler",
+    "name": "balanceLedger",
     "inputs": [],
     "outputs": [
       {
         "name": "",
         "type": "address",
         "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "bufferBps",
+    "inputs": [
+      {
+        "name": "asset",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "canUnflag",
+    "inputs": [
+      {
+        "name": "user",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "asset",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "canWithdraw",
+    "inputs": [
+      {
+        "name": "user",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "asset",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "amount",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "centuari",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "defaultBufferBps",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
     "stateMutability": "view"
@@ -68,12 +125,17 @@
         "internalType": "address"
       },
       {
-        "name": "operator_",
+        "name": "oracle_",
         "type": "address",
         "internalType": "address"
       },
       {
-        "name": "hubIntentSettler_",
+        "name": "centuari_",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "balanceLedger_",
         "type": "address",
         "internalType": "address"
       }
@@ -83,20 +145,26 @@
   },
   {
     "type": "function",
-    "name": "matchAndReimburse",
+    "name": "ltvBps",
     "inputs": [
       {
-        "name": "depositId",
-        "type": "bytes32",
-        "internalType": "bytes32"
+        "name": "asset",
+        "type": "address",
+        "internalType": "address"
       }
     ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
   },
   {
     "type": "function",
-    "name": "operator",
+    "name": "oracle",
     "inputs": [],
     "outputs": [
       {
@@ -122,25 +190,22 @@
   },
   {
     "type": "function",
-    "name": "register",
+    "name": "renounceOwnership",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "setBuffer",
     "inputs": [
-      {
-        "name": "depositId",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      },
-      {
-        "name": "solver",
-        "type": "address",
-        "internalType": "address"
-      },
       {
         "name": "asset",
         "type": "address",
         "internalType": "address"
       },
       {
-        "name": "amount",
+        "name": "bufferBps_",
         "type": "uint256",
         "internalType": "uint256"
       }
@@ -150,19 +215,12 @@
   },
   {
     "type": "function",
-    "name": "renounceOwnership",
-    "inputs": [],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "setHubIntentSettler",
+    "name": "setDefaultBuffer",
     "inputs": [
       {
-        "name": "newHubIntentSettler",
-        "type": "address",
-        "internalType": "address"
+        "name": "bufferBps_",
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
     "outputs": [],
@@ -170,10 +228,28 @@
   },
   {
     "type": "function",
-    "name": "setOperator",
+    "name": "setLtv",
     "inputs": [
       {
-        "name": "newOperator",
+        "name": "asset",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "ltvBps_",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "setOracle",
+    "inputs": [
+      {
+        "name": "newOracle",
         "type": "address",
         "internalType": "address"
       }
@@ -196,19 +272,44 @@
   },
   {
     "type": "event",
-    "name": "HubIntentSettlerUpdated",
+    "name": "BufferUpdated",
     "inputs": [
       {
-        "name": "previousHubIntentSettler",
+        "name": "asset",
         "type": "address",
         "indexed": true,
         "internalType": "address"
       },
       {
-        "name": "newHubIntentSettler",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
+        "name": "oldBps",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "newBps",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "DefaultBufferUpdated",
+    "inputs": [
+      {
+        "name": "oldBps",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "newBps",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
       }
     ],
     "anonymous": false
@@ -228,16 +329,41 @@
   },
   {
     "type": "event",
-    "name": "OperatorUpdated",
+    "name": "LtvUpdated",
     "inputs": [
       {
-        "name": "previousOperator",
+        "name": "asset",
         "type": "address",
         "indexed": true,
         "internalType": "address"
       },
       {
-        "name": "newOperator",
+        "name": "oldBps",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "newBps",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "OracleUpdated",
+    "inputs": [
+      {
+        "name": "oldOracle",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "newOracle",
         "type": "address",
         "indexed": true,
         "internalType": "address"
@@ -265,77 +391,9 @@
     "anonymous": false
   },
   {
-    "type": "event",
-    "name": "ReimbursementCompleted",
-    "inputs": [
-      {
-        "name": "depositId",
-        "type": "bytes32",
-        "indexed": true,
-        "internalType": "bytes32"
-      },
-      {
-        "name": "solver",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      },
-      {
-        "name": "asset",
-        "type": "address",
-        "indexed": false,
-        "internalType": "address"
-      },
-      {
-        "name": "amount",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "ReimbursementRegistered",
-    "inputs": [
-      {
-        "name": "depositId",
-        "type": "bytes32",
-        "indexed": true,
-        "internalType": "bytes32"
-      },
-      {
-        "name": "solver",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      },
-      {
-        "name": "asset",
-        "type": "address",
-        "indexed": false,
-        "internalType": "address"
-      },
-      {
-        "name": "amount",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      }
-    ],
-    "anonymous": false
-  },
-  {
     "type": "error",
-    "name": "AlreadyRegistered",
-    "inputs": [
-      {
-        "name": "depositId",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
-    ]
+    "name": "InvalidBps",
+    "inputs": []
   },
   {
     "type": "error",
@@ -344,35 +402,8 @@
   },
   {
     "type": "error",
-    "name": "InvalidStatus",
-    "inputs": [
-      {
-        "name": "depositId",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      },
-      {
-        "name": "current",
-        "type": "uint8",
-        "internalType": "enum ISettlementLedger.ReimbursementStatus"
-      }
-    ]
-  },
-  {
-    "type": "error",
     "name": "NotInitializing",
     "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "NotRegistered",
-    "inputs": [
-      {
-        "name": "depositId",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
-    ]
   },
   {
     "type": "error",
@@ -398,22 +429,7 @@
   },
   {
     "type": "error",
-    "name": "ReentrancyGuardReentrantCall",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "Unauthorized",
-    "inputs": []
-  },
-  {
-    "type": "error",
     "name": "ZeroAddress",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "ZeroAmount",
     "inputs": []
   }
 ]

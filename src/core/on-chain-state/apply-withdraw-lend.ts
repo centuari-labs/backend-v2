@@ -1,6 +1,10 @@
 import {
-    applyOnChainEffect,
     type ApplyOnChainEffectResult,
+    applyCreditedMutation,
+    applyLendPositionWithdrawnMutation,
+    applyOnChainEffect,
+    hexToBytea,
+    isAlreadyStamped,
 } from "@centuari-labs/on-chain-effects";
 import { Logger } from "@nestjs/common";
 import type { Pool } from "pg";
@@ -11,7 +15,7 @@ import {
     type TransactionReceipt,
     decodeEventLog,
 } from "viem";
-import { alreadyStamped, hexToBytea, topicFor } from "./apply-internals";
+import { topicFor } from "./apply-internals";
 
 /**
  * Eager-write the effects of
@@ -24,11 +28,9 @@ import { alreadyStamped, hexToBytea, topicFor } from "./apply-internals";
  *             uint256 newAvailable)`
  *      → increment `user_balance.available`.
  *
- * SQL mutations mirror
- * [centuari.processor.handleLendPositionWithdrawn](../../../../indexer-v3/src/processors/centuari.processor.ts)
- * and
- * [balance-ledger.processor.handleBalanceDelta](../../../../indexer-v3/src/processors/balance-ledger.processor.ts).
- * The eager path and indexer tail must stay byte-for-byte identical.
+ * SQL mutations are shared by construction with the indexer tail via
+ * `@centuari-labs/on-chain-effects` (`applyLendPositionWithdrawnMutation` /
+ * `applyCreditedMutation`), so the eager path and tail can't drift.
  */
 
 const logger = new Logger("apply-withdraw-lend");
@@ -122,7 +124,7 @@ export async function applyWithdrawLendEffects(
                 decoded.lender.toLowerCase() ===
                     event.args.lender.toLowerCase(),
             alreadyAppliedCheck: (tx, stamp) =>
-                alreadyStamped(
+                isAlreadyStamped(
                     tx,
                     "lend_position",
                     "market_id = $1 AND lender = $2",
@@ -133,27 +135,7 @@ export async function applyWithdrawLendEffects(
                     stamp,
                 ),
             mutation: async (tx, decoded, stamp) => {
-                await tx.query(
-                    `UPDATE lend_position
-                        SET cbt_balance = GREATEST(cbt_balance - $3::numeric, 0),
-                            principal   = GREATEST(principal   - $4::numeric, 0),
-                            applied_by_tx_hash = $5,
-                            applied_by_log_index = $6,
-                            applied_by_block_hash = $7,
-                            applied_by_block_number = $8,
-                            updated_at = now()
-                      WHERE market_id = $1 AND lender = $2 AND cbt_balance > 0`,
-                    [
-                        hexToBytea(decoded.marketId),
-                        hexToBytea(decoded.lender),
-                        decoded.cbtBurned.toString(),
-                        decoded.amountWithdrawn.toString(),
-                        hexToBytea(stamp.txHash),
-                        stamp.logIndex,
-                        hexToBytea(stamp.blockHash),
-                        stamp.blockNumber.toString(),
-                    ],
-                );
+                await applyLendPositionWithdrawnMutation(tx, decoded, stamp);
             },
         });
         logOutcome(
@@ -177,7 +159,7 @@ export async function applyWithdrawLendEffects(
                 decoded.user.toLowerCase() === event.args.user.toLowerCase() &&
                 decoded.asset.toLowerCase() === event.args.asset.toLowerCase(),
             alreadyAppliedCheck: (tx, stamp) =>
-                alreadyStamped(
+                isAlreadyStamped(
                     tx,
                     "user_balance",
                     "user_address = $1 AND asset = $2",
@@ -185,33 +167,7 @@ export async function applyWithdrawLendEffects(
                     stamp,
                 ),
             mutation: async (tx, decoded, stamp) => {
-                const delta = decoded.amount.toString();
-                await tx.query(
-                    `INSERT INTO user_balance
-                        (user_address, asset, available,
-                         used_as_collateral, flagged_at,
-                         applied_by_tx_hash, applied_by_log_index,
-                         applied_by_block_hash, applied_by_block_number,
-                         updated_at)
-                     VALUES ($1, $2, $3::numeric, false, 0,
-                             $4, $5, $6, $7, now())
-                     ON CONFLICT (user_address, asset) DO UPDATE SET
-                        available = user_balance.available + EXCLUDED.available,
-                        applied_by_tx_hash = EXCLUDED.applied_by_tx_hash,
-                        applied_by_log_index = EXCLUDED.applied_by_log_index,
-                        applied_by_block_hash = EXCLUDED.applied_by_block_hash,
-                        applied_by_block_number = EXCLUDED.applied_by_block_number,
-                        updated_at = now()`,
-                    [
-                        hexToBytea(decoded.user),
-                        hexToBytea(decoded.asset),
-                        delta,
-                        hexToBytea(stamp.txHash),
-                        stamp.logIndex,
-                        hexToBytea(stamp.blockHash),
-                        stamp.blockNumber.toString(),
-                    ],
-                );
+                await applyCreditedMutation(tx, decoded, stamp);
             },
         });
         logOutcome(receipt.transactionHash, "Credited", event.logIndex, result);

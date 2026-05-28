@@ -1,6 +1,9 @@
 import {
-    applyOnChainEffect,
     type ApplyOnChainEffectResult,
+    applyCreditedMutation,
+    applyOnChainEffect,
+    hexToBytea,
+    isAlreadyStamped,
 } from "@centuari-labs/on-chain-effects";
 import { Logger } from "@nestjs/common";
 import type { Pool } from "pg";
@@ -11,7 +14,7 @@ import {
     type TransactionReceipt,
     decodeEventLog,
 } from "viem";
-import { alreadyStamped, hexToBytea, topicFor } from "./apply-internals";
+import { topicFor } from "./apply-internals";
 
 /**
  * Eager-write the effect of a hub deposit onto the shared on-chain-state
@@ -25,13 +28,9 @@ import { alreadyStamped, hexToBytea, topicFor } from "./apply-internals";
  * balance-ledger processor stamps — so the eager path and the indexer tail
  * no-op each other (no double credit). NEVER key on `HubDepositor.Deposited`:
  * that is a different `logIndex` in the same tx and would not dedup against the
- * tail. SQL mirrors the indexer tail byte-for-byte
- * ([balance-ledger.processor.handleBalanceDelta](../../../../indexer-v3/src/processors/balance-ledger.processor.ts)).
- *
- * PLACEHOLDER (C4 writer cleanup): this `Credited` listener + insert SQL is a
- * stop-gap. Per the on-chain-effects roadmap it will move into the shared
- * `@centuari-labs/on-chain-effects` library so backend-v2 and indexer-v3 share
- * one implementation; revisit after that refactor.
+ * tail. The SQL mutation is shared by construction with the indexer tail via
+ * `@centuari-labs/on-chain-effects` (`applyCreditedMutation`), so the eager
+ * path and tail can't drift.
  */
 
 const logger = new Logger("apply-deposit");
@@ -102,7 +101,7 @@ export async function applyDepositEffects(
                 decoded.user.toLowerCase() === event.args.user.toLowerCase() &&
                 decoded.asset.toLowerCase() === event.args.asset.toLowerCase(),
             alreadyAppliedCheck: (tx, stamp) =>
-                alreadyStamped(
+                isAlreadyStamped(
                     tx,
                     "user_balance",
                     "user_address = $1 AND asset = $2",
@@ -110,32 +109,7 @@ export async function applyDepositEffects(
                     stamp,
                 ),
             mutation: async (tx, decoded, stamp) => {
-                await tx.query(
-                    `INSERT INTO user_balance
-                        (user_address, asset, available,
-                         used_as_collateral, flagged_at,
-                         applied_by_tx_hash, applied_by_log_index,
-                         applied_by_block_hash, applied_by_block_number,
-                         updated_at)
-                     VALUES ($1, $2, $3::numeric, false, 0,
-                             $4, $5, $6, $7, now())
-                     ON CONFLICT (user_address, asset) DO UPDATE SET
-                        available = user_balance.available + EXCLUDED.available,
-                        applied_by_tx_hash = EXCLUDED.applied_by_tx_hash,
-                        applied_by_log_index = EXCLUDED.applied_by_log_index,
-                        applied_by_block_hash = EXCLUDED.applied_by_block_hash,
-                        applied_by_block_number = EXCLUDED.applied_by_block_number,
-                        updated_at = now()`,
-                    [
-                        hexToBytea(decoded.user),
-                        hexToBytea(decoded.asset),
-                        decoded.amount.toString(),
-                        hexToBytea(stamp.txHash),
-                        stamp.logIndex,
-                        hexToBytea(stamp.blockHash),
-                        stamp.blockNumber.toString(),
-                    ],
-                );
+                await applyCreditedMutation(tx, decoded, stamp);
             },
         });
         if (result.applied) applied++;

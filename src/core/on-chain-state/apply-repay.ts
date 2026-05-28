@@ -1,6 +1,10 @@
 import {
-    applyOnChainEffect,
     type ApplyOnChainEffectResult,
+    applyDebitedMutation,
+    applyOnChainEffect,
+    applyRepaidMutation,
+    hexToBytea,
+    isAlreadyStamped,
 } from "@centuari-labs/on-chain-effects";
 import { Logger } from "@nestjs/common";
 import type { Pool } from "pg";
@@ -11,7 +15,7 @@ import {
     type TransactionReceipt,
     decodeEventLog,
 } from "viem";
-import { alreadyStamped, hexToBytea, topicFor } from "./apply-internals";
+import { topicFor } from "./apply-internals";
 
 /**
  * Eager-write the effects of `Centuari.repay(marketId, borrower, token,
@@ -21,12 +25,9 @@ import { alreadyStamped, hexToBytea, topicFor } from "./apply-internals";
  * - `Debited(address writer, address user, address asset, uint256 amount,
  *            uint256 newAvailable)`       → decrement `user_balance.available`.
  *
- * SQL mutations mirror the indexer tail byte-for-byte
- * ([centuari.processor.handleRepaid](../../../../indexer-v3/src/processors/centuari.processor.ts)
- * and
- * [balance-ledger.processor.handleBalanceDelta](../../../../indexer-v3/src/processors/balance-ledger.processor.ts)).
- * If this helper and the tail ever diverge, idempotency breaks when the
- * tail replays a block and stomps a row the eager path already wrote.
+ * SQL mutations are shared by construction with the indexer tail via
+ * `@centuari-labs/on-chain-effects` (`applyRepaidMutation` /
+ * `applyDebitedMutation`), so the eager path and tail can't drift.
  *
  * Every matching log gets its own `applyOnChainEffect` call scoped to its
  * `logIndex`, so a tx that emits multiple matching logs is applied in full
@@ -123,7 +124,7 @@ export async function applyRepayEffects(args: ApplyRepayArgs): Promise<void> {
                 decoded.borrower.toLowerCase() ===
                     event.args.borrower.toLowerCase(),
             alreadyAppliedCheck: (tx, stamp) =>
-                alreadyStamped(
+                isAlreadyStamped(
                     tx,
                     "borrow_position",
                     "market_id = $1 AND borrower = $2",
@@ -134,25 +135,7 @@ export async function applyRepayEffects(args: ApplyRepayArgs): Promise<void> {
                     stamp,
                 ),
             mutation: async (tx, decoded, stamp) => {
-                await tx.query(
-                    `UPDATE borrow_position
-                        SET debt = GREATEST(debt - $3::numeric, 0),
-                            applied_by_tx_hash = $4,
-                            applied_by_log_index = $5,
-                            applied_by_block_hash = $6,
-                            applied_by_block_number = $7,
-                            updated_at = now()
-                      WHERE market_id = $1 AND borrower = $2 AND debt > 0`,
-                    [
-                        hexToBytea(decoded.marketId),
-                        hexToBytea(decoded.borrower),
-                        decoded.amount.toString(),
-                        hexToBytea(stamp.txHash),
-                        stamp.logIndex,
-                        hexToBytea(stamp.blockHash),
-                        stamp.blockNumber.toString(),
-                    ],
-                );
+                await applyRepaidMutation(tx, decoded, stamp);
             },
         });
         logOutcome(receipt.transactionHash, "Repaid", event.logIndex, result);
@@ -171,7 +154,7 @@ export async function applyRepayEffects(args: ApplyRepayArgs): Promise<void> {
                 decoded.user.toLowerCase() === event.args.user.toLowerCase() &&
                 decoded.asset.toLowerCase() === event.args.asset.toLowerCase(),
             alreadyAppliedCheck: (tx, stamp) =>
-                alreadyStamped(
+                isAlreadyStamped(
                     tx,
                     "user_balance",
                     "user_address = $1 AND asset = $2",
@@ -179,33 +162,7 @@ export async function applyRepayEffects(args: ApplyRepayArgs): Promise<void> {
                     stamp,
                 ),
             mutation: async (tx, decoded, stamp) => {
-                const delta = `-${decoded.amount.toString()}`;
-                await tx.query(
-                    `INSERT INTO user_balance
-                        (user_address, asset, available,
-                         used_as_collateral, flagged_at,
-                         applied_by_tx_hash, applied_by_log_index,
-                         applied_by_block_hash, applied_by_block_number,
-                         updated_at)
-                     VALUES ($1, $2, $3::numeric, false, 0,
-                             $4, $5, $6, $7, now())
-                     ON CONFLICT (user_address, asset) DO UPDATE SET
-                        available = user_balance.available + EXCLUDED.available,
-                        applied_by_tx_hash = EXCLUDED.applied_by_tx_hash,
-                        applied_by_log_index = EXCLUDED.applied_by_log_index,
-                        applied_by_block_hash = EXCLUDED.applied_by_block_hash,
-                        applied_by_block_number = EXCLUDED.applied_by_block_number,
-                        updated_at = now()`,
-                    [
-                        hexToBytea(decoded.user),
-                        hexToBytea(decoded.asset),
-                        delta,
-                        hexToBytea(stamp.txHash),
-                        stamp.logIndex,
-                        hexToBytea(stamp.blockHash),
-                        stamp.blockNumber.toString(),
-                    ],
-                );
+                await applyDebitedMutation(tx, decoded, stamp);
             },
         });
         logOutcome(receipt.transactionHash, "Debited", event.logIndex, result);

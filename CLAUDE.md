@@ -23,6 +23,9 @@ pnpm run seed               # seed database
 Contract addresses and ABIs are auto-managed by
 `smart-contract-revamp/bin/sync-to-services.sh`. After a redeploy, run that
 script once and backend-v2 will pick up the new artifacts on next restart.
+Run `./bin/sync-to-services.sh --check` to verify backend-v2 is on the latest
+deployment — it exits non-zero and prints the diff if `.env.contracts` or
+`src/abi/*.json` has drifted.
 
 - **Addresses**: live in `.env.contracts` (gitignored, regenerated). The
   AppModule's `ConfigModule.forRoot` reads `.env.contracts` first, then

@@ -1,6 +1,9 @@
 import {
-    applyOnChainEffect,
     type ApplyOnChainEffectResult,
+    applyDebitedMutation,
+    applyOnChainEffect,
+    hexToBytea,
+    isAlreadyStamped,
 } from "@centuari-labs/on-chain-effects";
 import { Logger } from "@nestjs/common";
 import type { Pool } from "pg";
@@ -11,7 +14,7 @@ import {
     type TransactionReceipt,
     decodeEventLog,
 } from "viem";
-import { alreadyStamped, hexToBytea, topicFor } from "./apply-internals";
+import { topicFor } from "./apply-internals";
 
 /**
  * Eager-write the effect of `HubDepositor.payout(user, asset, amount)`:
@@ -20,12 +23,10 @@ import { alreadyStamped, hexToBytea, topicFor } from "./apply-internals";
  *            uint256 newAvailable)` → decrement `user_balance.available`.
  *
  * `HubDepositor.payout` is the only on-chain entry point this helper covers
- * today. It triggers `BalanceLedger.debit`, which emits `Debited`. SQL
- * mutation mirrors
- * [balance-ledger.processor.handleBalanceDelta](../../../../indexer-v3/src/processors/balance-ledger.processor.ts)
- * byte-for-byte; the eager path and indexer tail must not diverge or
- * idempotency breaks when the tail replays a block the eager path already
- * wrote.
+ * today. It triggers `BalanceLedger.debit`, which emits `Debited`. The SQL
+ * mutation is shared by construction with the indexer tail via
+ * `@centuari-labs/on-chain-effects` (`applyDebitedMutation`), so the eager
+ * path and tail can't drift.
  */
 
 const logger = new Logger("apply-withdraw");
@@ -88,7 +89,7 @@ export async function applyWithdrawEffects(
                 decoded.user.toLowerCase() === event.args.user.toLowerCase() &&
                 decoded.asset.toLowerCase() === event.args.asset.toLowerCase(),
             alreadyAppliedCheck: (tx, stamp) =>
-                alreadyStamped(
+                isAlreadyStamped(
                     tx,
                     "user_balance",
                     "user_address = $1 AND asset = $2",
@@ -96,33 +97,7 @@ export async function applyWithdrawEffects(
                     stamp,
                 ),
             mutation: async (tx, decoded, stamp) => {
-                const delta = `-${decoded.amount.toString()}`;
-                await tx.query(
-                    `INSERT INTO user_balance
-                        (user_address, asset, available,
-                         used_as_collateral, flagged_at,
-                         applied_by_tx_hash, applied_by_log_index,
-                         applied_by_block_hash, applied_by_block_number,
-                         updated_at)
-                     VALUES ($1, $2, $3::numeric, false, 0,
-                             $4, $5, $6, $7, now())
-                     ON CONFLICT (user_address, asset) DO UPDATE SET
-                        available = user_balance.available + EXCLUDED.available,
-                        applied_by_tx_hash = EXCLUDED.applied_by_tx_hash,
-                        applied_by_log_index = EXCLUDED.applied_by_log_index,
-                        applied_by_block_hash = EXCLUDED.applied_by_block_hash,
-                        applied_by_block_number = EXCLUDED.applied_by_block_number,
-                        updated_at = now()`,
-                    [
-                        hexToBytea(decoded.user),
-                        hexToBytea(decoded.asset),
-                        delta,
-                        hexToBytea(stamp.txHash),
-                        stamp.logIndex,
-                        hexToBytea(stamp.blockHash),
-                        stamp.blockNumber.toString(),
-                    ],
-                );
+                await applyDebitedMutation(tx, decoded, stamp);
             },
         });
         logOutcome(receipt.transactionHash, event.logIndex, result);

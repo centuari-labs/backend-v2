@@ -176,6 +176,8 @@ All responses are wrapped by the global interceptor:
 
 The backend reads — but never writes — `portfolio.locked_amount`. Match-time increments are owned by the matching-engine's db-writer process; settlement-time decrements are owned by settlement-engine. Backend's job is validation (place-order) and HF accounting (using both open orders and unsettled matches as in-flight debt).
 
+Separately, the backend's on-chain-state eager writers (`src/core/on-chain-state/apply-*.ts`) emit their `user_balance` / `lend_position` / `borrow_position` upserts through the shared `@centuari-labs/on-chain-effects` mutation functions + `isAlreadyStamped`, so that SQL is identical **by construction** with the indexer-v3 tail and can't drift (C7).
+
 #### HF buffer config
 
 `risk.borrow_buffer_bps` (`INT NOT NULL DEFAULT 100`, per [migration 20260510130000](src/core/database/migrations/20260510130000_add_borrow_buffer_bps.sql)) configures the per-market safety margin above HF=1 that a new borrow must clear. The effective threshold is `1 + bufferBps/10000` (e.g. 100 bps → threshold 1.01).

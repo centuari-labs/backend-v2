@@ -1,6 +1,8 @@
+import { applyMarketCreatedMutation } from "@centuari-labs/on-chain-effects";
 import { Test, TestingModule } from "@nestjs/testing";
 import { getRepositoryToken } from "@nestjs/typeorm";
 import { DataSource } from "typeorm";
+import { DatabaseService } from "../../core/database/database.service";
 import { Market } from "../../market/entities/market.entity";
 import { MarketRepositories } from "../../market/repository/market.repository";
 import { computeMarketIdBytes32 } from "../../market/utils/market-id.utils";
@@ -75,6 +77,9 @@ describe("MarketRepositories", () => {
     let mInsertQb: MockInsertQb;
     let userBalanceRepo: { createQueryBuilder: jest.Mock };
     let lendRepo: { createQueryBuilder: jest.Mock };
+    let mockClient: { query: jest.Mock; release: jest.Mock };
+    let mockPool: { connect: jest.Mock };
+    let databaseService: { getPool: jest.Mock };
 
     beforeEach(async () => {
         ubQb = createMockQb();
@@ -85,6 +90,18 @@ describe("MarketRepositories", () => {
             createQueryBuilder: jest.fn().mockReturnValue(ubQb),
         };
         lendRepo = { createQueryBuilder: jest.fn().mockReturnValue(lpQb) };
+
+        // Shared-pool path for the eager market write (apply-market.ts):
+        // pool.connect() → client.query(BEGIN) → applyMarketCreatedMutation →
+        // client.query(COMMIT) → client.release().
+        mockClient = {
+            query: jest.fn().mockResolvedValue({ rows: [], rowCount: 1 }),
+            release: jest.fn(),
+        };
+        mockPool = { connect: jest.fn().mockResolvedValue(mockClient) };
+        databaseService = { getPool: jest.fn().mockReturnValue(mockPool) };
+        // applyMarketCreatedMutation is a module-level jest.fn in the stub.
+        (applyMarketCreatedMutation as jest.Mock).mockClear();
 
         const mockEntityManager = { getRepository: jest.fn() };
         const mockDataSource = {
@@ -103,6 +120,7 @@ describe("MarketRepositories", () => {
                     provide: getRepositoryToken(LendPosition),
                     useValue: lendRepo,
                 },
+                { provide: DatabaseService, useValue: databaseService },
             ],
         }).compile();
 
@@ -421,44 +439,58 @@ describe("MarketRepositories", () => {
     });
 
     describe("ensureMarketsForLoanToken", () => {
-        it("returns [] for empty input without hitting the repo", async () => {
+        it("returns [] for empty input without touching the pool", async () => {
             const result = await repository.ensureMarketsForLoanToken(
                 LOAN_TOKEN_USDC,
                 [],
             );
             expect(result).toEqual([]);
-            expect(repository.createQueryBuilder).not.toHaveBeenCalled();
+            expect(databaseService.getPool).not.toHaveBeenCalled();
+            expect(applyMarketCreatedMutation).not.toHaveBeenCalled();
         });
 
-        it("computes marketId via computeMarketIdBytes32, lowercases loanToken, and inserts with ON CONFLICT DO NOTHING", async () => {
+        it("computes marketId, lowercases loanToken, and routes each maturity through the shared mutation with a null stamp", async () => {
             const result = await repository.ensureMarketsForLoanToken(
                 LOAN_TOKEN_USDC.toUpperCase(),
                 [MATURITY_A, MATURITY_B],
             );
 
-            expect(mInsertQb.insert).toHaveBeenCalledTimes(1);
-            expect(mInsertQb.into).toHaveBeenCalledWith(Market);
-            expect(mInsertQb.values).toHaveBeenCalledWith([
+            // One transaction on the shared pool wrapping the mutations.
+            expect(mockPool.connect).toHaveBeenCalledTimes(1);
+            expect(mockClient.query).toHaveBeenCalledWith("BEGIN");
+            expect(mockClient.query).toHaveBeenCalledWith("COMMIT");
+            expect(mockClient.release).toHaveBeenCalledTimes(1);
+
+            // One shared mutation per maturity, NULL stamp (no event yet).
+            expect(applyMarketCreatedMutation).toHaveBeenCalledTimes(2);
+            expect(applyMarketCreatedMutation).toHaveBeenNthCalledWith(
+                1,
+                mockClient,
                 {
                     marketId: computeMarketIdBytes32(
                         LOAN_TOKEN_USDC,
                         MATURITY_A,
                     ),
                     loanToken: LOAN_TOKEN_USDC,
-                    maturity: MATURITY_A.toString(),
+                    maturity: BigInt(MATURITY_A),
                 },
+                null,
+            );
+            expect(applyMarketCreatedMutation).toHaveBeenNthCalledWith(
+                2,
+                mockClient,
                 {
                     marketId: computeMarketIdBytes32(
                         LOAN_TOKEN_USDC,
                         MATURITY_B,
                     ),
                     loanToken: LOAN_TOKEN_USDC,
-                    maturity: MATURITY_B.toString(),
+                    maturity: BigInt(MATURITY_B),
                 },
-            ]);
-            expect(mInsertQb.orIgnore).toHaveBeenCalledTimes(1);
-            expect(mInsertQb.execute).toHaveBeenCalledTimes(1);
+                null,
+            );
 
+            // Return value unchanged — maturity stays a number for callers.
             expect(result).toEqual([
                 {
                     marketId: computeMarketIdBytes32(
@@ -479,24 +511,27 @@ describe("MarketRepositories", () => {
             ]);
         });
 
-        it("propagates execute() errors so the caller can retry", async () => {
-            mInsertQb.execute.mockRejectedValueOnce(new Error("pg down"));
+        it("rolls back and propagates errors so the caller can retry", async () => {
+            (applyMarketCreatedMutation as jest.Mock).mockRejectedValueOnce(
+                new Error("pg down"),
+            );
             await expect(
                 repository.ensureMarketsForLoanToken(LOAN_TOKEN_USDC, [
                     MATURITY_A,
                 ]),
             ).rejects.toThrow("pg down");
+            expect(mockClient.query).toHaveBeenCalledWith("ROLLBACK");
+            expect(mockClient.release).toHaveBeenCalledTimes(1);
         });
 
         it("computeMarketIdBytes32 is deterministic and trailing 16 bytes are zero (zero-padded encoding invariant)", async () => {
-            // Indirectly verify via the values passed to insert()
+            // Indirectly verify via the marketId passed to the shared mutation.
             await repository.ensureMarketsForLoanToken(LOAN_TOKEN_USDC, [
                 MATURITY_A,
             ]);
-            const passed = mInsertQb.values.mock.calls[0][0] as Array<{
-                marketId: string;
-            }>;
-            const marketId = passed[0].marketId;
+            const firstCall = (applyMarketCreatedMutation as jest.Mock).mock
+                .calls[0];
+            const { marketId } = firstCall[1] as { marketId: string };
             // 0x + 64 hex chars
             expect(marketId).toMatch(/^0x[0-9a-f]{64}$/);
             // Trailing 16 bytes (32 hex chars after the first 32) are zero

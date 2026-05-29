@@ -126,3 +126,22 @@ export const applyLendPositionWithdrawnMutation = jest.fn(
         _stamp: IdempotencyStamp,
     ): Promise<number> => 1,
 );
+
+export interface MarketCreatedArgs {
+    marketId: Hex;
+    loanToken: Hex;
+    maturity: bigint;
+}
+
+/**
+ * `market` is the one mutation with a NULLABLE stamp: the backend registers
+ * markets on a cron before any `MarketCreated` event exists (eager path passes
+ * `null`); the indexer tail passes a real stamp. See the package's own tests.
+ */
+export const applyMarketCreatedMutation = jest.fn(
+    async (
+        _tx: PoolClient,
+        _decoded: MarketCreatedArgs,
+        _stamp: IdempotencyStamp | null,
+    ): Promise<number> => 1,
+);

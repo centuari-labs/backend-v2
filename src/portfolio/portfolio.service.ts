@@ -57,12 +57,14 @@ import {
     computeHealthFactor,
     DEFAULT_BORROW_BUFFER_BPS,
     formatHealthFactorResponse,
+    HEALTH_FACTOR_NO_DEBT,
     MIN_HEALTH_FACTOR,
     type CollateralPositionInput,
     type DebtPositionInput,
     type HealthFactorResult,
     type HealthFactorOptions,
 } from "./helpers/health-factor.helpers";
+import type { WithdrawableMaxResponseDto } from "./dto/withdrawable-max.dto";
 import { OrderSide, OrderStatus } from "../orders/constants/order.constants";
 
 @Injectable()
@@ -283,21 +285,161 @@ export class PortfolioService {
         collateralReductionBaseUnits: string,
     ): Promise<HealthFactorResult> {
         const wallet = await this.resolveWallet(accountId);
+        return this.simulateHealthFactorAfterWithdrawalForWallet(
+            wallet,
+            assetId,
+            collateralReductionBaseUnits,
+            accountId,
+        );
+    }
+
+    /**
+     * Wallet-keyed core of {@link simulateHealthFactorAfterWithdrawal} for
+     * callers that already hold the wallet address (e.g. the `@Wallet()`
+     * controller path). Reduces the flagged-collateral position for `assetId`
+     * by `collateralReductionBaseUnits` (clamped at 0) and recomputes HF. The
+     * optional `accountId` is threaded through only for the legacy
+     * `includeOpenOrders` path inside `buildHealthFactorInputs`.
+     */
+    async simulateHealthFactorAfterWithdrawalForWallet(
+        wallet: string,
+        assetId: string,
+        collateralReductionBaseUnits: string,
+        accountId?: string,
+    ): Promise<HealthFactorResult> {
         const { collateralPositions, debtPositions } =
             await this.buildHealthFactorInputs(wallet, accountId);
+        return computeHealthFactor(
+            this.reduceCollateral(
+                collateralPositions,
+                assetId,
+                BigInt(collateralReductionBaseUnits),
+            ),
+            debtPositions,
+        );
+    }
 
-        const adjusted = collateralPositions.map((pos) => {
+    /**
+     * Returns a copy of `collateralPositions` with the position for `assetId`
+     * reduced by `reduction` base units (clamped at 0). Pure / in-memory so a
+     * binary search can probe it repeatedly without re-hitting the DB.
+     */
+    private reduceCollateral(
+        collateralPositions: CollateralPositionInput[],
+        assetId: string,
+        reduction: bigint,
+    ): CollateralPositionInput[] {
+        return collateralPositions.map((pos) => {
             if (pos.assetId !== assetId) return pos;
-            const reduced =
-                safeBigInt(pos.amountBaseUnits) -
-                BigInt(collateralReductionBaseUnits);
+            const reduced = safeBigInt(pos.amountBaseUnits) - reduction;
             return {
                 ...pos,
                 amountBaseUnits: (reduced > 0n ? reduced : 0n).toString(),
             };
         });
+    }
 
-        return computeHealthFactor(adjusted, debtPositions);
+    /**
+     * HF-aware withdrawal limits for one asset (UX read; the authoritative
+     * gate is still `withdraw.service` + the on-chain `RiskModule`). Returns
+     * the current HF, the largest amount withdrawable while keeping
+     * `HF >= MIN_HEALTH_FACTOR + bufferBps/10000`, and an off-chain `canUnflag`
+     * pre-check (= the entire collateral position can be removed and stay
+     * above that threshold).
+     *
+     * HF is monotonic-decreasing in the withdrawal size, so a binary search
+     * over base units converges. Inputs are built ONCE and the search runs in
+     * memory over the pure `computeHealthFactor` — no per-probe DB round-trip.
+     *
+     * The buffer (default 100 bps -> threshold 1.01) matches the on-chain
+     * RiskModule's pass condition, so this read predicts the on-chain outcome.
+     * NOTE: a known stablecoin LTV-parity nuance (on-chain 8500 vs off-chain
+     * AVG ~8625) means off-chain `canUnflag` can differ slightly from the
+     * on-chain gate — enabled-but-rejected is caught by the existing unflag
+     * toast; disabled-but-allowed is conservative.
+     */
+    async getWithdrawableMax(
+        wallet: string,
+        assetId: string,
+    ): Promise<WithdrawableMaxResponseDto> {
+        const bufferBps = DEFAULT_BORROW_BUFFER_BPS;
+        const balance = await this.portfolioRepository.getUserBalanceForAsset(
+            wallet,
+            assetId,
+        );
+        if (!balance) {
+            return {
+                assetId,
+                isCollateral: false,
+                availableBalanceBaseUnits: "0",
+                availableBalance: "0",
+                currentHealthFactor: null,
+                maxWithdrawableBaseUnits: "0",
+                maxWithdrawable: "0",
+                canUnflag: true,
+                bufferBps,
+            };
+        }
+
+        const available = safeBigInt(balance.available);
+        const { decimals } = balance;
+        const threshold = MIN_HEALTH_FACTOR + bufferBps / 10_000;
+
+        const { collateralPositions, debtPositions } =
+            await this.buildHealthFactorInputs(wallet);
+        const current = computeHealthFactor(collateralPositions, debtPositions);
+        const currentHealthFactor =
+            current.healthFactor === HEALTH_FACTOR_NO_DEBT
+                ? null
+                : Number(current.healthFactor.toFixed(4));
+
+        const passes = (reduction: bigint): boolean => {
+            const hf = computeHealthFactor(
+                this.reduceCollateral(collateralPositions, assetId, reduction),
+                debtPositions,
+            ).healthFactor;
+            return hf === HEALTH_FACTOR_NO_DEBT || hf >= threshold;
+        };
+
+        let maxBase: bigint;
+        if (
+            !balance.isCollateral ||
+            current.healthFactor === HEALTH_FACTOR_NO_DEBT
+        ) {
+            // Non-collateral or debt-free: the whole balance is withdrawable.
+            maxBase = available;
+        } else if (!passes(0n)) {
+            // Current HF already below the buffer threshold — the user must
+            // repay before removing any of this collateral (matches the
+            // on-chain gate; intended effect of the buffer).
+            maxBase = 0n;
+        } else if (passes(available)) {
+            maxBase = available;
+        } else {
+            // Largest X in [0, available] keeping HF >= threshold (strictly,
+            // over integer base units, so the returned max yields a passing HF
+            // while max+1 does not).
+            let lo = 0n;
+            let hi = available;
+            while (hi - lo > 1n) {
+                const mid = lo + (hi - lo) / 2n;
+                if (passes(mid)) lo = mid;
+                else hi = mid;
+            }
+            maxBase = lo;
+        }
+
+        return {
+            assetId,
+            isCollateral: balance.isCollateral,
+            availableBalanceBaseUnits: available.toString(),
+            availableBalance: baseUnitsToHuman(available.toString(), decimals),
+            currentHealthFactor,
+            maxWithdrawableBaseUnits: maxBase.toString(),
+            maxWithdrawable: baseUnitsToHuman(maxBase.toString(), decimals),
+            canUnflag: maxBase >= available,
+            bufferBps,
+        };
     }
 
     async getMyHealthFactor(

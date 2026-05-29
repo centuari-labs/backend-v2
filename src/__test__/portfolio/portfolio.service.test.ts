@@ -43,6 +43,7 @@ describe("PortfolioService (A5)", () => {
             getUserBorrowedAssets: jest.fn().mockResolvedValue([]),
             getUserLendPositionsForApr: jest.fn().mockResolvedValue([]),
             getUserCollateralAssets: jest.fn().mockResolvedValue([]),
+            getUserBalanceForAsset: jest.fn().mockResolvedValue(null),
             getUserAssets: jest.fn().mockResolvedValue({ data: [], total: 0 }),
             getUserPositions: jest
                 .fn()
@@ -402,6 +403,117 @@ describe("PortfolioService (A5)", () => {
                 [USDC_UUID],
                 LOAN_TOKEN_UUID,
             );
+        });
+    });
+
+    describe("getWithdrawableMax", () => {
+        // getUserCollateralAssets returns the same `available` as the collateral
+        // amount, so reducing by up to `available` drives this asset's collateral
+        // contribution to zero.
+        const collateralRow = {
+            asset_id: USDC_UUID,
+            amount: "1000000000", // 1000 USDC @ 6dp
+            decimals: 6,
+        };
+        const riskRow = {
+            asset_id: USDC_UUID,
+            avg_ltv: "7500", // 75%
+            avg_lt: "8000",
+        };
+
+        it("debt-free collateral -> full balance, canUnflag true, HF null", async () => {
+            portfolioRepository.getUserBalanceForAsset.mockResolvedValue({
+                available: "1000000000",
+                isCollateral: true,
+                decimals: 6,
+            });
+            portfolioRepository.getUserCollateralAssets.mockResolvedValue([
+                collateralRow,
+            ]);
+            portfolioRepository.getRiskParamsByCollateralTokenIds.mockResolvedValue(
+                [riskRow],
+            );
+            portfolioRepository.getUserBorrowedAssets.mockResolvedValue([]);
+
+            const result = await service.getWithdrawableMax(wallet, USDC_UUID);
+
+            expect(result.isCollateral).toBe(true);
+            expect(result.currentHealthFactor).toBeNull();
+            expect(result.maxWithdrawableBaseUnits).toBe("1000000000");
+            expect(result.maxWithdrawable).toBe("1000");
+            expect(result.canUnflag).toBe(true);
+            expect(result.bufferBps).toBe(100);
+        });
+
+        it("flagged collateral with debt -> max bounded by HF >= 1 + buffer, canUnflag false", async () => {
+            // 1000 USDC collateral @ $1, 75% LTV; 200 USDC debt -> current HF 3.0.
+            portfolioRepository.getUserBalanceForAsset.mockResolvedValue({
+                available: "1000000000",
+                isCollateral: true,
+                decimals: 6,
+            });
+            portfolioRepository.getUserCollateralAssets.mockResolvedValue([
+                collateralRow,
+            ]);
+            portfolioRepository.getRiskParamsByCollateralTokenIds.mockResolvedValue(
+                [riskRow],
+            );
+            portfolioRepository.getUserBorrowedAssets.mockResolvedValue([
+                { asset_id: USDC_UUID, amount: "200000000", decimals: 6 },
+            ]);
+
+            const result = await service.getWithdrawableMax(wallet, USDC_UUID);
+
+            expect(result.currentHealthFactor).toBeCloseTo(3.0, 4);
+            const maxBase = BigInt(result.maxWithdrawableBaseUnits);
+            const available = BigInt(result.availableBalanceBaseUnits);
+            expect(maxBase > 0n).toBe(true);
+            expect(maxBase < available).toBe(true);
+            expect(result.canUnflag).toBe(false);
+
+            // Integer boundary: at max HF stays >= 1.01; one more base unit breaches it.
+            const threshold = 1 + 100 / 10_000; // 1.01
+            const atMax =
+                await service.simulateHealthFactorAfterWithdrawalForWallet(
+                    wallet,
+                    USDC_UUID,
+                    maxBase.toString(),
+                );
+            const overMax =
+                await service.simulateHealthFactorAfterWithdrawalForWallet(
+                    wallet,
+                    USDC_UUID,
+                    (maxBase + 1n).toString(),
+                );
+            expect(atMax.healthFactor).toBeGreaterThanOrEqual(threshold);
+            expect(overMax.healthFactor).toBeLessThan(threshold);
+        });
+
+        it("non-collateral asset -> full balance, canUnflag true", async () => {
+            portfolioRepository.getUserBalanceForAsset.mockResolvedValue({
+                available: "500000000",
+                isCollateral: false,
+                decimals: 6,
+            });
+            portfolioRepository.getUserBorrowedAssets.mockResolvedValue([
+                { asset_id: USDC_UUID, amount: "100000000", decimals: 6 },
+            ]);
+
+            const result = await service.getWithdrawableMax(wallet, USDC_UUID);
+
+            expect(result.isCollateral).toBe(false);
+            expect(result.maxWithdrawableBaseUnits).toBe("500000000");
+            expect(result.canUnflag).toBe(true);
+        });
+
+        it("returns permissive zeros when the asset has no balance row", async () => {
+            portfolioRepository.getUserBalanceForAsset.mockResolvedValue(null);
+
+            const result = await service.getWithdrawableMax(wallet, USDC_UUID);
+
+            expect(result.maxWithdrawableBaseUnits).toBe("0");
+            expect(result.canUnflag).toBe(true);
+            expect(result.currentHealthFactor).toBeNull();
         });
     });
 

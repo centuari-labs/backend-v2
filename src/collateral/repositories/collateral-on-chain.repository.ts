@@ -1,69 +1,61 @@
+import {
+    type IdempotencyStamp,
+    applyCollateralFlagSetMutation,
+    hexToBytea,
+    isAlreadyStamped as sharedIsAlreadyStamped,
+} from "@centuari-labs/on-chain-effects";
 import { Injectable } from "@nestjs/common";
 import type { PoolClient } from "pg";
 import type { Hex } from "viem";
 import type { CollateralFlagSetArgs } from "../constants";
-import type { IdempotencyStamp } from "@centuari-labs/on-chain-effects";
 
 /**
- * Raw SQL against the indexer-v3 shared schema. The mutation mirrors
- * balance-ledger.processor.ts in indexer-v3 so the eager path and the
- * indexer tail cannot diverge.
+ * Stamped `user_balance` writes for the `BalanceLedger.CollateralFlagSet`
+ * event. Both methods delegate to `@centuari-labs/on-chain-effects` so the SQL
+ * is identical *by construction* with the indexer-v3 tail and the other
+ * eager-path writers — the Track C7 invariant. A divergent inline copy would
+ * break C10 replay idempotency, so do NOT re-inline the upsert here.
+ *
+ * This thin repository wrapper exists only to honour the backend
+ * repository-pattern rule (services never call the shared SQL helpers
+ * directly) and to adapt the (user, asset) calling convention. The
+ * `core/on-chain-state/apply-*.ts` infra modules call the same shared helpers.
  */
 @Injectable()
 export class CollateralOnChainRepository {
-    async isAlreadyStamped(
+    /**
+     * True when the `user_balance` row for (user, asset) already carries this
+     * exact `(txHash, logIndex)` stamp — i.e. the eager path re-ran or the
+     * indexer tail got there first. Both paths use this to no-op idempotently.
+     */
+    isAlreadyStamped(
         tx: PoolClient,
         user: string,
         asset: string,
-        txHash: Hex,
-        logIndex: number,
+        stamp: IdempotencyStamp,
     ): Promise<boolean> {
-        const res = await tx.query(
-            `SELECT 1 FROM user_balance
-              WHERE user_address = $1 AND asset = $2
-                AND applied_by_tx_hash = $3 AND applied_by_log_index = $4`,
-            [hexToBytea(user), hexToBytea(asset), hexToBytea(txHash), logIndex],
+        return sharedIsAlreadyStamped(
+            tx,
+            "user_balance",
+            "user_address = $1 AND asset = $2",
+            [hexToBytea(user as Hex), hexToBytea(asset as Hex)],
+            stamp,
         );
-        return (res.rowCount ?? 0) > 0;
     }
 
+    /**
+     * Upsert `used_as_collateral` + `flagged_at` for the `CollateralFlagSet`
+     * event, stamping the idempotency columns. Delegates to the shared
+     * `applyCollateralFlagSetMutation` (the single source of truth for this
+     * upsert). `CollateralFlagSetArgs` is a superset of the mutation's
+     * `CollateralFlagArgs` — it additionally carries `writer` — so it passes
+     * straight through.
+     */
     async upsertFlag(
         tx: PoolClient,
         args: CollateralFlagSetArgs,
         stamp: IdempotencyStamp,
     ): Promise<void> {
-        await tx.query(
-            `INSERT INTO user_balance
-                (user_address, asset, used_as_collateral, flagged_at,
-                 applied_by_tx_hash, applied_by_log_index,
-                 applied_by_block_hash, applied_by_block_number, updated_at)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now())
-             ON CONFLICT (user_address, asset) DO UPDATE SET
-                used_as_collateral = EXCLUDED.used_as_collateral,
-                flagged_at = EXCLUDED.flagged_at,
-                applied_by_tx_hash = EXCLUDED.applied_by_tx_hash,
-                applied_by_log_index = EXCLUDED.applied_by_log_index,
-                applied_by_block_hash = EXCLUDED.applied_by_block_hash,
-                applied_by_block_number = EXCLUDED.applied_by_block_number,
-                updated_at = now()`,
-            [
-                hexToBytea(args.user),
-                hexToBytea(args.asset),
-                args.used,
-                args.flaggedAt.toString(),
-                hexToBytea(stamp.txHash),
-                stamp.logIndex,
-                hexToBytea(stamp.blockHash),
-                stamp.blockNumber.toString(),
-            ],
-        );
+        await applyCollateralFlagSetMutation(tx, args, stamp);
     }
-}
-
-function hexToBytea(hex: string): Buffer {
-    const stripped = hex.startsWith("0x") ? hex.slice(2) : hex;
-    if (stripped.length % 2 !== 0) {
-        throw new Error(`hexToBytea: odd-length hex ${hex}`);
-    }
-    return Buffer.from(stripped, "hex");
 }

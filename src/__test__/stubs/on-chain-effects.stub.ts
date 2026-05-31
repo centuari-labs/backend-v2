@@ -127,6 +127,14 @@ export const applyLendPositionWithdrawnMutation = jest.fn(
     ): Promise<number> => 1,
 );
 
+export const applyCollateralFlagSetMutation = jest.fn(
+    async (
+        _tx: PoolClient,
+        _decoded: unknown,
+        _stamp: IdempotencyStamp,
+    ): Promise<number> => 1,
+);
+
 export interface MarketCreatedArgs {
     marketId: Hex;
     loanToken: Hex;

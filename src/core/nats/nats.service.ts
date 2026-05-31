@@ -83,6 +83,26 @@ export class NatsService implements OnModuleInit, OnModuleDestroy {
         }
     }
 
+    // Send a request and await the responder's reply (request/reply).
+    // Rejects if no reply arrives within `timeoutMs` (NATS TIMEOUT error).
+    async request<T>(
+        subject: string,
+        data: unknown,
+        timeoutMs: number,
+    ): Promise<T> {
+        if (!this.connection) {
+            throw new Error("NATS connection not established");
+        }
+
+        const payload = JSON.stringify(data);
+        const reply = await this.connection.request(
+            subject,
+            new TextEncoder().encode(payload),
+            { timeout: timeoutMs },
+        );
+        return JSON.parse(new TextDecoder().decode(reply.data)) as T;
+    }
+
     // Subscribe to a NATS subject
     async subscribe<T>(
         subject: string,

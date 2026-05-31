@@ -117,3 +117,28 @@ export type BorrowMarketOrder = z.infer<typeof borrowMarketOrderSchema>;
 export type BorrowLimitOrder = z.infer<typeof borrowLimitOrderSchema>;
 export type MatchingEngineOrder = z.infer<typeof orderSchema>;
 export type UpdateOrder = z.infer<typeof updateOrderSchema>;
+
+/**
+ * Authoritative reply the matching engine returns on the `orders.cancel.request`
+ * request/reply subject (C1 engine-coordinated cancel). Mirrors the engine's
+ * `cancelReplySchema`. The backend persists CANCELLED only on a `CANCELLED`
+ * outcome; `NOT_FOUND` means the order was matched in the race window (already
+ * matched / no longer cancellable) and `NOT_OWNER` means a wallet mismatch.
+ */
+export const cancelReplySchema = z.discriminatedUnion("outcome", [
+    z.object({
+        outcome: z.literal("CANCELLED"),
+        orderId: z.string().uuid(),
+        remainingAmount: z.string(),
+    }),
+    z.object({
+        outcome: z.literal("NOT_OWNER"),
+        orderId: z.string().uuid(),
+    }),
+    z.object({
+        outcome: z.literal("NOT_FOUND"),
+        orderId: z.string().uuid(),
+    }),
+]);
+
+export type CancelReply = z.infer<typeof cancelReplySchema>;

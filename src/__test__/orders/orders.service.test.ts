@@ -1,8 +1,10 @@
 import { Test, TestingModule } from "@nestjs/testing";
 import {
     BadRequestException,
+    ConflictException,
     ForbiddenException,
     NotFoundException,
+    ServiceUnavailableException,
     HttpStatus,
 } from "@nestjs/common";
 import { OrdersService } from "../../orders/orders.service";
@@ -88,6 +90,7 @@ describe("OrdersService", () => {
 
         const mockNatsService = {
             publish: jest.fn(),
+            request: jest.fn(),
         };
 
         const mockPriceService = {
@@ -833,12 +836,21 @@ describe("OrdersService", () => {
     });
 
     describe("cancelOrder", () => {
-        it("should cancel an open order successfully", async () => {
+        // The engine's reply carries a real UUID; the backend switches on the
+        // outcome and does not compare it to the requested order id.
+        const replyOrderId = "550e8400-e29b-41d4-a716-446655440099";
+        // The DB still shows the order open/partial; the engine has the final say.
+        const cancelledReply = (_orderId: string) => ({
+            outcome: "CANCELLED" as const,
+            orderId: replyOrderId,
+            remainingAmount: "1000",
+        });
+
+        it("should persist CANCELLED only after a CANCELLED reply from the engine", async () => {
             const openOrder = createMockOrder({
                 id: "uuid-cancel-001",
                 status: OrderStatus.Open,
             });
-
             const cancelledOrder = {
                 ...openOrder,
                 status: OrderStatus.Cancelled,
@@ -849,7 +861,9 @@ describe("OrdersService", () => {
                 id: mockAccountId,
             } as any);
             orderRepository.save.mockResolvedValue(cancelledOrder);
-            natsService.publish.mockResolvedValue(undefined);
+            natsService.request.mockResolvedValue(
+                cancelledReply("uuid-cancel-001"),
+            );
 
             const result = await service.cancelOrder(
                 "uuid-cancel-001",
@@ -857,6 +871,7 @@ describe("OrdersService", () => {
             );
 
             expect(result.status).toBe(OrderStatus.Cancelled);
+            expect(orderRepository.save).toHaveBeenCalledTimes(1);
         });
 
         it("should cancel a partial order successfully", async () => {
@@ -866,7 +881,6 @@ describe("OrdersService", () => {
                 quantity: "1000",
                 filledQuantity: "500",
             });
-
             const cancelledOrder = {
                 ...partialOrder,
                 status: OrderStatus.Cancelled,
@@ -877,7 +891,9 @@ describe("OrdersService", () => {
                 id: mockAccountId,
             } as any);
             orderRepository.save.mockResolvedValue(cancelledOrder);
-            natsService.publish.mockResolvedValue(undefined);
+            natsService.request.mockResolvedValue(
+                cancelledReply("uuid-cancel-002"),
+            );
 
             const result = await service.cancelOrder(
                 "uuid-cancel-002",
@@ -893,6 +909,7 @@ describe("OrdersService", () => {
             await expect(
                 service.cancelOrder("non-existent-uuid", mockWalletAddress),
             ).rejects.toThrow(NotFoundException);
+            expect(natsService.request).not.toHaveBeenCalled();
         });
 
         it("should throw ForbiddenException when cancelling order owned by another wallet", async () => {
@@ -910,6 +927,7 @@ describe("OrdersService", () => {
             await expect(
                 service.cancelOrder("uuid-cancel-003", mockWalletAddress),
             ).rejects.toThrow(ForbiddenException);
+            expect(natsService.request).not.toHaveBeenCalled();
         });
 
         it("should throw BadRequestException when cancelling a filled order", async () => {
@@ -944,7 +962,7 @@ describe("OrdersService", () => {
             ).rejects.toThrow(BadRequestException);
         });
 
-        it("should publish cancel event to NATS", async () => {
+        it("should send a cancel request on the request/reply subject", async () => {
             const openOrder = createMockOrder({
                 id: "uuid-cancel-007",
                 status: OrderStatus.Open,
@@ -958,17 +976,98 @@ describe("OrdersService", () => {
                 ...openOrder,
                 status: OrderStatus.Cancelled,
             });
-            natsService.publish.mockResolvedValue(undefined);
+            natsService.request.mockResolvedValue(
+                cancelledReply("uuid-cancel-007"),
+            );
 
             await service.cancelOrder("uuid-cancel-007", mockWalletAddress);
 
-            expect(natsService.publish).toHaveBeenCalledWith(
-                "orders.cancel",
+            expect(natsService.request).toHaveBeenCalledWith(
+                "orders.cancel.request",
                 expect.objectContaining({
                     orderId: "uuid-cancel-007",
                     walletAddress: mockWalletAddress,
                 }),
+                expect.any(Number),
             );
+        });
+
+        it("should NOT persist CANCELLED and throw Conflict when the engine replies NOT_FOUND (matched in the race window)", async () => {
+            const openOrder = createMockOrder({
+                id: "uuid-cancel-008",
+                status: OrderStatus.Open,
+            });
+
+            orderRepository.getOrderById.mockResolvedValue(openOrder);
+            orderRepository.findAccountByWallet.mockResolvedValue({
+                id: mockAccountId,
+            } as any);
+            natsService.request.mockResolvedValue({
+                outcome: "NOT_FOUND",
+                orderId: replyOrderId,
+            });
+
+            await expect(
+                service.cancelOrder("uuid-cancel-008", mockWalletAddress),
+            ).rejects.toThrow(ConflictException);
+            expect(orderRepository.save).not.toHaveBeenCalled();
+        });
+
+        it("should throw Forbidden when the engine replies NOT_OWNER", async () => {
+            const openOrder = createMockOrder({
+                id: "uuid-cancel-009",
+                status: OrderStatus.Open,
+            });
+
+            orderRepository.getOrderById.mockResolvedValue(openOrder);
+            orderRepository.findAccountByWallet.mockResolvedValue({
+                id: mockAccountId,
+            } as any);
+            natsService.request.mockResolvedValue({
+                outcome: "NOT_OWNER",
+                orderId: replyOrderId,
+            });
+
+            await expect(
+                service.cancelOrder("uuid-cancel-009", mockWalletAddress),
+            ).rejects.toThrow(ForbiddenException);
+            expect(orderRepository.save).not.toHaveBeenCalled();
+        });
+
+        it("should throw ServiceUnavailable (and not persist) when the engine does not reply in time", async () => {
+            const openOrder = createMockOrder({
+                id: "uuid-cancel-010",
+                status: OrderStatus.Open,
+            });
+
+            orderRepository.getOrderById.mockResolvedValue(openOrder);
+            orderRepository.findAccountByWallet.mockResolvedValue({
+                id: mockAccountId,
+            } as any);
+            natsService.request.mockRejectedValue(new Error("TIMEOUT"));
+
+            await expect(
+                service.cancelOrder("uuid-cancel-010", mockWalletAddress),
+            ).rejects.toThrow(ServiceUnavailableException);
+            expect(orderRepository.save).not.toHaveBeenCalled();
+        });
+
+        it("should throw ServiceUnavailable on a malformed reply", async () => {
+            const openOrder = createMockOrder({
+                id: "uuid-cancel-011",
+                status: OrderStatus.Open,
+            });
+
+            orderRepository.getOrderById.mockResolvedValue(openOrder);
+            orderRepository.findAccountByWallet.mockResolvedValue({
+                id: mockAccountId,
+            } as any);
+            natsService.request.mockResolvedValue({ outcome: "WAT" });
+
+            await expect(
+                service.cancelOrder("uuid-cancel-011", mockWalletAddress),
+            ).rejects.toThrow(ServiceUnavailableException);
+            expect(orderRepository.save).not.toHaveBeenCalled();
         });
     });
 

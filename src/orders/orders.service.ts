@@ -1,10 +1,12 @@
 import {
     BadRequestException,
+    ConflictException,
     ForbiddenException,
     HttpStatus,
     Injectable,
     Logger,
     NotFoundException,
+    ServiceUnavailableException,
 } from "@nestjs/common";
 import { NatsService } from "../core/nats/nats.service";
 import { MarketRepositories } from "../market/repository/market.repository";
@@ -41,10 +43,21 @@ import { PortfolioService } from "../portfolio/portfolio.service";
 import { HEALTH_FACTOR_NO_DEBT } from "../portfolio/helpers/health-factor.helpers";
 import {
     orderSchema,
+    cancelReplySchema,
     MatchingEngineOrder,
+    type CancelReply,
 } from "./matching-engine/order.schema";
 import { UpdateOrderDto } from "./dto/update-order.dto";
 import { OrderMarket } from "./entities/order-market.entity";
+
+/**
+ * How long the backend waits for the matching engine's cancel verdict before
+ * rejecting the cancel (503). Kept short so the request feels synchronous; the
+ * engine replies in well under the ~10ms NATS round trip in practice.
+ */
+const CANCEL_REQUEST_TIMEOUT_MS = Number(
+    process.env.NATS_CANCEL_REQUEST_TIMEOUT_MS ?? 2000,
+);
 
 interface PreparedOrderContext {
     accountId: string;
@@ -249,15 +262,81 @@ export class OrdersService {
             );
         }
 
-        order.status = OrderStatus.Cancelled;
-        order.cancelReason = CancelReason.UserCancelled;
+        // Ask the matching engine to cancel and wait for its authoritative
+        // verdict BEFORE persisting CANCELLED. This closes the race where the
+        // order is matched on-engine in the NATS round-trip window while the
+        // backend optimistically marks it CANCELLED (C1 engine-coordinated
+        // cancel). We only write CANCELLED on a CANCELLED reply.
+        const reply = await this.requestCancelFromEngine(
+            orderId,
+            walletAddress,
+        );
 
-        const updatedOrder = await this.orderRepository.save(order);
+        switch (reply.outcome) {
+            case "CANCELLED": {
+                order.status = OrderStatus.Cancelled;
+                order.cancelReason = CancelReason.UserCancelled;
+                return this.orderRepository.save(order);
+            }
+            case "NOT_FOUND":
+                // The engine no longer has the order: it was matched in the race
+                // window (the DB still showed it open). Do NOT write CANCELLED —
+                // the db-writer will land its real terminal status shortly.
+                throw new ConflictException(
+                    "Order is already being matched or settled and can no longer be cancelled",
+                );
+            case "NOT_OWNER":
+                throw new ForbiddenException("You do not own this order");
+            default: {
+                // Exhaustiveness guard — unreachable for the typed union.
+                const _exhaustive: never = reply;
+                throw new ServiceUnavailableException(
+                    "Unexpected cancel response from matching engine",
+                );
+            }
+        }
+    }
 
-        // Publish cancellation event to NATS
-        await this.publishCancelOrderToNats(orderId, walletAddress);
+    /**
+     * Send a cancel request to the matching engine and validate its reply.
+     *
+     * Throws {@link ServiceUnavailableException} on timeout, transport error, or
+     * a malformed reply — the caller never writes CANCELLED in those cases, so a
+     * down/slow engine fails the cancel safely instead of corrupting state.
+     */
+    private async requestCancelFromEngine(
+        orderId: string,
+        walletAddress: string,
+    ): Promise<CancelReply> {
+        let raw: unknown;
+        try {
+            raw = await this.natsService.request(
+                NATS_SUBJECTS.CANCEL_REQUEST,
+                { orderId, walletAddress, timestamp: Date.now() },
+                CANCEL_REQUEST_TIMEOUT_MS,
+            );
+        } catch (error) {
+            this.logger.error(
+                `Cancel request for order ${orderId} failed: ${
+                    error instanceof Error ? error.message : String(error)
+                }`,
+            );
+            throw new ServiceUnavailableException(
+                "Matching engine did not respond; please retry the cancellation",
+            );
+        }
 
-        return updatedOrder;
+        const parsed = cancelReplySchema.safeParse(raw);
+        if (!parsed.success) {
+            this.logger.error(
+                `Malformed cancel reply for order ${orderId}: ${parsed.error.message}`,
+            );
+            throw new ServiceUnavailableException(
+                "Invalid response from matching engine; please retry the cancellation",
+            );
+        }
+
+        return parsed.data;
     }
 
     async updateOrder(
@@ -678,26 +757,6 @@ export class OrdersService {
         } catch (error) {
             this.logger.error(
                 `Failed to publish order ${order.orderId as string} to NATS: ${error.message}`,
-            );
-        }
-    }
-
-    private async publishCancelOrderToNats(
-        orderId: string,
-        walletAddress: string,
-    ): Promise<void> {
-        const subject = NATS_SUBJECTS.CANCEL;
-        try {
-            await this.natsService.publish(subject, {
-                orderId,
-                walletAddress,
-            });
-            this.logger.debug(
-                `Published cancel order ${orderId} to ${subject}`,
-            );
-        } catch (error) {
-            this.logger.error(
-                `Failed to publish cancel order ${orderId} to NATS: ${error.message}`,
             );
         }
     }

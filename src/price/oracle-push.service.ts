@@ -44,11 +44,13 @@ export class OraclePushService {
      * one bad asset never blocks the rest; the next cycle retries.
      */
     async pushAllPrices(): Promise<void> {
-        const operatorKey = this.chainConfig.operatorPrivateKey;
+        const operatorKey = this.chainConfig.oraclePushOperatorPrivateKey;
         const pushOracles = this.chainConfig.pushOracles;
 
         if (!operatorKey) {
-            this.logger.debug("No OPERATOR_PRIVATE_KEY; skipping oracle push");
+            this.logger.debug(
+                "No oracle-push operator key (ORACLE_PUSH_OPERATOR_PRIVATE_KEY / OPERATOR_PRIVATE_KEY); skipping oracle push",
+            );
             return;
         }
         if (Object.keys(pushOracles).length === 0) {
@@ -74,7 +76,11 @@ export class OraclePushService {
             if (!oracle) continue; // no PushOracle registered for this token
 
             const price = prices[token.id.toLowerCase()];
-            if (typeof price !== "number" || !Number.isFinite(price) || price <= 0) {
+            if (
+                typeof price !== "number" ||
+                !Number.isFinite(price) ||
+                price <= 0
+            ) {
                 skipped++;
                 continue;
             }

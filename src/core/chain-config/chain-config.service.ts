@@ -6,6 +6,14 @@ export class ChainConfigService {
     private readonly logger = new Logger(ChainConfigService.name);
     readonly chainId: number;
     readonly operatorPrivateKey: string;
+    /**
+     * Dedicated signing key for the oracle price-push keeper. Falls back to
+     * `operatorPrivateKey` so it works with the same key today; set
+     * `ORACLE_PUSH_OPERATOR_PRIVATE_KEY` to point the keeper at a separate
+     * operator later (then also rotate the PushOracles' on-chain operator to
+     * that address via `PushOracle.setOperator`).
+     */
+    readonly oraclePushOperatorPrivateKey: string;
     readonly hubDepositorAddress: string;
     readonly centuariAddress: string;
     readonly collateralManagerAddress: string;
@@ -22,6 +30,9 @@ export class ChainConfigService {
         );
         this.operatorPrivateKey =
             configService.get<string>("OPERATOR_PRIVATE_KEY") ?? "";
+        this.oraclePushOperatorPrivateKey =
+            configService.get<string>("ORACLE_PUSH_OPERATOR_PRIVATE_KEY") ??
+            this.operatorPrivateKey;
         this.hubDepositorAddress =
             configService.get<string>("HUB_DEPOSITOR_ADDRESS") ?? "";
         this.centuariAddress =

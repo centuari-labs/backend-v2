@@ -15,6 +15,7 @@ describe("OraclePushService", () => {
 
     const build = (overrides: {
         operatorPrivateKey?: string;
+        oraclePushOperatorPrivateKey?: string;
         pushOracles?: Record<string, string>;
         cacheReady?: boolean;
         prices?: Record<string, number>;
@@ -27,12 +28,23 @@ describe("OraclePushService", () => {
         const chainConfig = {
             chainId: 421614,
             operatorPrivateKey: overrides.operatorPrivateKey ?? "0xoperatorkey",
-            pushOracles:
-                overrides.pushOracles ?? { USDC: "0xUSDCoracle", BTC: "0xBTCoracle" },
+            // Mirror ChainConfigService: the keeper key is the dedicated
+            // ORACLE_PUSH_OPERATOR_PRIVATE_KEY, falling back to the backend
+            // operator key when unset.
+            oraclePushOperatorPrivateKey:
+                overrides.oraclePushOperatorPrivateKey ??
+                overrides.operatorPrivateKey ??
+                "0xoperatorkey",
+            pushOracles: overrides.pushOracles ?? {
+                USDC: "0xUSDCoracle",
+                BTC: "0xBTCoracle",
+            },
         } as unknown as ChainConfigService;
 
         const priceService = {
-            isCacheReady: jest.fn().mockReturnValue(overrides.cacheReady ?? true),
+            isCacheReady: jest
+                .fn()
+                .mockReturnValue(overrides.cacheReady ?? true),
             getPrices: jest
                 .fn()
                 .mockReturnValue(
@@ -41,15 +53,13 @@ describe("OraclePushService", () => {
         } as unknown as PriceService;
 
         const tokensRepository = {
-            getActiveTokens: jest
-                .fn()
-                .mockResolvedValue(
-                    overrides.tokens ?? [
-                        mkToken("usdc-id", "USDC"),
-                        mkToken("btc-id", "BTC"),
-                        mkToken("eth-id", "ETH"), // no PushOracle configured
-                    ],
-                ),
+            getActiveTokens: jest.fn().mockResolvedValue(
+                overrides.tokens ?? [
+                    mkToken("usdc-id", "USDC"),
+                    mkToken("btc-id", "BTC"),
+                    mkToken("eth-id", "ETH"), // no PushOracle configured
+                ],
+            ),
         } as unknown as TokensRepository;
 
         const viemService = { writeContract } as unknown as ViemService;
@@ -72,7 +82,9 @@ describe("OraclePushService", () => {
         ];
     });
 
-    afterAll(() => loggerSpies.forEach((s) => s.mockRestore()));
+    afterAll(() => {
+        for (const s of loggerSpies) s.mockRestore();
+    });
     afterEach(() => jest.clearAllMocks());
 
     it("pushes 1e18-scaled prices only for tokens with a PushOracle", async () => {
@@ -102,6 +114,45 @@ describe("OraclePushService", () => {
         const { service, writeContract } = build({ operatorPrivateKey: "" });
         await service.pushAllPrices();
         expect(writeContract).not.toHaveBeenCalled();
+    });
+
+    it("falls back to the backend operator key when no dedicated oracle-push key is set", async () => {
+        const { service, writeContract } = build({
+            operatorPrivateKey: "0xbackendop",
+        });
+        await service.pushAllPrices();
+        expect(writeContract).toHaveBeenCalledWith(
+            421614,
+            "0xbackendop",
+            "0xUSDCoracle",
+            expect.anything(),
+            "setPrice",
+            [parseUnits("1", 18)],
+        );
+    });
+
+    it("uses the dedicated oracle-push key when set, not the backend operator", async () => {
+        const { service, writeContract } = build({
+            operatorPrivateKey: "0xbackendop",
+            oraclePushOperatorPrivateKey: "0xdedicatedkey",
+        });
+        await service.pushAllPrices();
+        expect(writeContract).toHaveBeenCalledWith(
+            421614,
+            "0xdedicatedkey",
+            "0xUSDCoracle",
+            expect.anything(),
+            "setPrice",
+            [parseUnits("1", 18)],
+        );
+        expect(writeContract).not.toHaveBeenCalledWith(
+            421614,
+            "0xbackendop",
+            expect.anything(),
+            expect.anything(),
+            expect.anything(),
+            expect.anything(),
+        );
     });
 
     it("does nothing when no PushOracles are configured", async () => {

@@ -18,6 +18,11 @@ export enum OrderStatus {
 export enum CancelReason {
     UserCancelled = "USER_CANCELLED",
     Ioc = "IOC",
+    // Order auto-expired because its market passed maturity (resting order can
+    // never validly match). Stamped by the matching-engine maturity sweep via
+    // the db-writer; status stays CANCELLED. Requires the matching
+    // `cancel_reason` enum value (migration 20260601120000).
+    MarketMatured = "MARKET_MATURED",
 }
 
 export const order_group_status = {

@@ -370,6 +370,10 @@ export class OrdersService {
                 );
             }
 
+            // Reject re-pointing an order into a matured market (same guard as
+            // placement). Runs before any mutation so the update fails cleanly.
+            await this.assertMarketsNotMatured(dto.marketIds);
+
             const decimals = await this.tokensService.getTokenDecimalsByAssetId(
                 order.assetId,
             );
@@ -459,11 +463,14 @@ export class OrdersService {
     }
 
     private async prepareOrder(
-        dto: { assetId: string; amount: string },
+        dto: { assetId: string; amount: string; marketIds?: string[] },
         orderType: OrderType,
         walletAddress: string,
         privyUserId: string,
     ): Promise<PreparedOrderContext> {
+        // Fail fast before any fee/balance/HF work if a target market has
+        // already matured — a matured-market order can never validly match.
+        await this.assertMarketsNotMatured(dto.marketIds ?? []);
         const accountId = await this.getOrCreateAccount(
             walletAddress,
             privyUserId,
@@ -598,6 +605,32 @@ export class OrdersService {
             maturityByMarketId.set(market.id, market.maturity);
         }
         return maturityByMarketId;
+    }
+
+    /**
+     * Reject placing/updating an order whose target market has already passed
+     * maturity. A resting order in a matured market can never validly match, so
+     * it would otherwise sit on the book locking the user's spendable balance
+     * until the matching-engine maturity sweep removes it. Guarding placement
+     * here closes the hole at the source (the engine carries a backstop too).
+     *
+     * `market.maturity` is stored as epoch seconds (see C4 cutover notes).
+     */
+    private async assertMarketsNotMatured(marketIds: string[]): Promise<void> {
+        if (marketIds.length === 0) {
+            return;
+        }
+        const maturityByMarketId =
+            await this.resolveMarketMaturities(marketIds);
+        const nowSeconds = Math.floor(Date.now() / 1000);
+        for (const [marketId, maturity] of maturityByMarketId) {
+            if (maturity <= nowSeconds) {
+                throw new BadRequestException(
+                    `Market ${marketId} has matured; orders can no longer be ` +
+                        "placed or updated in a matured market.",
+                );
+            }
+        }
     }
 
     private async computeSettlementFee(

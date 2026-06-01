@@ -38,13 +38,16 @@ describe("OrdersService", () => {
     };
     let portfolioService: jest.Mocked<PortfolioService>;
     let dataSource: jest.Mocked<DataSource>;
+    let marketRepository: { getMarketsByIds: jest.Mock };
 
     const mockWalletAddress = "0x1234567890abcdef1234567890abcdef12345678";
     const mockPrivyUserId = "did:privy:mock-user-id";
     const mockAccountId = "uuid-account-001";
     const mockAssetId = "550e8400-e29b-41d4-a716-446655440003";
     const mockMarketId = "0x" + "ab".repeat(32);
-    const mockMaturityDate = new Date("2025-06-01T00:00:00.000Z");
+    // Far-future maturity so the matured-market placement guard
+    // (assertMarketsNotMatured) treats the default mock market as still active.
+    const mockMaturityDate = new Date("2030-06-01T00:00:00.000Z");
     const mockMaturityUnix = Math.floor(mockMaturityDate.getTime() / 1000);
 
     const createMockOrder = (overrides: Partial<Order> = {}): Order => ({
@@ -191,6 +194,7 @@ describe("OrdersService", () => {
             getPrice: module.get(PriceService).getPrice as any,
         };
         dataSource = module.get(DataSource);
+        marketRepository = module.get(MarketRepositories);
     });
 
     afterEach(() => {
@@ -1585,6 +1589,110 @@ describe("OrdersService", () => {
             ).rejects.toThrow(
                 /Update would reduce health factor.*below required 1\.0500 \(1\.0 \+ 500bps buffer\)/,
             );
+        });
+    });
+
+    describe("matured-market placement guard", () => {
+        const pastMaturityUnix = Math.floor(Date.now() / 1000) - 24 * 60 * 60; // 1 day ago
+
+        const lendLimitDto: CreateLimitOrderDto = {
+            assetId: mockAssetId,
+            amount: "1000",
+            marketIds: [mockMarketId],
+            rate: 500,
+        };
+
+        it("rejects placing an order into a market past maturity", async () => {
+            // Persistent (not Once) — this test invokes the path twice.
+            marketRepository.getMarketsByIds.mockResolvedValue([
+                { id: mockMarketId, maturity: pastMaturityUnix },
+            ]);
+
+            await expect(
+                service.createLendLimitOrder(
+                    lendLimitDto,
+                    mockWalletAddress,
+                    mockPrivyUserId,
+                ),
+            ).rejects.toThrow(BadRequestException);
+            await expect(
+                service.createLendLimitOrder(
+                    lendLimitDto,
+                    mockWalletAddress,
+                    mockPrivyUserId,
+                ),
+            ).rejects.toThrow(/has matured/);
+
+            // Guard fails fast — no order is ever persisted or published.
+            expect(orderRepository.saveOrderWithMarkets).not.toHaveBeenCalled();
+            expect(natsService.publish).not.toHaveBeenCalled();
+        });
+
+        it("accepts placing an order into a market that is still active", async () => {
+            // Default mock maturity is far-future; just wire the success path.
+            tokensService.validateTokenByAssetId.mockResolvedValue({} as any);
+            tokensService.getTokenDecimalsByAssetId.mockResolvedValue(6);
+            orderRepository.getOrCreateAccount.mockResolvedValue({
+                id: mockAccountId,
+            } as any);
+            const expectedOrder = createMockOrder({
+                side: OrderSide.Lend,
+                type: OrderType.Limit,
+                rate: 500,
+            });
+            orderRepository.create.mockReturnValue(expectedOrder);
+            orderRepository.saveOrderWithMarkets.mockResolvedValue(
+                expectedOrder,
+            );
+            natsService.publish.mockResolvedValue(undefined);
+
+            await expect(
+                service.createLendLimitOrder(
+                    lendLimitDto,
+                    mockWalletAddress,
+                    mockPrivyUserId,
+                ),
+            ).resolves.toBeDefined();
+        });
+
+        it("rejects updating an order to point at a matured market", async () => {
+            const updateDto: UpdateOrderDto = {
+                amount: "100",
+                rate: 500,
+                marketIds: [mockMarketId],
+            } as UpdateOrderDto;
+
+            const openOrder = createMockOrder({ status: OrderStatus.Open });
+            orderRepository.findAccountByWallet.mockResolvedValue({
+                id: mockAccountId,
+            } as any);
+            (dataSource.transaction as jest.Mock).mockImplementationOnce(
+                async (cb: any) =>
+                    cb({
+                        getRepository: jest.fn((entity: any) => {
+                            if (entity === OrderMarket)
+                                return {
+                                    save: jest.fn().mockResolvedValue({}),
+                                    delete: jest.fn().mockResolvedValue({}),
+                                };
+                            return {
+                                findOne: jest.fn().mockResolvedValue(openOrder),
+                                save: jest
+                                    .fn()
+                                    .mockImplementation((v) =>
+                                        Promise.resolve(v),
+                                    ),
+                            };
+                        }),
+                    }),
+            );
+            marketRepository.getMarketsByIds.mockResolvedValueOnce([
+                { id: mockMarketId, maturity: pastMaturityUnix },
+            ]);
+
+            await expect(
+                service.updateOrder(openOrder.id, mockWalletAddress, updateDto),
+            ).rejects.toThrow(/has matured/);
         });
     });
 });

@@ -8,8 +8,10 @@
 -- NOTE: token_address values are the deployed mock-token addresses and MUST be
 -- re-aligned after every contract redeploy — HubDepositor._supportedAssets is the
 -- on-chain source of truth; a stale address reverts deposits with UnsupportedAsset.
--- sync-to-services.sh does NOT refresh this table. After a redeploy, update these
--- addresses (or re-run a realign step) before depositing.
+-- sync-to-services.sh does NOT refresh this table. After a redeploy, realign
+-- deterministically from the deployment summary before seeding:
+--   pnpm run db realign:assets <smart-contract-revamp/deployments/deploy-<net>-latest.json>
+-- (rewrites token_address per symbol from the summary's mockTokens; idempotent).
 BEGIN;
 
 -- coingecko_id: CoinGecko coin ID for live prices; NULL for testnet-only tokens.
@@ -17,17 +19,17 @@ BEGIN;
 INSERT INTO assets (id, name, symbol, token_address, is_loan_token, chain_id, coingecko_id, decimals, image_url)
 SELECT gen_random_uuid(), v.name, v.symbol, v.token_address, v.is_loan_token, v.chain_id, v.coingecko_id, v.decimals, v.image_url
 FROM (VALUES
-    ('Bitcoin',                                   'BTC',    '0x73Bc0536aDF10110233e67D1bdd98580A5255494', false, 421614, 'bitcoin',                                              8,  '/tokens/btc-icon.webp'),
-    ('Ethereum',                                  'ETH',    '0x22BEE7B9f4DC7923190B3e3BE795f5905c62F00c', false, 421614, 'ethereum',                                             18, '/tokens/eth-icon.webp'),
-    ('Tether Gold',                               'XAUT',   '0x2544Ce3FF3540EEeADBB6FA19709b8fAd83441F4', false, 421614, 'tether-gold',                                          6,  '/tokens/xaut-icon.webp'),
-    ('USD Coin',                                  'USDC',   '0x218A9082C712FA709c044a6cea6Ef333df04cc3d', true,  421614, 'usd-coin',                                             6,  '/tokens/usdc-icon.webp'),
-    ('Tether USD',                                'USDT',   '0xc3Ab74D13A2b03d66E9b5a5Eda8b3F2Fea52Fc12', true,  421614, 'tether',                                               6,  '/tokens/usdt-icon.webp'),
-    ('Indonesian Rupiah',                         'IDRX',   '0x86B3405275F5fCb90f98a12C18E619f134F6521a', true,  421614, 'idrx',                                                 6,  '/tokens/idrx-icon.webp'),
-    ('StraitsX SGD',                              'XSGD',   '0x9aeDd0ff1178e33Ad6d30F858ddB98115F9c0293', true,  421614, 'xsgd',                                                 6,  '/tokens/xsgd-icon.webp'),
-    ('iShares Silver Trust (Ondo)',               'SLVon',  '0x47757F5C6109032019a8316F3550A1F5Dd2196D9', false, 421614, 'ishares-silver-trust-ondo-tokenized-stock',            18, '/tokens/slvon-icon.webp'),
-    ('NVIDIA (Ondo)',                             'NVDAon', '0x75f23E36c2011d8AD580b5D62Ed131c58F2D7FE2', false, 421614, 'nvidia-ondo-tokenized-stock',                          18, '/tokens/nvda-icon.webp'),
-    ('Apple (Ondo)',                              'AAPLon', '0x9f4aCe64eB5Aa003c39F85ab10EE3d2f0f102A34', false, 421614, 'apple-ondo-tokenized-stock',                           18, '/tokens/aaplon-icon.webp'),
-    ('iShares 20+ Year Treasury Bond ETF (Ondo)', 'TLTon',  '0x8A7d5D4A1B7feFb055930d4D9e8d6A92c068414f', false, 421614, 'ishares-20-year-treasury-bond-etf-ondo-tokenized-etf', 18, '/tokens/tlton-icon.webp')
+    ('Bitcoin',                                   'BTC',    '0xcbdA7995F02f77e148aB5Da93fFEc48B0873d94c', false, 421614, 'bitcoin',                                              8,  '/tokens/btc-icon.webp'),
+    ('Ethereum',                                  'ETH',    '0xAb92344099cf31F24cc841F194BE53626023aB61', false, 421614, 'ethereum',                                             18, '/tokens/eth-icon.webp'),
+    ('Tether Gold',                               'XAUT',   '0x0cCA2904D26686460ABFF0faE5473bd62616ED2A', false, 421614, 'tether-gold',                                          6,  '/tokens/xaut-icon.webp'),
+    ('USD Coin',                                  'USDC',   '0x6B8d9A4C6EBC58672c00b7b9CF5f450654f5e1F0', true,  421614, 'usd-coin',                                             6,  '/tokens/usdc-icon.webp'),
+    ('Tether USD',                                'USDT',   '0x14e0361FEE0942FfC71ff39a463c8aa023Ae7F55', true,  421614, 'tether',                                               6,  '/tokens/usdt-icon.webp'),
+    ('Indonesian Rupiah',                         'IDRX',   '0x6C9Bf300b4B016011993dAB06E9C33c754cd2605', true,  421614, 'idrx',                                                 6,  '/tokens/idrx-icon.webp'),
+    ('StraitsX SGD',                              'XSGD',   '0x69cEDC83B6c4b276194Ac2FB43E3956e174C0C09', true,  421614, 'xsgd',                                                 6,  '/tokens/xsgd-icon.webp'),
+    ('iShares Silver Trust (Ondo)',               'SLVon',  '0x11e501F57E545a08701dC922aEf311197018c009', false, 421614, 'ishares-silver-trust-ondo-tokenized-stock',            18, '/tokens/slvon-icon.webp'),
+    ('NVIDIA (Ondo)',                             'NVDAon', '0xDF5063f2264430bBB4432E053782cb03b6aA1c63', false, 421614, 'nvidia-ondo-tokenized-stock',                          18, '/tokens/nvda-icon.webp'),
+    ('Apple (Ondo)',                              'AAPLon', '0x6BF8b95C4C5927b4Baa98B38d83700d5EE2fe74f', false, 421614, 'apple-ondo-tokenized-stock',                           18, '/tokens/aaplon-icon.webp'),
+    ('iShares 20+ Year Treasury Bond ETF (Ondo)', 'TLTon',  '0x64df8dC9C85cBcEA9C30c2562bAF3a1B3d038C90', false, 421614, 'ishares-20-year-treasury-bond-etf-ondo-tokenized-etf', 18, '/tokens/tlton-icon.webp')
 ) AS v(name, symbol, token_address, is_loan_token, chain_id, coingecko_id, decimals, image_url)
 WHERE NOT EXISTS (
     SELECT 1 FROM assets a WHERE a.symbol = v.symbol AND a.chain_id = v.chain_id::NUMERIC

@@ -18,6 +18,26 @@ pnpm run migrate            # run DB migrations
 pnpm run seed               # seed database
 ```
 
+## Database migrations & seeds (single authority)
+
+backend-v2 is the **single migration authority** for the shared Postgres
+database. As of 2026-06-02 the historical migration set (32 backend + 4
+formerly-indexer-v3 migrations) was squashed into two grouped genesis
+migrations + one consolidated seed:
+
+- `migrations/20260602000000_genesis_onchain_schema.sql` — shared on-chain-state
+  tables (`user_balance`, `market`, `deposit_event`, positions, etc.) that
+  indexer-v3 / settlement-engine read & write. Runs first (`order_markets` FKs
+  `market`).
+- `migrations/20260602000100_genesis_app_schema.sql` — backend-owned relational
+  tables (`accounts`, `assets`, `risk`, `orders`, `matches`, access codes, …).
+- `seeds/20260602000000_genesis_seed.sql` — 11 Arbitrum-Sepolia assets + full
+  risk matrix. Token addresses must be re-aligned after every contract redeploy.
+
+indexer-v3 no longer migrates at boot, so **backend `pnpm run migrate` must run
+before indexer-v3 starts**. Testnet reset runbook: `pnpm run db reset` (or drop
++ recreate the DB) → `pnpm run migrate` → `pnpm run seed`.
+
 ## Contract addresses & ABIs
 
 Contract addresses and ABIs are auto-managed by
@@ -180,7 +200,7 @@ Separately, the backend's on-chain-state eager writers (`src/core/on-chain-state
 
 #### HF buffer config
 
-`risk.borrow_buffer_bps` (`INT NOT NULL DEFAULT 100`, per [migration 20260510130000](src/core/database/migrations/20260510130000_add_borrow_buffer_bps.sql)) configures the per-market safety margin above HF=1 that a new borrow must clear. The effective threshold is `1 + bufferBps/10000` (e.g. 100 bps → threshold 1.01).
+`risk.borrow_buffer_bps` (`INT NOT NULL DEFAULT 100`, defined in [the genesis app schema](src/core/database/migrations/20260602000100_genesis_app_schema.sql)) configures the per-market safety margin above HF=1 that a new borrow must clear. The effective threshold is `1 + bufferBps/10000` (e.g. 100 bps → threshold 1.01).
 
 Aggregation rule: for a given `(account, loanToken)`, the effective buffer is `MAX(risk.borrow_buffer_bps)` over every flagged-collateral × loanToken risk row the user has. The conservative MAX prevents a low-buffer collateral from masking a high-buffer collateral the user also flagged.
 

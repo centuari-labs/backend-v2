@@ -1,4 +1,4 @@
-import { Injectable, Logger, OnModuleInit } from "@nestjs/common";
+import { Injectable, Logger, OnApplicationBootstrap } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Interval } from "@nestjs/schedule";
 import { Repository } from "typeorm";
@@ -27,7 +27,7 @@ const ONE_MONTH_SECONDS = 30 * ONE_DAY_SECONDS;
  * `POST /market/register` admin endpoint.
  */
 @Injectable()
-export class MarketWorker implements OnModuleInit {
+export class MarketWorker implements OnApplicationBootstrap {
     private readonly logger = new Logger(MarketWorker.name);
 
     constructor(
@@ -36,7 +36,17 @@ export class MarketWorker implements OnModuleInit {
         private readonly marketRepository: MarketRepositories,
     ) {}
 
-    async onModuleInit(): Promise<void> {
+    /**
+     * The eager first refresh runs in `onApplicationBootstrap`, not
+     * `onModuleInit`. NestJS guarantees every module's `onModuleInit` has
+     * completed before any `onApplicationBootstrap` fires, so by this point
+     * `DatabaseService` has created its connection pool. Running the refresh
+     * in `onModuleInit` raced that initialization — the worker's first call
+     * could hit `getPool()` while the pool was still `undefined`, throwing
+     * "Cannot read properties of undefined (reading 'connect')" on boot and
+     * leaving markets uncreated until the next 24h interval (bug cc8af16).
+     */
+    async onApplicationBootstrap(): Promise<void> {
         try {
             await this.ensureFutureMaturitiesForLoanTokens();
         } catch (error) {

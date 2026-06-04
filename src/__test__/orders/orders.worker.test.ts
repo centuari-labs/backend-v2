@@ -141,16 +141,6 @@ describe("OrdersWorker", () => {
     });
 
     describe("onModuleInit", () => {
-        it("should skip when disabled (production)", async () => {
-            process.env.NODE_ENV = "production";
-
-            await worker.onModuleInit();
-
-            expect(
-                marketRepository.findAllMarketsForCache,
-            ).not.toHaveBeenCalled();
-        });
-
         it("should skip when ORDER_WORKER_ENABLED is not true", async () => {
             process.env.ORDER_WORKER_ENABLED = "false";
 
@@ -159,6 +149,19 @@ describe("OrdersWorker", () => {
             expect(
                 marketRepository.findAllMarketsForCache,
             ).not.toHaveBeenCalled();
+        });
+
+        it("should not be gated by NODE_ENV=production when the flag is on", async () => {
+            // The flag is the sole gate: production must NOT short-circuit the
+            // worker. Disabled would return early without throwing; here the
+            // gate passes and init proceeds far enough to fail on the missing
+            // OPERATOR_PRIVATE_KEY (ConfigService mock returns undefined).
+            process.env.NODE_ENV = "production";
+            process.env.ORDER_WORKER_ENABLED = "true";
+
+            await expect(worker.onModuleInit()).rejects.toThrow(
+                "OPERATOR_PRIVATE_KEY",
+            );
         });
     });
 
@@ -198,13 +201,24 @@ describe("OrdersWorker", () => {
         });
 
         it("should skip when disabled", async () => {
-            process.env.NODE_ENV = "production";
+            process.env.ORDER_WORKER_ENABLED = "false";
 
             await worker.refreshAssetMarketCache();
 
             expect(
                 marketRepository.findAllMarketsForCache,
             ).not.toHaveBeenCalled();
+        });
+
+        it("should run under NODE_ENV=production when the flag is on", async () => {
+            process.env.NODE_ENV = "production";
+            process.env.ORDER_WORKER_ENABLED = "true";
+            marketRepository.findAllMarketsForCache.mockResolvedValue([]);
+            tokenRepository.find.mockResolvedValue([]);
+
+            await worker.refreshAssetMarketCache();
+
+            expect(marketRepository.findAllMarketsForCache).toHaveBeenCalled();
         });
     });
 
@@ -242,7 +256,7 @@ describe("OrdersWorker", () => {
         });
 
         it("should skip when disabled", async () => {
-            process.env.NODE_ENV = "production";
+            process.env.ORDER_WORKER_ENABLED = "false";
 
             await worker.placeOrders();
 

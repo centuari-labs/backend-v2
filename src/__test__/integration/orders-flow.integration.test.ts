@@ -48,7 +48,10 @@ describe("Orders Flow Integration", () => {
     let accountRepository: jest.Mocked<Repository<Account>>;
     let dataSource: jest.Mocked<DataSource>;
 
-    const mockMaturityDate = new Date("2025-06-01T00:00:00.000Z");
+    // Far-future maturity so the market is never matured at test time.
+    // (A past-dated maturity makes assertMarketsNotMatured short-circuit every
+    // order-creation test with "Market ... has matured".)
+    const mockMaturityDate = new Date("2099-06-01T00:00:00.000Z");
 
     beforeEach(async () => {
         const mockNats = createMockNatsService();
@@ -374,18 +377,28 @@ describe("Orders Flow Integration", () => {
                 cancelledOrder as Order,
             );
 
+            // C1 engine-coordinated cancel: the backend asks the matching
+            // engine via request/reply and only persists CANCELLED on a
+            // CANCELLED verdict. Mock the authoritative reply.
+            natsService.request.mockResolvedValue({
+                outcome: "CANCELLED",
+                orderId: MOCK_IDS.orderId,
+                remainingAmount: "0",
+            });
+
             const result = await ordersService.cancelOrder(
                 "cancel-me",
                 MOCK_IDS.walletAddress,
             );
 
             expect(result.status).toBe(OrderStatus.Cancelled);
-            expect(natsService.publish).toHaveBeenCalledWith(
-                "orders.cancel",
+            expect(natsService.request).toHaveBeenCalledWith(
+                "orders.cancel.request",
                 expect.objectContaining({
                     orderId: "cancel-me",
                     walletAddress: MOCK_IDS.walletAddress,
                 }),
+                expect.any(Number),
             );
         });
 

@@ -61,6 +61,24 @@ describe("PrivyService", () => {
         });
     });
 
+    describe("constructor / env validation", () => {
+        beforeEach(() => {
+            mockExistsSync.mockReturnValue(false);
+        });
+
+        it("should throw when PRIVY_APP_ID is missing", () => {
+            process.env.PRIVY_APP_ID = "";
+
+            expect(() => new PrivyService()).toThrow(/PRIVY_APP_ID/);
+        });
+
+        it("should throw when PRIVY_PROJECT_SECRET is missing", () => {
+            process.env.PRIVY_PROJECT_SECRET = "";
+
+            expect(() => new PrivyService()).toThrow(/PRIVY_PROJECT_SECRET/);
+        });
+    });
+
     describe("verify", () => {
         let service: PrivyService;
 

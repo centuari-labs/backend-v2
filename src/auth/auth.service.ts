@@ -4,7 +4,7 @@ import {
     Logger,
     NotFoundException,
 } from "@nestjs/common";
-import { randomBytes } from "node:crypto";
+import { randomInt } from "node:crypto";
 import { DatabaseService } from "../core/database/database.service";
 import { ViemService } from "../core/viem/viem.service";
 import type { DepositWalletResponse } from "./dto/validate-wallet.dto";
@@ -12,6 +12,10 @@ import type { GenerateAccessCodesDto } from "./dto/generate-access-codes.dto";
 
 @Injectable()
 export class AuthService {
+    private static readonly ACCESS_CODE_ALPHABET =
+        "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+    private static readonly ACCESS_CODE_RANDOM_LENGTH = 12;
+
     private readonly logger = new Logger(AuthService.name);
 
     constructor(
@@ -139,7 +143,9 @@ export class AuthService {
         }> = [];
 
         for (let i = 0; i < count; i++) {
-            const code = `${prefix}-${this.generateRandomCode(5)}`;
+            const code = `${prefix}-${this.generateRandomCode(
+                AuthService.ACCESS_CODE_RANDOM_LENGTH,
+            )}`;
 
             const row = await this.databaseService.queryOne<{
                 id: string;
@@ -191,11 +197,12 @@ export class AuthService {
     }
 
     private generateRandomCode(length: number): string {
-        const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-        const bytes = randomBytes(length);
         let result = "";
         for (let i = 0; i < length; i++) {
-            result += chars[bytes[i] % chars.length];
+            result +=
+                AuthService.ACCESS_CODE_ALPHABET[
+                    randomInt(AuthService.ACCESS_CODE_ALPHABET.length)
+                ];
         }
         return result;
     }

@@ -195,6 +195,24 @@ describe("AuthService", () => {
                 [expect.stringContaining("CENTUARI-"), 1, null],
             );
         });
+
+        it("should generate 12-character random code suffixes", async () => {
+            databaseService.queryOne.mockImplementation(
+                async (_query: string, params: unknown[]) => ({
+                    id: "gen-1",
+                    code: params[0],
+                    max_uses: params[1],
+                    expires_at: params[2],
+                }),
+            );
+
+            await service.generateAccessCodes({ prefix: "QA" });
+
+            expect(databaseService.queryOne).toHaveBeenCalledWith(
+                expect.stringContaining("INSERT INTO access_codes"),
+                [expect.stringMatching(/^QA-[A-HJ-NP-Z2-9]{12}$/), 1, null],
+            );
+        });
     });
 
     describe("deactivateAccessCode", () => {

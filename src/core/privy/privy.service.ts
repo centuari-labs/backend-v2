@@ -67,7 +67,11 @@ export class PrivyService {
 
             return result;
         } catch (err) {
-            console.error("Privy verification error:", err);
+            this.logger.error(
+                `Privy verification error: ${
+                    err instanceof Error ? err.message : String(err)
+                }`,
+            );
             throw new UnauthorizedException("Invalid Privy token");
         }
     }

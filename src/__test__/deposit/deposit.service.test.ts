@@ -75,6 +75,7 @@ describe("DepositService", () => {
             operatorPrivateKey: "",
             hubDepositorAddress: "",
             centuariAddress: "",
+            balanceLedgerAddress: "0x0000000000000000000000000000000000000000",
         };
 
         const module: TestingModule = await Test.createTestingModule({

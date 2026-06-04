@@ -73,6 +73,12 @@ export interface ApplyDepositArgs {
      * user are ignored (belt-and-suspenders).
      */
     expectedUser: Address;
+    /**
+     * Canonical `BalanceLedger` proxy address. Only `Credited` logs emitted by
+     * this exact contract are applied — a log carrying the same topic shape from
+     * any other (attacker-controlled) contract in the same receipt is rejected.
+     */
+    balanceLedgerAddress: Address;
 }
 
 /**
@@ -82,10 +88,11 @@ export interface ApplyDepositArgs {
 export async function applyDepositEffects(
     args: ApplyDepositArgs,
 ): Promise<number> {
-    const { pool, client, receipt, expectedUser } = args;
+    const { pool, client, receipt, expectedUser, balanceLedgerAddress } = args;
     const userLc = expectedUser.toLowerCase();
+    const ledgerLc = balanceLedgerAddress.toLowerCase();
 
-    const creditedEvents = parseReceiptLogs(receipt, userLc);
+    const creditedEvents = parseReceiptLogs(receipt, userLc, ledgerLc);
 
     let applied = 0;
     for (const event of creditedEvents) {
@@ -122,6 +129,7 @@ export async function applyDepositEffects(
 function parseReceiptLogs(
     receipt: TransactionReceipt,
     expectedUserLc: string,
+    balanceLedgerLc: string,
 ): ParsedCredited[] {
     const creditedEvents: ParsedCredited[] = [];
 
@@ -129,6 +137,9 @@ function parseReceiptLogs(
         const topic0 = log.topics[0];
         if (!topic0) continue;
         if (topic0.toLowerCase() !== TOPIC_CREDITED.toLowerCase()) continue;
+        // Reject Credited logs from any contract other than the canonical
+        // BalanceLedger — a spoofed log sharing the topic shape must not credit.
+        if (log.address.toLowerCase() !== balanceLedgerLc) continue;
 
         try {
             const decoded = decodeEventLog({

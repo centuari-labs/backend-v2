@@ -8,6 +8,7 @@ import {
     UseGuards,
     ForbiddenException,
 } from "@nestjs/common";
+import { Throttle } from "@nestjs/throttler";
 import { FaucetService } from "./faucet.service";
 import { RequestTokenDto, FaucetResponseDto } from "./dto/faucet.dto";
 import { AuthGuard } from "../common/guards/auth.guard";
@@ -17,6 +18,11 @@ import { Wallet } from "../common/decorators/wallet.decorator";
 export class FaucetController {
     constructor(private readonly faucetService: FaucetService) {}
 
+    // Faucet drips real testnet tokens on-chain — tightly rate-limit per IP.
+    @Throttle({
+        short: { ttl: 1000, limit: 1 },
+        long: { ttl: 60000, limit: 5 },
+    })
     @Post("request-tokens")
     @UseGuards(AuthGuard)
     async requestTokens(

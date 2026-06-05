@@ -1,5 +1,5 @@
 import { Test, TestingModule } from "@nestjs/testing";
-import { Logger } from "@nestjs/common";
+import { BadRequestException, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { DepositService } from "../../deposit/deposit.service";
 import { ViemService } from "../../core/viem/viem.service";
@@ -11,6 +11,7 @@ import { DatabaseService } from "../../core/database/database.service";
 describe("DepositService", () => {
     let service: DepositService;
     let viemService: jest.Mocked<ViemService>;
+    let tokensService: jest.Mocked<TokensService>;
     let tokensRepository: jest.Mocked<TokensRepository>;
     let loggerSpy: jest.SpyInstance;
 
@@ -95,6 +96,7 @@ describe("DepositService", () => {
 
         service = module.get(DepositService);
         viemService = module.get(ViemService);
+        tokensService = module.get(TokensService);
         tokensRepository = module.get(TokensRepository);
     });
 
@@ -109,6 +111,22 @@ describe("DepositService", () => {
             expect(result.formattedBalance).toBe("1000");
             expect(result.decimals).toBe(6);
             expect(result.symbol).toBe("USDT");
+        });
+
+        it("should throw and skip RPC work for an unknown assetId (L-3)", async () => {
+            // getTokenByAssetId delegates to TokensService.validateTokenByAssetId,
+            // which throws BadRequestException for unsupported assets — the asset
+            // existence check happens before any on-chain read.
+            tokensService.getTokenByAssetId.mockRejectedValueOnce(
+                new BadRequestException("Token unknown-asset is not supported"),
+            );
+
+            await expect(
+                service.getBalance("unknown-asset", WALLET_ADDRESS),
+            ).rejects.toThrow(BadRequestException);
+
+            // No viem RPC call should have been made.
+            expect(viemService.readContract).not.toHaveBeenCalled();
         });
     });
 

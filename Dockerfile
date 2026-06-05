@@ -48,6 +48,10 @@ RUN test -f /app/dist/src/main.js || (echo "COPY failed: dist/src/main.js missin
 # Copy keys (needed for JWT verification)
 COPY --from=builder /app/keys ./keys
 
+# Drop root privileges for the runtime container
+RUN chown -R node:node /app
+USER node
+
 # Expose the application port
 EXPOSE 3000
 

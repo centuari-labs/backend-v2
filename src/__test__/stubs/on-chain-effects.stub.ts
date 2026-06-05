@@ -67,3 +67,89 @@ export const applyOnChainEffect = jest.fn(
         reason: "event_missing" as const,
     }),
 );
+
+/**
+ * The byte/stamp helpers and per-event mutation functions the eager-path
+ * `apply-*.ts` modules import from the package. The real implementations live
+ * in `on-chain-effects/src/mutations.ts` and are covered by that package's own
+ * tests; here we only need the named bindings to resolve at runtime. The
+ * mutation fns are `jest.fn()`s because `applyOnChainEffect` (above) never
+ * invokes the `mutation` callback in unit tests — suites that want to assert
+ * mutation behaviour override these directly.
+ */
+export const hexToBytea = (hex: Hex): Buffer => {
+    const stripped = hex.startsWith("0x") ? hex.slice(2) : hex;
+    if (stripped.length % 2 !== 0) {
+        throw new Error(`hexToBytea: odd-length hex ${hex}`);
+    }
+    return Buffer.from(stripped, "hex");
+};
+
+export const isAlreadyStamped = jest.fn(
+    async (
+        _tx: PoolClient,
+        _table: string,
+        _pkCondition: string,
+        _pkValues: readonly unknown[],
+        _stamp: IdempotencyStamp,
+    ): Promise<boolean> => false,
+);
+
+export const applyCreditedMutation = jest.fn(
+    async (
+        _tx: PoolClient,
+        _decoded: unknown,
+        _stamp: IdempotencyStamp,
+    ): Promise<number> => 1,
+);
+
+export const applyDebitedMutation = jest.fn(
+    async (
+        _tx: PoolClient,
+        _decoded: unknown,
+        _stamp: IdempotencyStamp,
+    ): Promise<number> => 1,
+);
+
+export const applyRepaidMutation = jest.fn(
+    async (
+        _tx: PoolClient,
+        _decoded: unknown,
+        _stamp: IdempotencyStamp,
+    ): Promise<number> => 1,
+);
+
+export const applyLendPositionWithdrawnMutation = jest.fn(
+    async (
+        _tx: PoolClient,
+        _decoded: unknown,
+        _stamp: IdempotencyStamp,
+    ): Promise<number> => 1,
+);
+
+export const applyCollateralFlagSetMutation = jest.fn(
+    async (
+        _tx: PoolClient,
+        _decoded: unknown,
+        _stamp: IdempotencyStamp,
+    ): Promise<number> => 1,
+);
+
+export interface MarketCreatedArgs {
+    marketId: Hex;
+    loanToken: Hex;
+    maturity: bigint;
+}
+
+/**
+ * `market` is the one mutation with a NULLABLE stamp: the backend registers
+ * markets on a cron before any `MarketCreated` event exists (eager path passes
+ * `null`); the indexer tail passes a real stamp. See the package's own tests.
+ */
+export const applyMarketCreatedMutation = jest.fn(
+    async (
+        _tx: PoolClient,
+        _decoded: MarketCreatedArgs,
+        _stamp: IdempotencyStamp | null,
+    ): Promise<number> => 1,
+);

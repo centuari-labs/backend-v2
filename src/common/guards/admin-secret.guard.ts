@@ -1,3 +1,4 @@
+import { createHash, timingSafeEqual } from "node:crypto";
 import {
     CanActivate,
     ExecutionContext,
@@ -23,10 +24,27 @@ export class AdminSecretGuard implements CanActivate {
             "ACCESS_CODE_ADMIN_SECRET",
         );
 
-        if (!secret || token !== secret) {
+        // Fail closed when the secret is unset/empty.
+        if (!secret) {
+            throw new UnauthorizedException("Invalid admin secret");
+        }
+
+        if (!this.constantTimeEquals(token, secret)) {
             throw new UnauthorizedException("Invalid admin secret");
         }
 
         return true;
+    }
+
+    /**
+     * Constant-time string comparison. The two values are hashed to equal-length
+     * buffers first so `timingSafeEqual` never throws on a length mismatch and
+     * the comparison itself leaks no timing signal about the secret's length or
+     * content.
+     */
+    private constantTimeEquals(a: string, b: string): boolean {
+        const aHash = createHash("sha256").update(a).digest();
+        const bHash = createHash("sha256").update(b).digest();
+        return timingSafeEqual(aHash, bHash);
     }
 }

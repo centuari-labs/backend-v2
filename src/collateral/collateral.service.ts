@@ -161,13 +161,7 @@ export class CollateralService {
                 args.asset.toLowerCase() === expectedAsset &&
                 args.used === false,
             alreadyAppliedCheck: (tx, stamp) =>
-                this.repo.isAlreadyStamped(
-                    tx,
-                    walletAddress,
-                    asset,
-                    stamp.txHash,
-                    stamp.logIndex,
-                ),
+                this.repo.isAlreadyStamped(tx, walletAddress, asset, stamp),
             mutation: (tx, args, stamp) =>
                 this.repo.upsertFlag(tx, args, stamp),
         });

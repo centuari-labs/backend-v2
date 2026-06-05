@@ -14,6 +14,10 @@ import {
     UserDetailsResponseDto,
 } from "./dto/portfolio.dto";
 import { ChartDataQueryDto } from "./dto/chart-data.dto";
+import {
+    WithdrawableMaxQueryDto,
+    type WithdrawableMaxResponseDto,
+} from "./dto/withdrawable-max.dto";
 import { AuthGuard } from "../common/guards/auth.guard";
 import { Wallet, CurrentUser } from "../common/decorators/wallet.decorator";
 import { WithdrawLendPositionDto } from "./dto/withdraw-lend-position.dto";
@@ -58,6 +62,14 @@ export class PortfolioController {
         @Wallet() wallet: string,
     ): Promise<MyHealthFactorResponseDto> {
         return this.portfolioService.getMyHealthFactor(wallet);
+    }
+
+    @Get("withdrawable-max")
+    async getWithdrawableMax(
+        @Wallet() wallet: string,
+        @Query() query: WithdrawableMaxQueryDto,
+    ): Promise<WithdrawableMaxResponseDto> {
+        return this.portfolioService.getWithdrawableMax(wallet, query.assetId);
     }
 
     @Get("my-position")

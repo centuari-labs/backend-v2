@@ -62,9 +62,10 @@ import { EventsGateway } from "./core/websocket/websocket.gateway";
     providers: [
         // Default-on rate limiting for every HTTP route. Tracker resolves to
         // the authenticated wallet (post-AuthGuard) and falls back to req.ip
-        // when no wallet is in scope. Endpoints that need looser limits
-        // override with @Throttle(); endpoints that need none use
-        // @SkipThrottle().
+        // when no wallet is in scope, so authenticated callers are throttled
+        // per-wallet (not collapsed onto a shared proxy IP). Endpoints that
+        // need looser limits override with @Throttle(); endpoints that need
+        // none use @SkipThrottle().
         { provide: APP_GUARD, useClass: WalletThrottlerGuard },
     ],
 })

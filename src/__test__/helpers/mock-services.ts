@@ -29,6 +29,7 @@ export function createMockOrderRepository(): Partial<
 export function createMockNatsService(): Partial<jest.Mocked<NatsService>> {
     return {
         publish: jest.fn().mockResolvedValue(undefined),
+        request: jest.fn().mockResolvedValue(undefined),
         subscribe: jest.fn().mockResolvedValue(undefined),
         isConnected: jest.fn().mockReturnValue(true),
     };

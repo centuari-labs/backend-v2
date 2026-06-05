@@ -51,6 +51,15 @@ program
     .action((target) => exec("run-seed", target ? [target] : []));
 
 program
+    .command("realign:assets [deployJson]")
+    .description(
+        "Re-align seed token_address values with a deployment's mockTokens (path arg or DEPLOY_JSON env)",
+    )
+    .action((deployJson) =>
+        exec("realign-assets-from-deploy", deployJson ? [deployJson] : []),
+    );
+
+program
     .command("reset")
     .description("Reset all migration files")
     .action(() => exec("reset-migration"));

@@ -1,8 +1,10 @@
 import { Test, TestingModule } from "@nestjs/testing";
 import {
     BadRequestException,
+    ConflictException,
     ForbiddenException,
     NotFoundException,
+    ServiceUnavailableException,
     HttpStatus,
 } from "@nestjs/common";
 import { OrdersService } from "../../orders/orders.service";
@@ -36,13 +38,16 @@ describe("OrdersService", () => {
     };
     let portfolioService: jest.Mocked<PortfolioService>;
     let dataSource: jest.Mocked<DataSource>;
+    let marketRepository: { getMarketsByIds: jest.Mock };
 
     const mockWalletAddress = "0x1234567890abcdef1234567890abcdef12345678";
     const mockPrivyUserId = "did:privy:mock-user-id";
     const mockAccountId = "uuid-account-001";
     const mockAssetId = "550e8400-e29b-41d4-a716-446655440003";
     const mockMarketId = "0x" + "ab".repeat(32);
-    const mockMaturityDate = new Date("2025-06-01T00:00:00.000Z");
+    // Far-future maturity so the matured-market placement guard
+    // (assertMarketsNotMatured) treats the default mock market as still active.
+    const mockMaturityDate = new Date("2030-06-01T00:00:00.000Z");
     const mockMaturityUnix = Math.floor(mockMaturityDate.getTime() / 1000);
 
     const createMockOrder = (overrides: Partial<Order> = {}): Order => ({
@@ -88,6 +93,7 @@ describe("OrdersService", () => {
 
         const mockNatsService = {
             publish: jest.fn(),
+            request: jest.fn(),
         };
 
         const mockPriceService = {
@@ -188,6 +194,7 @@ describe("OrdersService", () => {
             getPrice: module.get(PriceService).getPrice as any,
         };
         dataSource = module.get(DataSource);
+        marketRepository = module.get(MarketRepositories);
     });
 
     afterEach(() => {
@@ -833,12 +840,21 @@ describe("OrdersService", () => {
     });
 
     describe("cancelOrder", () => {
-        it("should cancel an open order successfully", async () => {
+        // The engine's reply carries a real UUID; the backend switches on the
+        // outcome and does not compare it to the requested order id.
+        const replyOrderId = "550e8400-e29b-41d4-a716-446655440099";
+        // The DB still shows the order open/partial; the engine has the final say.
+        const cancelledReply = (_orderId: string) => ({
+            outcome: "CANCELLED" as const,
+            orderId: replyOrderId,
+            remainingAmount: "1000",
+        });
+
+        it("should persist CANCELLED only after a CANCELLED reply from the engine", async () => {
             const openOrder = createMockOrder({
                 id: "uuid-cancel-001",
                 status: OrderStatus.Open,
             });
-
             const cancelledOrder = {
                 ...openOrder,
                 status: OrderStatus.Cancelled,
@@ -849,7 +865,9 @@ describe("OrdersService", () => {
                 id: mockAccountId,
             } as any);
             orderRepository.save.mockResolvedValue(cancelledOrder);
-            natsService.publish.mockResolvedValue(undefined);
+            natsService.request.mockResolvedValue(
+                cancelledReply("uuid-cancel-001"),
+            );
 
             const result = await service.cancelOrder(
                 "uuid-cancel-001",
@@ -857,6 +875,7 @@ describe("OrdersService", () => {
             );
 
             expect(result.status).toBe(OrderStatus.Cancelled);
+            expect(orderRepository.save).toHaveBeenCalledTimes(1);
         });
 
         it("should cancel a partial order successfully", async () => {
@@ -866,7 +885,6 @@ describe("OrdersService", () => {
                 quantity: "1000",
                 filledQuantity: "500",
             });
-
             const cancelledOrder = {
                 ...partialOrder,
                 status: OrderStatus.Cancelled,
@@ -877,7 +895,9 @@ describe("OrdersService", () => {
                 id: mockAccountId,
             } as any);
             orderRepository.save.mockResolvedValue(cancelledOrder);
-            natsService.publish.mockResolvedValue(undefined);
+            natsService.request.mockResolvedValue(
+                cancelledReply("uuid-cancel-002"),
+            );
 
             const result = await service.cancelOrder(
                 "uuid-cancel-002",
@@ -893,6 +913,7 @@ describe("OrdersService", () => {
             await expect(
                 service.cancelOrder("non-existent-uuid", mockWalletAddress),
             ).rejects.toThrow(NotFoundException);
+            expect(natsService.request).not.toHaveBeenCalled();
         });
 
         it("should throw ForbiddenException when cancelling order owned by another wallet", async () => {
@@ -910,6 +931,7 @@ describe("OrdersService", () => {
             await expect(
                 service.cancelOrder("uuid-cancel-003", mockWalletAddress),
             ).rejects.toThrow(ForbiddenException);
+            expect(natsService.request).not.toHaveBeenCalled();
         });
 
         it("should throw BadRequestException when cancelling a filled order", async () => {
@@ -944,7 +966,7 @@ describe("OrdersService", () => {
             ).rejects.toThrow(BadRequestException);
         });
 
-        it("should publish cancel event to NATS", async () => {
+        it("should send a cancel request on the request/reply subject", async () => {
             const openOrder = createMockOrder({
                 id: "uuid-cancel-007",
                 status: OrderStatus.Open,
@@ -958,17 +980,98 @@ describe("OrdersService", () => {
                 ...openOrder,
                 status: OrderStatus.Cancelled,
             });
-            natsService.publish.mockResolvedValue(undefined);
+            natsService.request.mockResolvedValue(
+                cancelledReply("uuid-cancel-007"),
+            );
 
             await service.cancelOrder("uuid-cancel-007", mockWalletAddress);
 
-            expect(natsService.publish).toHaveBeenCalledWith(
-                "orders.cancel",
+            expect(natsService.request).toHaveBeenCalledWith(
+                "orders.cancel.request",
                 expect.objectContaining({
                     orderId: "uuid-cancel-007",
                     walletAddress: mockWalletAddress,
                 }),
+                expect.any(Number),
             );
+        });
+
+        it("should NOT persist CANCELLED and throw Conflict when the engine replies NOT_FOUND (matched in the race window)", async () => {
+            const openOrder = createMockOrder({
+                id: "uuid-cancel-008",
+                status: OrderStatus.Open,
+            });
+
+            orderRepository.getOrderById.mockResolvedValue(openOrder);
+            orderRepository.findAccountByWallet.mockResolvedValue({
+                id: mockAccountId,
+            } as any);
+            natsService.request.mockResolvedValue({
+                outcome: "NOT_FOUND",
+                orderId: replyOrderId,
+            });
+
+            await expect(
+                service.cancelOrder("uuid-cancel-008", mockWalletAddress),
+            ).rejects.toThrow(ConflictException);
+            expect(orderRepository.save).not.toHaveBeenCalled();
+        });
+
+        it("should throw Forbidden when the engine replies NOT_OWNER", async () => {
+            const openOrder = createMockOrder({
+                id: "uuid-cancel-009",
+                status: OrderStatus.Open,
+            });
+
+            orderRepository.getOrderById.mockResolvedValue(openOrder);
+            orderRepository.findAccountByWallet.mockResolvedValue({
+                id: mockAccountId,
+            } as any);
+            natsService.request.mockResolvedValue({
+                outcome: "NOT_OWNER",
+                orderId: replyOrderId,
+            });
+
+            await expect(
+                service.cancelOrder("uuid-cancel-009", mockWalletAddress),
+            ).rejects.toThrow(ForbiddenException);
+            expect(orderRepository.save).not.toHaveBeenCalled();
+        });
+
+        it("should throw ServiceUnavailable (and not persist) when the engine does not reply in time", async () => {
+            const openOrder = createMockOrder({
+                id: "uuid-cancel-010",
+                status: OrderStatus.Open,
+            });
+
+            orderRepository.getOrderById.mockResolvedValue(openOrder);
+            orderRepository.findAccountByWallet.mockResolvedValue({
+                id: mockAccountId,
+            } as any);
+            natsService.request.mockRejectedValue(new Error("TIMEOUT"));
+
+            await expect(
+                service.cancelOrder("uuid-cancel-010", mockWalletAddress),
+            ).rejects.toThrow(ServiceUnavailableException);
+            expect(orderRepository.save).not.toHaveBeenCalled();
+        });
+
+        it("should throw ServiceUnavailable on a malformed reply", async () => {
+            const openOrder = createMockOrder({
+                id: "uuid-cancel-011",
+                status: OrderStatus.Open,
+            });
+
+            orderRepository.getOrderById.mockResolvedValue(openOrder);
+            orderRepository.findAccountByWallet.mockResolvedValue({
+                id: mockAccountId,
+            } as any);
+            natsService.request.mockResolvedValue({ outcome: "WAT" });
+
+            await expect(
+                service.cancelOrder("uuid-cancel-011", mockWalletAddress),
+            ).rejects.toThrow(ServiceUnavailableException);
+            expect(orderRepository.save).not.toHaveBeenCalled();
         });
     });
 
@@ -1486,6 +1589,110 @@ describe("OrdersService", () => {
             ).rejects.toThrow(
                 /Update would reduce health factor.*below required 1\.0500 \(1\.0 \+ 500bps buffer\)/,
             );
+        });
+    });
+
+    describe("matured-market placement guard", () => {
+        const pastMaturityUnix = Math.floor(Date.now() / 1000) - 24 * 60 * 60; // 1 day ago
+
+        const lendLimitDto: CreateLimitOrderDto = {
+            assetId: mockAssetId,
+            amount: "1000",
+            marketIds: [mockMarketId],
+            rate: 500,
+        };
+
+        it("rejects placing an order into a market past maturity", async () => {
+            // Persistent (not Once) — this test invokes the path twice.
+            marketRepository.getMarketsByIds.mockResolvedValue([
+                { id: mockMarketId, maturity: pastMaturityUnix },
+            ]);
+
+            await expect(
+                service.createLendLimitOrder(
+                    lendLimitDto,
+                    mockWalletAddress,
+                    mockPrivyUserId,
+                ),
+            ).rejects.toThrow(BadRequestException);
+            await expect(
+                service.createLendLimitOrder(
+                    lendLimitDto,
+                    mockWalletAddress,
+                    mockPrivyUserId,
+                ),
+            ).rejects.toThrow(/has matured/);
+
+            // Guard fails fast — no order is ever persisted or published.
+            expect(orderRepository.saveOrderWithMarkets).not.toHaveBeenCalled();
+            expect(natsService.publish).not.toHaveBeenCalled();
+        });
+
+        it("accepts placing an order into a market that is still active", async () => {
+            // Default mock maturity is far-future; just wire the success path.
+            tokensService.validateTokenByAssetId.mockResolvedValue({} as any);
+            tokensService.getTokenDecimalsByAssetId.mockResolvedValue(6);
+            orderRepository.getOrCreateAccount.mockResolvedValue({
+                id: mockAccountId,
+            } as any);
+            const expectedOrder = createMockOrder({
+                side: OrderSide.Lend,
+                type: OrderType.Limit,
+                rate: 500,
+            });
+            orderRepository.create.mockReturnValue(expectedOrder);
+            orderRepository.saveOrderWithMarkets.mockResolvedValue(
+                expectedOrder,
+            );
+            natsService.publish.mockResolvedValue(undefined);
+
+            await expect(
+                service.createLendLimitOrder(
+                    lendLimitDto,
+                    mockWalletAddress,
+                    mockPrivyUserId,
+                ),
+            ).resolves.toBeDefined();
+        });
+
+        it("rejects updating an order to point at a matured market", async () => {
+            const updateDto: UpdateOrderDto = {
+                amount: "100",
+                rate: 500,
+                marketIds: [mockMarketId],
+            } as UpdateOrderDto;
+
+            const openOrder = createMockOrder({ status: OrderStatus.Open });
+            orderRepository.findAccountByWallet.mockResolvedValue({
+                id: mockAccountId,
+            } as any);
+            (dataSource.transaction as jest.Mock).mockImplementationOnce(
+                async (cb: any) =>
+                    cb({
+                        getRepository: jest.fn((entity: any) => {
+                            if (entity === OrderMarket)
+                                return {
+                                    save: jest.fn().mockResolvedValue({}),
+                                    delete: jest.fn().mockResolvedValue({}),
+                                };
+                            return {
+                                findOne: jest.fn().mockResolvedValue(openOrder),
+                                save: jest
+                                    .fn()
+                                    .mockImplementation((v) =>
+                                        Promise.resolve(v),
+                                    ),
+                            };
+                        }),
+                    }),
+            );
+            marketRepository.getMarketsByIds.mockResolvedValueOnce([
+                { id: mockMarketId, maturity: pastMaturityUnix },
+            ]);
+
+            await expect(
+                service.updateOrder(openOrder.id, mockWalletAddress, updateDto),
+            ).rejects.toThrow(/has matured/);
         });
     });
 });

@@ -2,6 +2,8 @@ import { Injectable } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { DataSource, In, Repository } from "typeorm";
 import { BYTEA_HEX } from "../../common/transformers/bytea-hex.transformer";
+import { DatabaseService } from "../../core/database/database.service";
+import { applyEnsureMarkets } from "../../core/on-chain-state/apply-market";
 import { LendPosition } from "../../portfolio/entities/lend-position.entity";
 import { UserBalance } from "../../portfolio/entities/user-balance.entity";
 import { Token } from "../../tokens/entities/token.entity";
@@ -24,6 +26,7 @@ export class MarketRepositories extends Repository<Market> {
         private readonly userBalanceRepo: Repository<UserBalance>,
         @InjectRepository(LendPosition)
         private readonly lendRepo: Repository<LendPosition>,
+        private readonly databaseService: DatabaseService,
     ) {
         super(Market, dataSource.createEntityManager());
     }
@@ -289,11 +292,15 @@ export class MarketRepositories extends Repository<Market> {
      * Eager-write new markets into the shared `market` table so they are
      * orderable before any on-chain `Centuari.MarketCreated` event fires
      * (the contract only emits that on a market's first settlement; see
-     * [Centuari.sol:81-102]). Mirrors the C3 "backend writes first, indexer
-     * tail-writes with stamps" pattern: `applied_by_*` columns stay NULL
-     * until indexer-v3 catches up on first settlement, after which its
-     * `ON CONFLICT (market_id) DO NOTHING` clause makes the tail-write a
-     * safe no-op.
+     * [Centuari.sol:81-102]). Routes through the shared
+     * `@centuari-labs/on-chain-effects` mutation (`applyEnsureMarkets` →
+     * `applyMarketCreatedMutation`) with a NULL stamp, so the upsert SQL is
+     * identical by construction with the indexer-v3 tail (C7). The
+     * `applied_by_*` columns stay NULL until indexer-v3 catches up on first
+     * settlement, after which its `ON CONFLICT (market_id) DO NOTHING` clause
+     * makes the tail-write a safe no-op. Returns the computed triples
+     * (maturity as a unix-seconds number) so callers like MarketWorker are
+     * unaffected by the write-path change.
      *
      * MarketId encoding: `uuidToBytes32(legacyUuid)` — calldata-verbatim
      * invariant from [Centuari.sol:81-102]. Do NOT change to full-width
@@ -318,18 +325,14 @@ export class MarketRepositories extends Repository<Market> {
             loanToken,
             maturity: m,
         }));
-        await this.createQueryBuilder()
-            .insert()
-            .into(Market)
-            .values(
-                triples.map((t) => ({
-                    marketId: t.marketId,
-                    loanToken: t.loanToken,
-                    maturity: t.maturity.toString(),
-                })),
-            )
-            .orIgnore()
-            .execute();
+        await applyEnsureMarkets(
+            this.databaseService.getPool(),
+            triples.map((t) => ({
+                marketId: t.marketId,
+                loanToken: t.loanToken,
+                maturity: BigInt(t.maturity),
+            })),
+        );
         return triples;
     }
 }

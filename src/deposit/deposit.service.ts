@@ -98,6 +98,8 @@ export class DepositService {
             client: this.viemService.getPublicClient(this.chainConfig.chainId),
             receipt,
             expectedUser: walletAddress as `0x${string}`,
+            balanceLedgerAddress: this.chainConfig
+                .balanceLedgerAddress as `0x${string}`,
         });
         this.logger.log(
             `Deposit confirmed: txHash=${txHash}, wallet=${walletAddress}, processed=${processed}`,

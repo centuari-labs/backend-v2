@@ -11,6 +11,18 @@ import type { AuthUser, IAuthStrategy } from "./auth-strategy.interface";
 export class DevAuthStrategy implements IAuthStrategy {
     static readonly PREFIX = "DEV_TOKEN_";
 
+    constructor() {
+        // Hard fail-closed: dev-auth bypasses Privy verification entirely
+        // (any DEV_TOKEN_<addr> becomes that wallet). It must never be
+        // instantiable in production, even if ENABLE_DEV_AUTH is misconfigured.
+        if (process.env.NODE_ENV === "production") {
+            throw new Error(
+                "DevAuthStrategy must never be enabled in production. " +
+                    "Unset ENABLE_DEV_AUTH or fix NODE_ENV.",
+            );
+        }
+    }
+
     static isDevToken(token: string): boolean {
         return token.startsWith(DevAuthStrategy.PREFIX);
     }

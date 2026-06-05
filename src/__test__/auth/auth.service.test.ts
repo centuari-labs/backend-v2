@@ -3,21 +3,16 @@ jest.mock("../../core/privy/privy.service");
 
 import { BadRequestException, NotFoundException } from "@nestjs/common";
 import { AuthService } from "../../auth/auth.service";
-import {
-    createMockDatabaseService,
-    createMockViemServiceFull,
-} from "../helpers/mock-services";
+import { createMockDatabaseService } from "../helpers/mock-services";
 import { createMockAccessCode } from "../helpers/mock-factories";
 
 describe("AuthService", () => {
     let service: AuthService;
     let databaseService: ReturnType<typeof createMockDatabaseService>;
-    let viemService: ReturnType<typeof createMockViemServiceFull>;
 
     beforeEach(() => {
         databaseService = createMockDatabaseService();
-        viemService = createMockViemServiceFull();
-        service = new AuthService(databaseService as any, viemService as any);
+        service = new AuthService(databaseService as any);
     });
 
     afterEach(() => {
@@ -195,6 +190,24 @@ describe("AuthService", () => {
                 [expect.stringContaining("CENTUARI-"), 1, null],
             );
         });
+
+        it("should generate 12-character random code suffixes", async () => {
+            databaseService.queryOne.mockImplementation(
+                async (_query: string, params: unknown[]) => ({
+                    id: "gen-1",
+                    code: params[0],
+                    max_uses: params[1],
+                    expires_at: params[2],
+                }),
+            );
+
+            await service.generateAccessCodes({ prefix: "QA" });
+
+            expect(databaseService.queryOne).toHaveBeenCalledWith(
+                expect.stringContaining("INSERT INTO access_codes"),
+                [expect.stringMatching(/^QA-[A-HJ-NP-Z2-9]{12}$/), 1, null],
+            );
+        });
     });
 
     describe("deactivateAccessCode", () => {
@@ -217,42 +230,6 @@ describe("AuthService", () => {
             await expect(
                 service.deactivateAccessCode("nonexistent"),
             ).rejects.toThrow(NotFoundException);
-        });
-    });
-
-    describe("validateAndCreateDepositWallet", () => {
-        it("should create deposit wallet with paired wallet", async () => {
-            const depositWallet = {
-                id: "dw-1",
-                wallet_address: "0xUserWallet",
-                paired_wallet_address: "0xPairedWallet",
-            };
-            databaseService.insert.mockResolvedValue(depositWallet);
-
-            const result =
-                await service.validateAndCreateDepositWallet("0xUserWallet");
-
-            expect(result).toEqual(depositWallet);
-            expect(viemService.isValidAddress).toHaveBeenCalledWith(
-                "0xUserWallet",
-            );
-            expect(viemService.generateWallet).toHaveBeenCalled();
-            expect(databaseService.insert).toHaveBeenCalledWith(
-                "deposit_wallets",
-                expect.objectContaining({
-                    wallet_address: "0xUserWallet",
-                    paired_wallet_address: "0xPairedWallet",
-                    paired_wallet_primary_key: "0xPairedKey",
-                }),
-            );
-        });
-
-        it("should throw BadRequestException for invalid wallet address", async () => {
-            viemService.isValidAddress.mockReturnValue(false);
-
-            await expect(
-                service.validateAndCreateDepositWallet("invalid"),
-            ).rejects.toThrow(BadRequestException);
         });
     });
 

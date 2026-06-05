@@ -95,7 +95,7 @@ export class OrdersWorker implements OnModuleInit {
     async onModuleInit(): Promise<void> {
         if (!this.isEnabled) {
             this.logger.log(
-                "OrdersWorker is disabled (NODE_ENV or ORDER_WORKER_ENABLED).",
+                "OrdersWorker is disabled (set ORDER_WORKER_ENABLED=true to enable).",
             );
             return;
         }
@@ -130,7 +130,9 @@ export class OrdersWorker implements OnModuleInit {
     }
 
     private get isEnabled(): boolean {
-        if (process.env.NODE_ENV === "production") return false;
+        // Flag-only gate, independent of NODE_ENV, so the market-making bot can
+        // run on testnet under NODE_ENV=production (which we need for real
+        // balances/auth/CORS). Never set ORDER_WORKER_ENABLED=true on mainnet.
         return process.env.ORDER_WORKER_ENABLED === "true";
     }
 

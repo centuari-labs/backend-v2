@@ -12,6 +12,9 @@ import {
     NotFoundException,
 } from "@nestjs/common";
 import type { TransactionReceipt } from "viem";
+import { validate } from "class-validator";
+import { plainToInstance } from "class-transformer";
+import { WithdrawRequestDto } from "../../withdraw/dto/withdraw.dto";
 import { ChainConfigService } from "../../core/chain-config/chain-config.service";
 import { DatabaseService } from "../../core/database/database.service";
 import { ViemService } from "../../core/viem/viem.service";
@@ -120,25 +123,41 @@ describe("WithdrawService (C3 Phase 2)", () => {
         service = module.get<WithdrawService>(WithdrawService);
     });
 
-    describe("validation", () => {
+    describe("amount validation (DTO boundary)", () => {
+        // Amount validity is enforced by the WithdrawRequestDto
+        // (@IsPositiveNumericString) at the global ValidationPipe, not by a
+        // float coercion inside the service (M-7). These assert the DTO rejects
+        // zero / negative / non-numeric amounts before the service runs.
+        async function validateAmount(amount: string) {
+            const dto = plainToInstance(WithdrawRequestDto, {
+                assetId: ASSET_ID,
+                amount,
+            });
+            return validate(dto);
+        }
+
+        function amountError(errors: Awaited<ReturnType<typeof validate>>) {
+            return errors.find((e) => e.property === "amount");
+        }
+
         it("rejects when amount is zero", async () => {
-            await expect(
-                service.withdraw({ assetId: ASSET_ID, amount: "0" }, WALLET),
-            ).rejects.toBeInstanceOf(BadRequestException);
+            expect(amountError(await validateAmount("0"))).toBeDefined();
         });
 
         it("rejects when amount is negative", async () => {
-            await expect(
-                service.withdraw({ assetId: ASSET_ID, amount: "-5" }, WALLET),
-            ).rejects.toBeInstanceOf(BadRequestException);
+            expect(amountError(await validateAmount("-5"))).toBeDefined();
         });
 
         it("rejects when amount is not a number", async () => {
-            await expect(
-                service.withdraw({ assetId: ASSET_ID, amount: "abc" }, WALLET),
-            ).rejects.toBeInstanceOf(BadRequestException);
+            expect(amountError(await validateAmount("abc"))).toBeDefined();
         });
 
+        it("accepts a positive numeric amount", async () => {
+            expect(amountError(await validateAmount("100.5"))).toBeUndefined();
+        });
+    });
+
+    describe("validation", () => {
         it("rejects when account not found", async () => {
             orderRepository.findAccountByWallet.mockResolvedValue(null);
             await expect(

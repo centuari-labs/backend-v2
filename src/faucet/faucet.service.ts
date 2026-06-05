@@ -21,22 +21,13 @@ interface MintOutcome {
 @Injectable()
 export class FaucetService {
     private readonly logger = new Logger(FaucetService.name);
-    private readonly isDevMode: boolean = false;
 
     constructor(
         @InjectRepository(Token)
         private readonly tokenRepository: Repository<Token>,
         private readonly viemService: ViemService,
         private readonly configService: ConfigService,
-    ) {
-        // this.isDevMode =
-        //     this.configService.get<string>("NODE_ENV") !== "production";
-        // if (this.isDevMode) {
-        //     this.logger.warn(
-        //         "FAUCET running in DEV MODE -- returning mock responses",
-        //     );
-        // }
-    }
+    ) {}
 
     /**
      * If any requested token looks like a symbol (not starting with 0x),
@@ -138,7 +129,7 @@ export class FaucetService {
         token: string | string[],
     ): Promise<FaucetResponseDto> {
         this.logger.debug(
-            `Received faucet request: chainId=${chainId}, recipient=${recipientAddress}, token=${Array.isArray(token) ? token.join(",") : token}`,
+            `Received faucet request: chainId=${chainId}, token=${Array.isArray(token) ? token.join(",") : token}`,
         );
         // Resolve symbols (e.g. "usdt") to on-chain addresses from DB
         const resolvedToken = await this.resolveSymbolsToAddresses(token);
@@ -146,16 +137,6 @@ export class FaucetService {
         this.logger.debug(
             `Resolved token addresses: ${Array.isArray(resolvedToken) ? resolvedToken.join(",") : resolvedToken}`,
         );
-
-        this.logger.debug("this.isDevMode", this.isDevMode);
-
-        if (this.isDevMode) {
-            return this.mockRequestTokens(
-                chainId,
-                recipientAddress,
-                resolvedToken,
-            );
-        }
 
         const operatorKey = this.configService.get<string>(
             "OPERATOR_PRIVATE_KEY",
@@ -181,7 +162,7 @@ export class FaucetService {
         );
 
         this.logger.debug(
-            `Requesting tokens from faucet: chainId=${chainId}, recipient=${recipientAddress}, tokens=${tokenAddresses.join(
+            `Requesting tokens from faucet: chainId=${chainId}, tokens=${tokenAddresses.join(
                 ",",
             )}`,
         );
@@ -241,14 +222,6 @@ export class FaucetService {
         tokenAddresses: string[],
         amounts?: string[],
     ): Promise<FaucetResponseDto> {
-        if (this.isDevMode) {
-            return this.mockRequestTokens(
-                chainId,
-                recipientAddress,
-                tokenAddresses.length > 0 ? tokenAddresses : "all-assets",
-            );
-        }
-
         const operatorKey = this.configService.get<string>(
             "OPERATOR_PRIVATE_KEY",
         );
@@ -500,7 +473,7 @@ export class FaucetService {
         }
 
         this.logger.debug(
-            `[DEV] Mock mint: tokens=${tokenAddresses.join(",")}, recipient=${recipientAddress}, chain=${chainId}`,
+            `[DEV] Mock mint: tokens=${tokenAddresses.join(",")}, chain=${chainId}`,
         );
 
         const results: TokenMintResultDto[] = tokenAddresses.map(

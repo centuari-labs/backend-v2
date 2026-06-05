@@ -11,7 +11,6 @@ import {
 } from "@nestjs/common";
 import { Wallet, CurrentUser } from "../common/decorators/wallet.decorator";
 import { AuthGuard } from "../common/guards/auth.guard";
-import { WalletThrottlerGuard } from "../common/guards/wallet-throttler.guard";
 import {
     CreateLimitOrderDto,
     CreateMarketOrderDto,
@@ -20,8 +19,10 @@ import { OrdersService } from "./orders.service";
 import { OrderResponse } from "./dto/order-response.dto";
 import { UpdateOrderDto } from "./dto/update-order.dto";
 
+// WalletThrottlerGuard is registered as APP_GUARD in app.module.ts and
+// runs globally; only AuthGuard needs explicit @UseGuards here.
 @Controller("orders")
-@UseGuards(AuthGuard, WalletThrottlerGuard)
+@UseGuards(AuthGuard)
 export class OrdersController {
     constructor(private readonly ordersService: OrdersService) {}
 

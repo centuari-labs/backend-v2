@@ -12,7 +12,6 @@ import { OrderMarket } from "./entities/order-market.entity";
 import { Account } from "./entities/account.entity";
 import { Match } from "./entities/match.entity";
 import { Token } from "../tokens/entities/token.entity";
-import { WalletThrottlerGuard } from "../common/guards/wallet-throttler.guard";
 import { OrdersController } from "./orders.controller";
 import { OrdersService } from "./orders.service";
 import { OrderRepository } from "./repositories/order.repository";
@@ -31,13 +30,7 @@ import { OrdersWorker } from "./orders.worker";
         FaucetModule,
     ],
     controllers: [OrdersController],
-    providers: [
-        OrdersService,
-        OrderRepository,
-        MatchRepository,
-        OrdersWorker,
-        WalletThrottlerGuard,
-    ],
+    providers: [OrdersService, OrderRepository, MatchRepository, OrdersWorker],
     exports: [OrdersService, OrderRepository, MatchRepository],
 })
 export class OrdersModule {}

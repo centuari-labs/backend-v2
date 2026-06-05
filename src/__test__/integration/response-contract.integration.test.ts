@@ -31,7 +31,6 @@ import { PortfolioService } from "src/portfolio/portfolio.service";
 
 import { RepayService } from "src/portfolio/repay.service";
 import { AuthGuard } from "src/common/guards/auth.guard";
-import { WalletThrottlerGuard } from "src/common/guards/wallet-throttler.guard";
 import { AuthStrategyFactory } from "src/common/guards/strategies/auth-strategy.factory";
 import { PrivyAuthStrategy } from "src/common/guards/strategies/privy-auth.strategy";
 
@@ -86,10 +85,7 @@ describe("Response Contract Integration", () => {
                 AuthStrategyFactory,
                 PrivyAuthStrategy,
             ],
-        })
-            .overrideGuard(WalletThrottlerGuard)
-            .useValue({ canActivate: () => true })
-            .compile();
+        }).compile();
 
         app = moduleFixture.createNestApplication();
         app.useGlobalInterceptors(new ResponseInterceptor());

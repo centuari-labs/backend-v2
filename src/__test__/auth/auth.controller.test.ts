@@ -15,15 +15,18 @@ jest.mock("../../common/guards/strategies/privy-auth.strategy", () => ({
 import { GUARDS_METADATA } from "@nestjs/common/constants";
 import { AuthController } from "../../auth/auth.controller";
 import { AuthGuard } from "../../common/guards/auth.guard";
-import { WalletThrottlerGuard } from "../../common/guards/wallet-throttler.guard";
 
 describe("AuthController", () => {
-    it("should throttle access-code redemption after authentication", () => {
+    // Throttling is enforced globally via APP_GUARD (WalletThrottlerGuard
+    // registered in app.module.ts), so the route only needs to declare
+    // AuthGuard at the route level — declaring WalletThrottlerGuard here
+    // too would double-count the same request against the throttle budget.
+    it("should guard access-code redemption with AuthGuard only", () => {
         const guards = Reflect.getMetadata(
             GUARDS_METADATA,
             AuthController.prototype.redeemAccessCode,
         );
 
-        expect(guards).toEqual([AuthGuard, WalletThrottlerGuard]);
+        expect(guards).toEqual([AuthGuard]);
     });
 });

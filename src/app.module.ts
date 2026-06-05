@@ -1,10 +1,11 @@
 import { Module } from "@nestjs/common";
-import { APP_GUARD } from "@nestjs/core";
 import { ConfigModule } from "@nestjs/config";
+import { APP_GUARD } from "@nestjs/core";
 import { ScheduleModule } from "@nestjs/schedule";
-import { ThrottlerGuard, ThrottlerModule } from "@nestjs/throttler";
+import { ThrottlerModule } from "@nestjs/throttler";
 import { TypeOrmModule } from "@nestjs/typeorm";
 import { AuthModule } from "./auth/auth.module";
+import { WalletThrottlerGuard } from "./common/guards/wallet-throttler.guard";
 import { CoreModule } from "./core/core.module";
 import { OrdersModule } from "./orders/orders.module";
 import { PriceModule } from "./price/price.module";
@@ -59,12 +60,13 @@ import { EventsGateway } from "./core/websocket/websocket.gateway";
     ],
     controllers: [],
     providers: [
-        // Bind the throttler globally so the ThrottlerModule limits (and any
-        // per-route @Throttle overrides) are actually enforced on every route.
-        {
-            provide: APP_GUARD,
-            useClass: ThrottlerGuard,
-        },
+        // Default-on rate limiting for every HTTP route. Tracker resolves to
+        // the authenticated wallet (post-AuthGuard) and falls back to req.ip
+        // when no wallet is in scope, so authenticated callers are throttled
+        // per-wallet (not collapsed onto a shared proxy IP). Endpoints that
+        // need looser limits override with @Throttle(); endpoints that need
+        // none use @SkipThrottle().
+        { provide: APP_GUARD, useClass: WalletThrottlerGuard },
     ],
 })
 export class AppModule {}

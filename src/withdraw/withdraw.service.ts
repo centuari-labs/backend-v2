@@ -47,10 +47,9 @@ export class WithdrawService {
     ): Promise<WithdrawResponseDto> {
         const { assetId, amount } = dto;
 
-        const amountNum = Number(amount);
-        if (Number.isNaN(amountNum) || amountNum <= 0) {
-            throw new BadRequestException("Amount must be a positive number");
-        }
+        // `amount` is validated by the DTO (@IsPositiveNumericString) — a
+        // positive numeric string — so no float coercion is needed here. The
+        // string is converted to base units via `humanToBaseUnits` below.
 
         const account =
             await this.orderRepository.findAccountByWallet(walletAddress);

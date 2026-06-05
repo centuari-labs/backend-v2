@@ -1,7 +1,8 @@
 import { Module } from "@nestjs/common";
+import { APP_GUARD } from "@nestjs/core";
 import { ConfigModule } from "@nestjs/config";
 import { ScheduleModule } from "@nestjs/schedule";
-import { ThrottlerModule } from "@nestjs/throttler";
+import { ThrottlerGuard, ThrottlerModule } from "@nestjs/throttler";
 import { TypeOrmModule } from "@nestjs/typeorm";
 import { AuthModule } from "./auth/auth.module";
 import { CoreModule } from "./core/core.module";
@@ -57,6 +58,13 @@ import { EventsGateway } from "./core/websocket/websocket.gateway";
         HealthModule,
     ],
     controllers: [],
-    providers: [],
+    providers: [
+        // Bind the throttler globally so the ThrottlerModule limits (and any
+        // per-route @Throttle overrides) are actually enforced on every route.
+        {
+            provide: APP_GUARD,
+            useClass: ThrottlerGuard,
+        },
+    ],
 })
 export class AppModule {}

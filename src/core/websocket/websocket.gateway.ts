@@ -10,7 +10,10 @@ import {
 } from "@nestjs/websockets";
 import { Inject, Logger, OnModuleDestroy, forwardRef } from "@nestjs/common";
 import { Server, Socket } from "socket.io";
+import { z } from "zod";
 import { NatsService } from "../nats/nats.service";
+import { PrivyAuthStrategy } from "../../common/guards/strategies/privy-auth.strategy";
+import { DevAuthStrategy } from "../../common/guards/strategies/dev-auth.strategy";
 import {
     OrderRepository,
     type OrderForTracking,
@@ -79,13 +82,56 @@ interface TrackedOrder {
     settlementFeeAmount: string;
 }
 
-const websocketCorsOrigin =
-    process.env.NODE_ENV === "production"
-        ? (process.env.WS_CORS_ORIGINS ?? "")
-              .split(",")
-              .map((origin) => origin.trim())
-              .filter((origin) => origin.length > 0)
-        : "*";
+function parseWsCorsOrigins(raw?: string): string[] {
+    return (raw ?? "")
+        .split(",")
+        .map((origin) => origin.trim())
+        .filter((origin) => origin.length > 0);
+}
+
+/**
+ * WS CORS allow-list. Never `"*"`: an explicit allow-list from WS_CORS_ORIGINS
+ * is required in production, and falls back to local dev origins (not a
+ * wildcard) elsewhere so a misconfigured non-prod box still isn't wide open.
+ */
+const websocketCorsOrigin: string[] = (() => {
+    const configured = parseWsCorsOrigins(process.env.WS_CORS_ORIGINS);
+    if (configured.length > 0) return configured;
+    if (process.env.NODE_ENV === "production") return [];
+    return [
+        "http://localhost:3200",
+        "http://localhost:3000",
+        "http://127.0.0.1:3200",
+    ];
+})();
+
+/** Validated shape of an inbound user-positions subscribe message. */
+const userPositionsSchema = z.object({
+    accountId: z.string().min(1),
+});
+
+/** Validated shape of order-status updates received over NATS. */
+const orderStatusSchema = z.object({
+    orderId: z.string().min(1),
+    status: z.string().min(1),
+    remainingAmount: z.string(),
+    timestamp: z.number(),
+});
+
+/** Validated shape of order-cancel messages received over NATS. */
+const orderCancelSchema = z.object({
+    orderId: z.string().min(1),
+    walletAddress: z.string().min(1),
+});
+
+/** Validated shape of recent-trade messages (matches.created) before broadcast. */
+const recentTradeSchema = z.object({
+    assetId: z.string().min(1),
+    side: z.enum(["LEND", "BORROW"]),
+    amount: z.string(),
+    rate: z.number(),
+    timestamp: z.number(),
+});
 
 @WebSocketGateway({
     cors: {
@@ -133,6 +179,7 @@ export class EventsGateway
         private readonly natsService: NatsService,
         @Inject(forwardRef(() => OrderRepository))
         private readonly orderRepository: OrderRepository,
+        private readonly privyAuthStrategy: PrivyAuthStrategy,
     ) {}
 
     afterInit(_server: Server) {
@@ -154,8 +201,67 @@ export class EventsGateway
         }
     }
 
-    handleConnection(client: Socket) {
-        this.logger.log(`Client connected: ${client.id}`);
+    async handleConnection(client: Socket) {
+        // Authenticate the socket on connect. The verified wallet address is
+        // stored on `socket.data` and is the ONLY trusted source for the user
+        // room — client-supplied `accountId` is checked against it (BOLA fix).
+        // Connections without a valid token still connect (so public rooms like
+        // prices / orderbook / recent-trades work) but cannot join user rooms.
+        try {
+            const token = this.extractToken(client);
+            if (token) {
+                const walletAddress = await this.authenticateToken(token);
+                client.data.walletAddress = walletAddress;
+                this.logger.log(
+                    `Client connected: ${client.id} (wallet=${walletAddress})`,
+                );
+                return;
+            }
+        } catch (err) {
+            this.logger.warn(
+                `Client ${client.id} provided an invalid auth token: ${
+                    err instanceof Error ? err.message : String(err)
+                }`,
+            );
+        }
+        this.logger.log(`Client connected: ${client.id} (unauthenticated)`);
+    }
+
+    /**
+     * Extract a bearer token from the Socket.IO handshake. Supports
+     * `auth: { token }` (preferred) and an `Authorization: Bearer <token>`
+     * header, mirroring the REST AuthGuard.
+     */
+    private extractToken(client: Socket): string | null {
+        const authToken = client.handshake.auth?.token;
+        if (typeof authToken === "string" && authToken.length > 0) {
+            return authToken.startsWith("Bearer ")
+                ? authToken.slice(7)
+                : authToken;
+        }
+        const header = client.handshake.headers?.authorization;
+        if (typeof header === "string" && header.startsWith("Bearer ")) {
+            return header.slice(7);
+        }
+        return null;
+    }
+
+    /**
+     * Verify a token and return its wallet address, reusing the same Privy
+     * verification the REST PrivyAuthStrategy uses. The dev-token path is only
+     * honored when ENABLE_DEV_AUTH is set and never in production
+     * (DevAuthStrategy refuses to construct under NODE_ENV=production).
+     */
+    private async authenticateToken(token: string): Promise<string> {
+        if (
+            process.env.ENABLE_DEV_AUTH === "true" &&
+            DevAuthStrategy.isDevToken(token)
+        ) {
+            const devUser = await new DevAuthStrategy().validate(token);
+            return devUser.walletAddress;
+        }
+        const user = await this.privyAuthStrategy.validate(token);
+        return user.walletAddress;
     }
 
     handleDisconnect(client: Socket) {
@@ -202,7 +308,14 @@ export class EventsGateway
             (data: unknown, subject: string) => {
                 try {
                     if (subject === "matches.created") {
-                        this.handleMatchCreated(data as RecentTradeDto);
+                        const parsed = recentTradeSchema.safeParse(data);
+                        if (!parsed.success) {
+                            this.logger.warn(
+                                `Dropping malformed matches.created message: ${parsed.error.message}`,
+                            );
+                            return;
+                        }
+                        this.handleMatchCreated(parsed.data);
                     }
                 } catch (err) {
                     this.logger.error(
@@ -218,13 +331,27 @@ export class EventsGateway
 
     private handleOrdersMessage(data: unknown, subject: string) {
         if (subject === "orders.status") {
-            this.handleStatusUpdate(data as OrderStatusMessage).catch((err) =>
+            const parsed = orderStatusSchema.safeParse(data);
+            if (!parsed.success) {
+                this.logger.warn(
+                    `Dropping malformed orders.status message: ${parsed.error.message}`,
+                );
+                return;
+            }
+            this.handleStatusUpdate(parsed.data).catch((err) =>
                 this.logger.error(
                     `Error in handleStatusUpdate: ${(err as Error).message}`,
                 ),
             );
         } else if (subject === "orders.cancel") {
-            this.handleCancelMessage(data as OrderCancelMessage).catch((err) =>
+            const parsed = orderCancelSchema.safeParse(data);
+            if (!parsed.success) {
+                this.logger.warn(
+                    `Dropping malformed orders.cancel message: ${parsed.error.message}`,
+                );
+                return;
+            }
+            this.handleCancelMessage(parsed.data).catch((err) =>
                 this.logger.error(
                     `Error in handleCancelMessage: ${(err as Error).message}`,
                 ),
@@ -610,10 +737,7 @@ export class EventsGateway
         @ConnectedSocket() client: Socket,
         @MessageBody() body: UserPositionsDto,
     ) {
-        const room = `user:${body.accountId}`;
-        client.join(room);
-        this.logger.log(`Client ${client.id} joined ${room}`);
-        return { success: true, room };
+        return this.joinUserRoom(client, body);
     }
 
     @SubscribeMessage("open-positions")
@@ -621,7 +745,42 @@ export class EventsGateway
         @ConnectedSocket() client: Socket,
         @MessageBody() body: UserPositionsDto,
     ) {
-        const room = `user:${body.accountId}`;
+        return this.joinUserRoom(client, body);
+    }
+
+    /**
+     * Join the per-user room, but only after asserting the requesting socket
+     * actually owns `accountId`. Without this, any client could join
+     * `user:<someoneElse>` and receive that user's full order stream (BOLA).
+     */
+    private joinUserRoom(client: Socket, body: unknown) {
+        const parsed = userPositionsSchema.safeParse(body);
+        if (!parsed.success) {
+            this.logger.warn(
+                `Client ${client.id} sent an invalid user-positions payload`,
+            );
+            return { success: false, error: "invalid payload" };
+        }
+
+        const walletAddress = client.data.walletAddress as string | undefined;
+        if (!walletAddress) {
+            this.logger.warn(
+                `Client ${client.id} attempted to join a user room while unauthenticated`,
+            );
+            return { success: false, error: "unauthenticated" };
+        }
+
+        if (
+            parsed.data.accountId.toLowerCase() !== walletAddress.toLowerCase()
+        ) {
+            this.logger.warn(
+                `Client ${client.id} (wallet=${walletAddress}) attempted to join ` +
+                    `another user's room (${parsed.data.accountId}) — rejected`,
+            );
+            return { success: false, error: "forbidden" };
+        }
+
+        const room = `user:${parsed.data.accountId}`;
         client.join(room);
         this.logger.log(`Client ${client.id} joined ${room}`);
         return { success: true, room };

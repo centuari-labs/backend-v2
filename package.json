@@ -42,6 +42,7 @@
         "class-validator": "^0.14.3",
         "dotenv": "^17.2.3",
         "express": "^5.2.1",
+        "helmet": "^8.2.0",
         "ioredis": "^5.8.2",
         "jose": "^6.1.2",
         "nats": "^2.29.3",
@@ -101,7 +102,8 @@
         "moduleNameMapper": {
             "^@/(.*)$": "<rootDir>/src/$1",
             "^src/(.*)$": "<rootDir>/src/$1",
-            "^@centuari-labs/on-chain-effects$": "<rootDir>/src/__test__/stubs/on-chain-effects.stub.ts"
+            "^@centuari-labs/on-chain-effects$": "<rootDir>/src/__test__/stubs/on-chain-effects.stub.ts",
+            "^jose$": "<rootDir>/src/__test__/stubs/jose.stub.ts"
         },
         "collectCoverageFrom": [
             "src/**/*.(t|j)s"

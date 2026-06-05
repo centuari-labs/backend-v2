@@ -3,6 +3,7 @@ import { Server, Socket } from "socket.io";
 import { EventsGateway } from "../../../core/websocket/websocket.gateway";
 import { NatsService } from "../../../core/nats/nats.service";
 import { OrderRepository } from "../../../orders/repositories/order.repository";
+import { PrivyAuthStrategy } from "../../../common/guards/strategies/privy-auth.strategy";
 import {
     OrderSide,
     OrderStatus,
@@ -80,7 +81,15 @@ describe("EventsGateway", () => {
             join: jest.fn(),
             leave: jest.fn(),
             emit: jest.fn(),
+            // Authenticated socket: the verified wallet lives on `data`.
+            data: {},
+            handshake: { auth: {}, headers: {} },
         } as any;
+
+        const mockPrivyAuthStrategy = {
+            validate: jest.fn(),
+            getName: jest.fn().mockReturnValue("privy"),
+        };
 
         const module: TestingModule = await Test.createTestingModule({
             providers: [
@@ -92,6 +101,10 @@ describe("EventsGateway", () => {
                 {
                     provide: OrderRepository,
                     useValue: mockOrderRepository,
+                },
+                {
+                    provide: PrivyAuthStrategy,
+                    useValue: mockPrivyAuthStrategy,
                 },
             ],
         }).compile();
@@ -219,7 +232,9 @@ describe("EventsGateway", () => {
     });
 
     describe("User Position Subscriptions", () => {
-        it("should allow client to subscribe to active-positions", () => {
+        it("should allow an authenticated client to join its OWN active-positions room", () => {
+            mockClient.data.walletAddress = "account-123";
+
             const result = gateway.handleActivePosition(mockClient, {
                 accountId: "account-123",
             });
@@ -231,7 +246,9 @@ describe("EventsGateway", () => {
             });
         });
 
-        it("should allow client to subscribe to open-positions", () => {
+        it("should allow an authenticated client to join its OWN open-positions room", () => {
+            mockClient.data.walletAddress = "account-123";
+
             const result = gateway.handleOpenPosition(mockClient, {
                 accountId: "account-123",
             });
@@ -240,6 +257,31 @@ describe("EventsGateway", () => {
             expect(result).toEqual({
                 success: true,
                 room: "user:account-123",
+            });
+        });
+
+        it("rejects joining ANOTHER user's room (BOLA)", () => {
+            mockClient.data.walletAddress = "account-123";
+
+            const result = gateway.handleActivePosition(mockClient, {
+                accountId: "account-999",
+            });
+
+            expect(mockClient.join).not.toHaveBeenCalled();
+            expect(result).toEqual({ success: false, error: "forbidden" });
+        });
+
+        it("rejects joining a user room when unauthenticated", () => {
+            mockClient.data = {};
+
+            const result = gateway.handleOpenPosition(mockClient, {
+                accountId: "account-123",
+            });
+
+            expect(mockClient.join).not.toHaveBeenCalled();
+            expect(result).toEqual({
+                success: false,
+                error: "unauthenticated",
             });
         });
     });
@@ -875,6 +917,10 @@ describe("EventsGateway", () => {
                     {
                         provide: OrderRepository,
                         useValue: mockOrderRepository,
+                    },
+                    {
+                        provide: PrivyAuthStrategy,
+                        useValue: { validate: jest.fn() },
                     },
                 ],
             }).compile();

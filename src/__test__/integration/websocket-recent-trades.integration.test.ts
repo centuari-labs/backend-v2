@@ -2,6 +2,7 @@ import { Test, TestingModule } from "@nestjs/testing";
 import { EventsGateway } from "../../core/websocket/websocket.gateway";
 import { NatsService } from "../../core/nats/nats.service";
 import { OrderRepository } from "../../orders/repositories/order.repository";
+import { PrivyAuthStrategy } from "../../common/guards/strategies/privy-auth.strategy";
 import {
     OrderSide,
     OrderStatus,
@@ -50,6 +51,10 @@ describe("WebSocket Recent Trades Integration", () => {
                 EventsGateway,
                 { provide: NatsService, useValue: mockNats },
                 { provide: OrderRepository, useValue: mockOrderRepo },
+                {
+                    provide: PrivyAuthStrategy,
+                    useValue: { validate: jest.fn() },
+                },
             ],
         }).compile();
 
@@ -68,12 +73,14 @@ describe("WebSocket Recent Trades Integration", () => {
         };
         (gateway as any).server = mockServer;
 
-        // Mock client
+        // Mock client (authenticated — verified wallet lives on `data`)
         mockClient = {
             id: "test-client-1",
             join: jest.fn(),
             leave: jest.fn(),
             emit: jest.fn(),
+            data: {},
+            handshake: { auth: {}, headers: {} },
         };
     });
 
@@ -248,7 +255,9 @@ describe("WebSocket Recent Trades Integration", () => {
     });
 
     describe("User position subscriptions", () => {
-        it("should join user room on active-positions subscribe", () => {
+        it("should join user room on active-positions subscribe (owner)", () => {
+            mockClient.data.walletAddress = "account-1";
+
             const result = gateway.handleActivePosition(mockClient, {
                 accountId: "account-1",
             });
@@ -257,13 +266,26 @@ describe("WebSocket Recent Trades Integration", () => {
             expect(result).toEqual({ success: true, room: "user:account-1" });
         });
 
-        it("should join user room on open-positions subscribe", () => {
+        it("should join user room on open-positions subscribe (owner)", () => {
+            mockClient.data.walletAddress = "account-1";
+
             const result = gateway.handleOpenPosition(mockClient, {
                 accountId: "account-1",
             });
 
             expect(mockClient.join).toHaveBeenCalledWith("user:account-1");
             expect(result).toEqual({ success: true, room: "user:account-1" });
+        });
+
+        it("should reject joining another user's room (BOLA)", () => {
+            mockClient.data.walletAddress = "account-1";
+
+            const result = gateway.handleActivePosition(mockClient, {
+                accountId: "account-2",
+            });
+
+            expect(mockClient.join).not.toHaveBeenCalled();
+            expect(result).toEqual({ success: false, error: "forbidden" });
         });
     });
 });

@@ -36,13 +36,59 @@ export class ViemService implements OnModuleInit {
         WalletClient<Transport, Chain, Account>
     >();
     private supportedChains = new Map<number, Chain>();
-    /** Per-address transaction queue to prevent nonce races */
+    /**
+     * Per-address transaction queue to serialize writes and prevent nonce
+     * races.
+     *
+     * SCALABILITY WARNING — this queue is *process-local*. It only serializes
+     * transactions originating from THIS backend instance. If a second writer
+     * shares the same operator key (another backend replica, the
+     * settlement-engine, the sweeper-bot, or a horizontally-scaled deploy),
+     * each process computes `pending` nonces independently and they WILL
+     * collide / drop. A real fix needs a distributed lock or a single
+     * nonce-allocator service keyed on `(chainId, operatorAddress)`; that work
+     * is deferred. Until then, only ONE process per operator key may submit
+     * transactions — enforced as a single-writer assertion at boot
+     * (`assertSingleWriter`).
+     */
     private txQueues = new Map<string, Promise<any>>();
 
     constructor(private readonly configService: ConfigService) {}
 
     onModuleInit() {
         this.initializeChains();
+        this.assertSingleWriter();
+    }
+
+    /**
+     * Boot-time guard for the process-local nonce queue. The queue is only
+     * correct when exactly one process submits transactions per operator key.
+     * Set `ALLOW_MULTIPLE_TX_WRITERS=true` to acknowledge you have an external
+     * nonce coordinator and silence this; otherwise we warn loudly so a
+     * multi-replica deploy that would corrupt nonces is caught early.
+     */
+    private assertSingleWriter(): void {
+        const acknowledged =
+            (
+                this.configService.get<string>("ALLOW_MULTIPLE_TX_WRITERS") ??
+                "false"
+            ).toLowerCase() === "true";
+
+        if (acknowledged) {
+            this.logger.warn(
+                "ALLOW_MULTIPLE_TX_WRITERS=true — the process-local nonce queue " +
+                    "no longer guarantees nonce safety. You MUST coordinate nonces " +
+                    "externally (single nonce-allocator / distributed lock).",
+            );
+            return;
+        }
+
+        this.logger.warn(
+            "ViemService nonce queue is PROCESS-LOCAL: only ONE process may " +
+                "submit transactions per operator key. Running multiple backend " +
+                "replicas (or another service sharing the operator key) without " +
+                "an external nonce coordinator will corrupt nonces.",
+        );
     }
 
     private initializeChains() {

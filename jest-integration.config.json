@@ -10,7 +10,8 @@
     "moduleNameMapper": {
         "^@/(.*)$": "<rootDir>/src/$1",
         "^src/(.*)$": "<rootDir>/src/$1",
-        "^@centuari-labs/on-chain-effects$": "<rootDir>/src/__test__/stubs/on-chain-effects.stub.ts"
+        "^@centuari-labs/on-chain-effects$": "<rootDir>/src/__test__/stubs/on-chain-effects.stub.ts",
+        "^jose$": "<rootDir>/src/__test__/stubs/jose.stub.ts"
     },
     "testEnvironment": "node",
     "testTimeout": 30000

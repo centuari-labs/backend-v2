@@ -21,7 +21,7 @@ describe("PrivyAuthStrategy", () => {
     });
 
     describe("validate", () => {
-        it("should return AuthUser with userId and walletAddress from valid Privy token", async () => {
+        it("should return AuthUser with userId and the linked wallet address", async () => {
             const mockToken = "valid-privy-token";
             const mockPrivyResult = {
                 userId: "did:privy:12345",
@@ -33,14 +33,47 @@ describe("PrivyAuthStrategy", () => {
             };
 
             mockPrivyService.verify.mockResolvedValue(mockPrivyResult);
+            mockPrivyService.getUser.mockResolvedValue({
+                linkedAccounts: [
+                    {
+                        type: "wallet",
+                        walletClientType: "metamask",
+                        address: "0xabc0000000000000000000000000000000000001",
+                    },
+                ],
+            });
 
             const result = await strategy.validate(mockToken);
 
             expect(result).toEqual({
                 userId: "did:privy:12345",
-                walletAddress: "did:privy:12345",
+                walletAddress: "0xabc0000000000000000000000000000000000001",
             });
             expect(mockPrivyService.verify).toHaveBeenCalledWith(mockToken);
+        });
+
+        it("should fail closed (throw) when the account has no linked wallet", async () => {
+            const mockToken = "valid-privy-token";
+            mockPrivyService.verify.mockResolvedValue({
+                userId: "did:privy:12345",
+            });
+            mockPrivyService.getUser.mockResolvedValue({ linkedAccounts: [] });
+
+            await expect(strategy.validate(mockToken)).rejects.toThrow(
+                UnauthorizedException,
+            );
+        });
+
+        it("should fail closed (throw) when wallet lookup errors, never returning the DID", async () => {
+            const mockToken = "valid-privy-token";
+            mockPrivyService.verify.mockResolvedValue({
+                userId: "did:privy:12345",
+            });
+            mockPrivyService.getUser.mockRejectedValue(new Error("upstream"));
+
+            await expect(strategy.validate(mockToken)).rejects.toThrow(
+                UnauthorizedException,
+            );
         });
 
         it("should throw UnauthorizedException when Privy verify returns null", async () => {

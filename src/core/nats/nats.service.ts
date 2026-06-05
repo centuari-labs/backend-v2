@@ -11,13 +11,48 @@ export class NatsService implements OnModuleInit, OnModuleDestroy {
     private readonly logger = new Logger(NatsService.name);
     private connection: NatsConnection | null = null;
     private readonly natsUrl: string;
+    private readonly natsUser?: string;
+    private readonly natsPass?: string;
+    private readonly natsToken?: string;
 
     constructor() {
         this.natsUrl = process.env.NATS_URL || "nats://localhost:4222";
+        this.natsUser = process.env.NATS_USER || undefined;
+        this.natsPass = process.env.NATS_PASS || undefined;
+        this.natsToken = process.env.NATS_TOKEN || undefined;
+        this.assertCredentials();
     }
 
     async onModuleInit() {
         await this.connect();
+    }
+
+    /**
+     * Fail closed when NATS auth is required but no credentials are configured.
+     * Opt in with `NATS_REQUIRE_AUTH=true` (recommended in production) — a
+     * misconfigured deploy then crashes at boot instead of silently connecting
+     * to an unauthenticated broker that any client on the network could publish
+     * forged order/match messages to.
+     */
+    private assertCredentials(): void {
+        const requireAuth =
+            (process.env.NATS_REQUIRE_AUTH ?? "false").toLowerCase() === "true";
+        const hasCredentials =
+            Boolean(this.natsToken) ||
+            (Boolean(this.natsUser) && Boolean(this.natsPass));
+
+        if (requireAuth && !hasCredentials) {
+            throw new Error(
+                "[nats] NATS_REQUIRE_AUTH=true but no credentials configured. " +
+                    "Set NATS_TOKEN, or NATS_USER and NATS_PASS.",
+            );
+        }
+        if (!hasCredentials) {
+            this.logger.warn(
+                "NATS credentials not configured — connecting unauthenticated. " +
+                    "Set NATS_TOKEN or NATS_USER/NATS_PASS (and NATS_REQUIRE_AUTH=true) in production.",
+            );
+        }
     }
 
     async onModuleDestroy() {
@@ -31,6 +66,10 @@ export class NatsService implements OnModuleInit, OnModuleDestroy {
                 maxReconnectAttempts: -1,
                 reconnectTimeWait: 1000,
                 name: "centuari-backend",
+                ...(this.natsToken ? { token: this.natsToken } : {}),
+                ...(this.natsUser && this.natsPass
+                    ? { user: this.natsUser, pass: this.natsPass }
+                    : {}),
             };
 
             this.connection = await connect(options);

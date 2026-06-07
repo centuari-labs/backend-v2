@@ -1,4 +1,11 @@
-import "dotenv/config";
+// Load .env.contracts FIRST, then .env. dotenv never overrides an already-set
+// key, so contract addresses come from the machine-managed .env.contracts and a
+// stale hand-edited address in .env can no longer shadow them. (`import
+// "dotenv/config"` loaded only .env, which silently won over .env.contracts —
+// it pointed the backend at a dead old Centuari and reverted every repay.)
+import { config as loadEnv } from "dotenv";
+loadEnv({ path: ".env.contracts" });
+loadEnv();
 import { Logger, ValidationPipe } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
 import { json, urlencoded } from "express";

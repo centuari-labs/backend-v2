@@ -111,5 +111,20 @@
         "coverageDirectory": "./coverage",
         "testEnvironment": "node"
     },
+    "pnpm": {
+        "overrides": {
+            "jws@3": ">=3.2.3 <4",
+            "@nestjs/core": ">=11.1.18",
+            "path-to-regexp@8": ">=8.4.0",
+            "multer": ">=2.1.1",
+            "socket.io-parser": ">=4.2.6",
+            "body-parser@2": ">=2.2.2",
+            "qs@6": ">=6.15.2",
+            "ws@8": ">=8.20.1",
+            "bn.js@5": ">=5.2.3",
+            "handlebars@4": ">=4.7.9",
+            "fast-uri@3": ">=3.1.2"
+        }
+    },
     "packageManager": "pnpm@10.29.2+sha512.bef43fa759d91fd2da4b319a5a0d13ef7a45bb985a3d7342058470f9d2051a3ba8674e629672654686ef9443ad13a82da2beb9eeb3e0221c87b8154fff9d74b8"
 }

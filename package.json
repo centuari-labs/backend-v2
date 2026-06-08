@@ -25,7 +25,7 @@
         "db": "ts-node src/core/database/scripts/db.ts"
     },
     "dependencies": {
-        "@centuari-labs/on-chain-effects": "file:../on-chain-effects",
+        "@centuari-labs/on-chain-effects": "^0.4.0",
         "@nestjs/common": "^11.0.1",
         "@nestjs/config": "^4.0.3",
         "@nestjs/core": "^11.0.1",

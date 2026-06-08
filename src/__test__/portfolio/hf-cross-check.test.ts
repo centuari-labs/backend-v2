@@ -28,10 +28,47 @@ interface Vectors {
     expectedHealthy: boolean[];
 }
 
-const FIXTURE_PATH = path.resolve(
-    __dirname,
-    "../../../../smart-contract-revamp/test/fixtures/hf-cross-check-vectors.json",
-);
+const FIXTURE_REL_PATH =
+    "smart-contract-revamp/test/fixtures/hf-cross-check-vectors.json";
+
+/**
+ * Resolve the shared HF cross-check fixture robustly, regardless of how deeply
+ * the backend-v2 checkout is nested. The previous hard-coded
+ * `../../../../smart-contract-revamp/...` path assumed backend-v2 was a direct
+ * sibling of smart-contract-revamp under the polyrepo root, which breaks when
+ * the suite runs inside a per-session git worktree
+ * (`backend-v2/.claude/worktrees/<id>/`, 3 levels deeper).
+ *
+ * Resolution order:
+ *   1. `HF_FIXTURE_PATH` env override (explicit escape hatch for CI/containers).
+ *   2. Walk up from this file until a directory contains the fixture at
+ *      `<dir>/smart-contract-revamp/test/fixtures/...` — finds the polyrepo
+ *      root from both the main checkout and any worktree depth.
+ */
+function resolveFixturePath(): string {
+    const override = process.env.HF_FIXTURE_PATH;
+    if (override) {
+        return path.resolve(override);
+    }
+
+    let dir = __dirname;
+    while (true) {
+        const candidate = path.join(dir, FIXTURE_REL_PATH);
+        if (fs.existsSync(candidate)) {
+            return candidate;
+        }
+        const parent = path.dirname(dir);
+        if (parent === dir) {
+            throw new Error(
+                `Could not locate ${FIXTURE_REL_PATH} by walking up from ` +
+                    `${__dirname}. Set HF_FIXTURE_PATH to point at the shared fixture.`,
+            );
+        }
+        dir = parent;
+    }
+}
+
+const FIXTURE_PATH = resolveFixturePath();
 
 describe("SC-9 HF cross-check (shared on/off-chain vectors)", () => {
     const v: Vectors = JSON.parse(fs.readFileSync(FIXTURE_PATH, "utf8"));

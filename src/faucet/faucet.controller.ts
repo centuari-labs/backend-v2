@@ -18,7 +18,8 @@ import { Wallet } from "../common/decorators/wallet.decorator";
 export class FaucetController {
     constructor(private readonly faucetService: FaucetService) {}
 
-    // Faucet drips real testnet tokens on-chain — tightly rate-limit per IP.
+    // Faucet drips real testnet tokens on-chain — tight per-identity
+    // throttle (user bucket via the global tracker; IP when unauthenticated).
     @Throttle({
         short: { ttl: 1000, limit: 1 },
         long: { ttl: 60000, limit: 5 },

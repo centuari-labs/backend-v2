@@ -9,6 +9,7 @@ import { RedisRateLimiterService } from "../common/rate-limit/redis-rate-limiter
 import { AuthGuard } from "../common/guards/auth.guard";
 import { AuthStrategyFactory } from "../common/guards/strategies/auth-strategy.factory";
 import { PrivyAuthStrategy } from "../common/guards/strategies/privy-auth.strategy";
+import { RequestAuthService } from "../common/guards/strategies/request-auth.service";
 import { EventsGateway } from "./websocket/websocket.gateway";
 import { OrdersModule } from "../orders/orders.module";
 
@@ -25,6 +26,7 @@ import { OrdersModule } from "../orders/orders.module";
         AuthGuard,
         AuthStrategyFactory,
         PrivyAuthStrategy,
+        RequestAuthService,
         EventsGateway,
     ],
     providers: [
@@ -38,6 +40,7 @@ import { OrdersModule } from "../orders/orders.module";
         AuthGuard,
         AuthStrategyFactory,
         PrivyAuthStrategy,
+        RequestAuthService,
         EventsGateway,
     ],
 })

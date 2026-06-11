@@ -3,12 +3,17 @@
 
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { Injectable, Logger, UnauthorizedException } from "@nestjs/common";
+import {
+    Injectable,
+    Logger,
+    type OnModuleInit,
+    UnauthorizedException,
+} from "@nestjs/common";
 import { PrivyClient } from "@privy-io/server-auth";
 import * as jose from "jose";
 
 @Injectable()
-export class PrivyService {
+export class PrivyService implements OnModuleInit {
     private readonly logger = new Logger(PrivyService.name);
     private privy: PrivyClient;
     private readonly verificationKey: string | null;
@@ -57,9 +62,36 @@ export class PrivyService {
         return key;
     }
 
+    /**
+     * Best-effort pre-warm of the SDK's verification-key fetch. The SDK only
+     * caches the key on a SUCCESSFUL fetch — a failed fetch is retried on
+     * every verifyAuthToken call. When no local key file is present, trigger
+     * the one-time fetch at boot so the first real request (and every request
+     * during a Privy outage) doesn't pay the network round-trip.
+     */
+    async onModuleInit() {
+        if (this.verificationKey) {
+            return;
+        }
+        try {
+            // Structurally valid JWT so the SDK reaches the key-fetch step;
+            // verification itself is expected to fail and is ignored.
+            await this.privy.verifyAuthToken(
+                "eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjB9.AA",
+            );
+        } catch {
+            // Expected — the dummy token never verifies. Key fetch (if it
+            // succeeded) is now cached inside the SDK client.
+        }
+    }
+
     async verify(token: string) {
         try {
-            const result = await this.privy.verifyAuthToken(token);
+            // Pass the locally-loaded verification key when present so this
+            // is a pure local crypto check — no network dependency at all.
+            const result = this.verificationKey
+                ? await this.privy.verifyAuthToken(token, this.verificationKey)
+                : await this.privy.verifyAuthToken(token);
 
             if (!result || !result.userId) {
                 throw new UnauthorizedException("Invalid Privy Access Token");

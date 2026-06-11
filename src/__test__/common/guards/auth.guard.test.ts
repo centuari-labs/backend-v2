@@ -16,6 +16,8 @@ describe("AuthGuard", () => {
     beforeEach(async () => {
         mockStrategy = {
             validate: jest.fn(),
+            verifyPrincipal: jest.fn(),
+            resolveAuthUser: jest.fn(),
             getName: jest.fn().mockReturnValue("mock"),
         };
 

@@ -6,6 +6,14 @@ jest.mock("../../common/guards/strategies/privy-auth.strategy", () => ({
             return { userId: "mock", walletAddress: "0xMock" };
         }
 
+        async verifyPrincipal() {
+            return { userId: "mock" };
+        }
+
+        async resolveAuthUser() {
+            return { userId: "mock", walletAddress: "0xMock" };
+        }
+
         getName() {
             return "privy";
         }
@@ -15,15 +23,19 @@ jest.mock("../../common/guards/strategies/privy-auth.strategy", () => ({
 import { GUARDS_METADATA } from "@nestjs/common/constants";
 import { AuthController } from "../../auth/auth.controller";
 import { AuthGuard } from "../../common/guards/auth.guard";
-import { WalletThrottlerGuard } from "../../common/guards/wallet-throttler.guard";
 
 describe("AuthController", () => {
-    it("should throttle access-code redemption after authentication", () => {
+    // Throttling is enforced globally by WalletThrottlerGuard (APP_GUARD in
+    // app.module.ts), which now keys buckets on the verified identity by
+    // itself. A route-level WalletThrottlerGuard would double-count every
+    // request against the same user bucket, so the route declares AuthGuard
+    // only.
+    it("should guard access-code redemption with AuthGuard only", () => {
         const guards = Reflect.getMetadata(
             GUARDS_METADATA,
             AuthController.prototype.redeemAccessCode,
         );
 
-        expect(guards).toEqual([AuthGuard, WalletThrottlerGuard]);
+        expect(guards).toEqual([AuthGuard]);
     });
 });

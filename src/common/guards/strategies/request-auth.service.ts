@@ -16,7 +16,7 @@ interface MemoCarrier {
     [AUTH_MEMO]?: RequestAuthMemo;
 }
 
-type AuthenticatedRequest = MemoCarrier & {
+export type AuthenticatedRequest = MemoCarrier & {
     headers?: { authorization?: string };
 };
 

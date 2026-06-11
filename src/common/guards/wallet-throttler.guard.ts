@@ -21,6 +21,12 @@ import {
  * AuthGuard never re-verifies). Requests without a verifiable token fall
  * back to the per-IP bucket. The `user:` / `ip:` prefixes keep the two key
  * namespaces separate and make bucket types readable when debugging storage.
+ *
+ * Trust caveat: in ENABLE_DEV_AUTH environments, dev tokens mint per-address
+ * buckets at zero cost — such environments are assumed trusted/non-public
+ * (dev auth already bypasses real authentication entirely, which dominates
+ * any throttle concern). Production cannot enable dev auth (fail-closed in
+ * DevAuthStrategy).
  */
 @Injectable()
 export class WalletThrottlerGuard extends ThrottlerGuard {
@@ -53,6 +59,6 @@ export class WalletThrottlerGuard extends ThrottlerGuard {
                 }`,
             );
         }
-        return `ip:${String(req.ip)}`;
+        return `ip:${String(req.ip ?? "unknown")}`;
     }
 }

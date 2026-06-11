@@ -3,11 +3,8 @@ import { AuthStrategyFactory } from "./auth-strategy.factory";
 import type { AuthPrincipal, AuthUser } from "./auth-strategy.interface";
 
 interface RequestAuthMemo {
-    principal: AuthPrincipal | null;
-    principalSettled: boolean;
-    authUser?: AuthUser;
-    authError?: unknown;
-    authSettled: boolean;
+    principal?: Promise<AuthPrincipal | null>;
+    authUser?: Promise<AuthUser>;
 }
 
 const AUTH_MEMO = Symbol("centuari.requestAuthMemo");
@@ -22,32 +19,46 @@ export type AuthenticatedRequest = MemoCarrier & {
 
 /**
  * Single verification path shared by WalletThrottlerGuard (global, pre-route)
- * and AuthGuard (route-level). Results — success AND failure — are memoized
- * on the request object via a Symbol key, so one request never verifies a
- * token twice regardless of how many guards consult it.
+ * and AuthGuard (route-level). The PROMISE of each stage — not its value — is
+ * memoized on the request object via a Symbol key, so concurrent or repeated
+ * consumers share one in-flight verification and a request never verifies a
+ * token twice.
  *
  * Two stages (see IAuthStrategy):
  * - getPrincipal: cheap local verification for the throttle bucket key.
- *   NEVER throws — a failed/missing token only means the tracker falls back
+ *   NEVER rejects — a failed/missing token only means the tracker falls back
  *   to the IP bucket; rejecting requests is AuthGuard's job.
  * - getAuthUser: full resolution (wallet extraction, may hit network).
- *   Throws UnauthorizedException on failure, exactly once per request.
+ *   Throws UnauthorizedException on failure. When stage-1 settled to null
+ *   (which absorbs transient infra errors as well as invalid tokens), this
+ *   stage re-attempts a full validate() so a transient blip is not memoized
+ *   into a definitive 401 — genuinely invalid tokens still fail.
  */
 @Injectable()
 export class RequestAuthService {
+    // Universal bound for every strategy: nothing larger than this is ever
+    // handed to a verifier (crypto or otherwise).
+    private static readonly MAX_TOKEN_LENGTH = 4096;
+
     private readonly logger = new Logger(RequestAuthService.name);
 
     constructor(private readonly strategyFactory: AuthStrategyFactory) {}
 
-    async getPrincipal(
+    getPrincipal(request: AuthenticatedRequest): Promise<AuthPrincipal | null> {
+        const memo = this.memoOf(request);
+        memo.principal ??= this.resolvePrincipal(request);
+        return memo.principal;
+    }
+
+    getAuthUser(request: AuthenticatedRequest): Promise<AuthUser> {
+        const memo = this.memoOf(request);
+        memo.authUser ??= this.resolveAuthUser(request);
+        return memo.authUser;
+    }
+
+    private async resolvePrincipal(
         request: AuthenticatedRequest,
     ): Promise<AuthPrincipal | null> {
-        const memo = this.memoOf(request);
-        if (memo.principalSettled) {
-            return memo.principal;
-        }
-        memo.principalSettled = true;
-
         const token = this.extractBearerToken(request);
         if (!token) {
             return null;
@@ -55,7 +66,7 @@ export class RequestAuthService {
 
         try {
             const strategy = this.strategyFactory.getStrategy(token);
-            memo.principal = await strategy.verifyPrincipal(token);
+            return await strategy.verifyPrincipal(token);
         } catch (error) {
             // Identity is only a bucket key here — never reject the request.
             this.logger.debug(
@@ -63,51 +74,39 @@ export class RequestAuthService {
                     error instanceof Error ? error.message : String(error)
                 }`,
             );
+            return null;
         }
-        return memo.principal;
     }
 
-    async getAuthUser(request: AuthenticatedRequest): Promise<AuthUser> {
-        const memo = this.memoOf(request);
-        if (memo.authSettled) {
-            if (memo.authUser) {
-                return memo.authUser;
-            }
-            throw memo.authError;
+    private async resolveAuthUser(
+        request: AuthenticatedRequest,
+    ): Promise<AuthUser> {
+        const token = this.extractBearerToken(request);
+        if (!token) {
+            throw new UnauthorizedException("Authorization header is required");
         }
 
-        try {
-            const token = this.extractBearerToken(request);
-            if (!token) {
-                throw new UnauthorizedException(
-                    "Authorization header is required",
-                );
-            }
+        const strategy = this.strategyFactory.getStrategy(token);
+        const principal = await this.getPrincipal(request);
 
-            const principal = await this.getPrincipal(request);
-            if (!principal) {
-                throw new UnauthorizedException("Invalid or expired token");
-            }
+        const user = principal
+            ? await strategy.resolveAuthUser(token, principal)
+            : // Stage-1 null conflates "invalid" with "transient infra error";
+              // re-attempt the full path so only genuine failures 401.
+              await strategy.validate(token);
 
-            const strategy = this.strategyFactory.getStrategy(token);
-            memo.authUser = await strategy.resolveAuthUser(token, principal);
-            return memo.authUser;
-        } catch (error) {
-            memo.authError = error;
-            throw error;
-        } finally {
-            memo.authSettled = true;
+        if (!user || !user.userId || !user.walletAddress) {
+            // A strategy must never resolve to an unusable user; fail closed
+            // instead of letting request.user become undefined downstream.
+            throw new UnauthorizedException("Invalid or expired token");
         }
+        return user;
     }
 
     private memoOf(request: AuthenticatedRequest): RequestAuthMemo {
         let memo = request[AUTH_MEMO];
         if (!memo) {
-            memo = {
-                principal: null,
-                principalSettled: false,
-                authSettled: false,
-            };
+            memo = {};
             request[AUTH_MEMO] = memo;
         }
         return memo;
@@ -120,6 +119,9 @@ export class RequestAuthService {
         }
         const [type, token] = authHeader.split(" ");
         if (type !== "Bearer" || !token) {
+            return null;
+        }
+        if (token.length > RequestAuthService.MAX_TOKEN_LENGTH) {
             return null;
         }
         return token;

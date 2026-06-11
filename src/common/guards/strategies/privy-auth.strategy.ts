@@ -48,19 +48,11 @@ export class PrivyAuthStrategy implements IAuthStrategy {
         };
     }
 
+    // Composes the two stages so there is exactly ONE verification code path.
+    // Direct callers (e.g. the websocket gateway) get the same cheap-rejection
+    // bound as the HTTP path — no drift between entry points.
     async validate(token: string): Promise<AuthUser> {
-        const result = await this.privyService.verify(token);
-
-        if (!result || !result.userId) {
-            throw new UnauthorizedException("Invalid Privy token");
-        }
-
-        const walletAddress = await this.extractWalletAddress(result.userId);
-
-        return {
-            userId: result.userId,
-            walletAddress,
-        };
+        return this.resolveAuthUser(token, await this.verifyPrincipal(token));
     }
 
     getName(): string {

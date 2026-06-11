@@ -8,6 +8,12 @@ jest.mock("../src/common/guards/strategies/privy-auth.strategy", () => ({
         async validate() {
             return { userId: "mock", walletAddress: "0xMock" };
         }
+        async verifyPrincipal() {
+            return { userId: "mock" };
+        }
+        async resolveAuthUser() {
+            return { userId: "mock", walletAddress: "0xMock" };
+        }
         getName() {
             return "privy";
         }
@@ -85,7 +91,12 @@ describe("Order Lifecycle E2E", () => {
                 DevAuthStrategy,
                 {
                     provide: PrivyAuthStrategy,
-                    useValue: { validate: jest.fn(), getName: () => "privy" },
+                    useValue: {
+                        validate: jest.fn(),
+                        verifyPrincipal: jest.fn(),
+                        resolveAuthUser: jest.fn(),
+                        getName: () => "privy",
+                    },
                 },
             ],
         }).compile();

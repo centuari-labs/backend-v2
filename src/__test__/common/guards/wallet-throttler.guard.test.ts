@@ -145,10 +145,14 @@ describe("WalletThrottlerGuard.getTracker", () => {
             const devGuard = buildGuard(new RequestAuthService(factory));
 
             const tracker = await devGuard.trackerOf(
-                createRequest("Bearer DEV_TOKEN_0xAbC123"),
+                createRequest(
+                    "Bearer DEV_TOKEN_0xAbC1000000000000000000000000000000000123",
+                ),
             );
 
-            expect(tracker).toBe("user:dev-user-0xabc123");
+            expect(tracker).toBe(
+                "user:dev-user-0xabc1000000000000000000000000000000000123",
+            );
         } finally {
             process.env.ENABLE_DEV_AUTH = previousEnv;
         }

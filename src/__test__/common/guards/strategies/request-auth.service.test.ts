@@ -1,7 +1,10 @@
 import { UnauthorizedException } from "@nestjs/common";
 import { Test, TestingModule } from "@nestjs/testing";
 import { AuthStrategyFactory } from "../../../../common/guards/strategies/auth-strategy.factory";
-import type { IAuthStrategy } from "../../../../common/guards/strategies/auth-strategy.interface";
+import type {
+    AuthUser,
+    IAuthStrategy,
+} from "../../../../common/guards/strategies/auth-strategy.interface";
 import { RequestAuthService } from "../../../../common/guards/strategies/request-auth.service";
 
 // Mock jose and PrivyService to avoid jose ESM import issues
@@ -80,6 +83,13 @@ describe("RequestAuthService", () => {
             await expect(service.getPrincipal(request)).resolves.toBeNull();
             expect(mockStrategy.verifyPrincipal).not.toHaveBeenCalled();
         });
+
+        it("rejects oversized tokens before any strategy call (universal bound)", async () => {
+            const request = createRequest(`Bearer ${"a".repeat(5000)}`);
+
+            await expect(service.getPrincipal(request)).resolves.toBeNull();
+            expect(mockStrategy.verifyPrincipal).not.toHaveBeenCalled();
+        });
     });
 
     describe("getAuthUser", () => {
@@ -129,8 +139,11 @@ describe("RequestAuthService", () => {
             );
         });
 
-        it("throws when the principal failed verification", async () => {
+        it("throws for a genuinely invalid token (stage-1 null, full validate also fails)", async () => {
             mockStrategy.verifyPrincipal.mockRejectedValue(
+                new UnauthorizedException("Invalid token"),
+            );
+            mockStrategy.validate.mockRejectedValue(
                 new UnauthorizedException("Invalid token"),
             );
             const request = createRequest("Bearer bad.jwt.token");
@@ -139,6 +152,40 @@ describe("RequestAuthService", () => {
                 UnauthorizedException,
             );
             expect(mockStrategy.resolveAuthUser).not.toHaveBeenCalled();
+            expect(mockStrategy.validate).toHaveBeenCalledTimes(1);
+        });
+
+        it("recovers from a transient stage-1 failure via full validate (no definitive 401 from an infra blip)", async () => {
+            mockStrategy.verifyPrincipal.mockRejectedValue(
+                new Error("network blip"),
+            );
+            mockStrategy.validate.mockResolvedValue({
+                userId: "did:privy:abc",
+                walletAddress: "0xabc",
+            });
+            const request = createRequest("Bearer valid.jwt.token");
+
+            // Tracker first: absorbs the blip into an IP-bucket fallback.
+            await expect(service.getPrincipal(request)).resolves.toBeNull();
+            // AuthGuard then still authenticates the user.
+            const user = await service.getAuthUser(request);
+
+            expect(user.walletAddress).toBe("0xabc");
+            expect(mockStrategy.validate).toHaveBeenCalledTimes(1);
+        });
+
+        it("fails closed when a strategy resolves a falsy/unusable user", async () => {
+            mockStrategy.verifyPrincipal.mockResolvedValue({
+                userId: "did:privy:abc",
+            });
+            mockStrategy.resolveAuthUser.mockResolvedValue(
+                undefined as unknown as AuthUser,
+            );
+            const request = createRequest("Bearer valid.jwt.token");
+
+            await expect(service.getAuthUser(request)).rejects.toThrow(
+                UnauthorizedException,
+            );
         });
 
         it("memoizes failure: rethrows without re-resolving (fail-closed kept)", async () => {

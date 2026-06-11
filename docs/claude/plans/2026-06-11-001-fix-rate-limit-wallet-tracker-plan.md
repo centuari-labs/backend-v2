@@ -513,6 +513,9 @@ atau teranotasi peringatan.
 | Asersi stale di `auth-flow.integration.test.ts` ("always returns PrivyAuthStrategy") pecah saat refactor | Scope R9: perbaiki asersi seperlunya, jangan refactor suite |
 | e2e dev-token bergantung `ENABLE_DEV_AUTH` di shell env | Jika merah saat verifikasi, set env di konfigurasi test e2e (perbaikan minimal) |
 | Sampai PR-2 (`trust proxy`), bucket `ip:` masih kolaps di belakang proxy Next | Diketahui & diterima di scope; jalur ber-token sudah benar setelah PR ini |
+| Trafik ber-token keluar dari plafon IP: N akun Privy dari satu mesin = N bucket (sybil) | Trade-off sadar: plafon IP untuk trafik terautentikasi baru layak SETELAH PR-2 (sebelum trust proxy, plafon IP justru mengkolaps semua user di belakang proxy Next). Re-evaluasi di PR-4/PR-5; biaya sybil = pembuatan akun Privy |
+| Kelas penolakan baru: token > 4096 char / bukan 3-segmen JWT → 401 generik | Laten — access token Privy saat ini kecil; jika format token Privy berubah, gejala terlihat sebagai 401 "expired". Terdokumentasi di sini agar mudah didiagnosis |
+| Tanpa key file DAN Privy down sejak boot: tracker mencoba key-fetch per request | Prewarm non-blocking + fallback stale-key memperkecil jendela; circuit breaker level service = kandidat PR-6 |
 
 ---
 

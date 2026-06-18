@@ -1,4 +1,11 @@
-import { Column, CreateDateColumn, Entity, Index, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
+import {
+    Column,
+    CreateDateColumn,
+    Entity,
+    Index,
+    PrimaryGeneratedColumn,
+    UpdateDateColumn,
+} from "typeorm";
 
 @Entity("assets")
 export class Token {
@@ -15,20 +22,23 @@ export class Token {
     @Column({ type: "text" })
     name: string;
 
-    @Column({ name: "image_url", type: "text" })
-    imageUrl: string;
-
     @Column({ name: "is_loan_token", type: "boolean" })
     isLoanToken: boolean;
 
-    @Column({ name: "lltv", type: "decimal" })
-    LLTV: number;
+    @Column({ name: "chain_id", type: "numeric", nullable: true })
+    chainId: number | null;
 
-    @Column({ name: "lt", type: "decimal" })
-    LT: number;
+    @Column({ name: "image_url", type: "text", nullable: true })
+    imageUrl: string | null;
 
-    @Column({ name: "lp", type: "decimal" })
-    LP: number;
+    @Column({ name: "avg_ltv", type: "numeric", nullable: true })
+    averageLTV: number | null;
+
+    @Column({ name: "coingecko_id", type: "text", nullable: true })
+    coingeckoId: string | null;
+
+    @Column({ type: "int", nullable: true })
+    decimals: number | null;
 
     @CreateDateColumn({ name: "created_at" })
     createdAt: Date;

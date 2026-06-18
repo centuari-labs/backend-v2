@@ -46,9 +46,18 @@ program
     .action((name) => exec("create-seed", [name]));
 
 program
-    .command("seed:run")
-    .description("Run all seed files")
-    .action(() => exec("run-seed"));
+    .command("seed:run [target]")
+    .description("Run seed files (optionally filtered by target)")
+    .action((target) => exec("run-seed", target ? [target] : []));
+
+program
+    .command("realign:assets [deployJson]")
+    .description(
+        "Re-align seed token_address values with a deployment's mockTokens (path arg or DEPLOY_JSON env)",
+    )
+    .action((deployJson) =>
+        exec("realign-assets-from-deploy", deployJson ? [deployJson] : []),
+    );
 
 program
     .command("reset")

@@ -111,7 +111,7 @@ curl -X POST http://localhost:3000/orders/lend/market \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer <YOUR_TOKEN>" \
   -d '{
-    "loanToken": "USDC",
+    "assetId": "b66a2641-3339-4a48-805c-6da248f33dee",
     "amount": "100"
   }'
 ```
@@ -122,7 +122,7 @@ curl -X POST http://localhost:3000/orders/lend/limit \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -d '{
-    "loanToken": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+    "assetId": "b66a2641-3339-4a48-805c-6da248f33dee",
     "amount": "100",
     "rate": 550,
     "maturities": [1720000000]
@@ -135,7 +135,7 @@ curl -X POST http://localhost:3000/orders/borrow/market \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer <YOUR_TOKEN>" \
   -d '{
-    "loanToken": "ETH",
+    "assetId": "b66a2641-3339-4a48-805c-6da248f33dee",
     "amount": "10"
   }'
 ```
@@ -146,7 +146,7 @@ curl -X POST http://localhost:3000/orders/borrow/limit \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer <YOUR_TOKEN>" \
   -d '{
-    "loanToken": "ETH",
+    "assetId": "b66a2641-3339-4a48-805c-6da248f33dee",
     "amount": "10",
     "interestRate": 2.5
   }'

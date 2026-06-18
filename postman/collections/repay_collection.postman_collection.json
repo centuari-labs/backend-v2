@@ -1,0 +1,61 @@
+{
+    "info": {
+        "_postman_id": "0ef703ed-5a04-49b6-ba91-40acee2ac73c",
+        "name": "Repay",
+        "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+    },
+    "item": [
+        {
+            "name": "repay",
+            "id": "c59132ba-52b0-4f0d-b984-795529cc6bfd",
+            "request": {
+                "method": "POST",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6IjJsR0pIc2VidkJPeHkxNWRUY2hkaTV2OU5xM2NvRVBsYlFDelFDbDlSeDAifQ.eyJzaWQiOiJjbW1wNGtvNmMwMXY2MGRsYnk1bnJxOHFzIiwiaXNzIjoicHJpdnkuaW8iLCJpYXQiOjE3NzM0MjAxNTgsImF1ZCI6ImNtZm1tb213dzAxNmZqbDBiZWU5aTJkczQiLCJzdWIiOiJkaWQ6cHJpdnk6Y21tamFhNmlqMDA4ODBkam9oa2JoNW4wYSIsImV4cCI6MTc3MzQyMzc1OH0.CZvKEslyl-TpPIoPpqd6MRZknHm-hPIeaw8I9xPrrOEGt9gaYYnrzXwYwgmyaawR8BtAkTNd41ou0TEmq8HHDg",
+                        "type": "text",
+                        "uuid": "5c744b5f-4428-4772-ad90-1c99c7f9c214"
+                    }
+                ],
+                "body": {
+                    "mode": "raw",
+                    "raw": "{\n  \"assetId\": \"ac7ae153-ad3f-44aa-96e7-44c8d22e84ab\",\n  \"amount\": \"10\"\n}\n",
+                    "options": {
+                        "raw": {
+                            "language": "json"
+                        }
+                    }
+                },
+                "url": {
+                    "raw": "http://localhost:3000/repay",
+                    "protocol": "http",
+                    "host": [
+                        "localhost"
+                    ],
+                    "port": "3000",
+                    "path": [
+                        "repay"
+                    ]
+                }
+            },
+            "response": [
+                {
+                    "id": "repay-resp-001",
+                    "name": "200 OK",
+                    "status": "OK",
+                    "code": 200,
+                    "_postman_previewlanguage": "json",
+                    "header": [
+                        {
+                            "key": "Content-Type",
+                            "value": "application/json"
+                        }
+                    ],
+                    "cookie": [],
+                    "body": "{\n  \"statusCode\": 200,\n  \"data\": {\n    \"txHash\": \"0xabc123def456789abc123def456789abc123def456789abc123def456789abcd\",\n    \"status\": \"SUCCESS\"\n  }\n}"
+                }
+            ]
+        }
+    ]
+}

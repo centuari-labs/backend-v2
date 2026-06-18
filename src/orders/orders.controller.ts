@@ -5,20 +5,22 @@ import {
     HttpStatus,
     Param,
     ParseUUIDPipe,
-    Patch,
     Post,
+    Put,
     UseGuards,
 } from "@nestjs/common";
 import { Wallet, CurrentUser } from "../common/decorators/wallet.decorator";
 import { AuthGuard } from "../common/guards/auth.guard";
-import { CreateBorrowLimitOrderDto } from "./dto/create-borrow-limit-order.dto";
-import { CreateBorrowMarketOrderDto } from "./dto/create-borrow-market-order.dto";
-import { CreateLendLimitOrderDto } from "./dto/create-lend-limit-order.dto";
-import { CreateLendMarketOrderDto } from "./dto/create-lend-market-order.dto";
+import {
+    CreateLimitOrderDto,
+    CreateMarketOrderDto,
+} from "./dto/create-order.dto";
 import { OrdersService } from "./orders.service";
 import { OrderResponse } from "./dto/order-response.dto";
-import { Order } from "./entities/order.entity";
+import { UpdateOrderDto } from "./dto/update-order.dto";
 
+// WalletThrottlerGuard is registered as APP_GUARD in app.module.ts and
+// runs globally; only AuthGuard needs explicit @UseGuards here.
 @Controller("orders")
 @UseGuards(AuthGuard)
 export class OrdersController {
@@ -27,48 +29,60 @@ export class OrdersController {
     @Post("lend/market")
     @HttpCode(HttpStatus.CREATED)
     async createLendMarketOrder(
-        @Body() dto: CreateLendMarketOrderDto,
+        @Body() dto: CreateMarketOrderDto,
         @Wallet() walletAddress: string,
         @CurrentUser() user: { userId: string },
     ): Promise<OrderResponse> {
-        const order = await this.ordersService.createLendMarketOrder(dto, walletAddress, user.userId);
-        return this.mapToResponse(order, dto, walletAddress);
+        return this.ordersService.createLendMarketOrder(
+            dto,
+            walletAddress,
+            user.userId,
+        );
     }
 
     @Post("lend/limit")
     @HttpCode(HttpStatus.CREATED)
     async createLendLimitOrder(
-        @Body() dto: CreateLendLimitOrderDto,
+        @Body() dto: CreateLimitOrderDto,
         @Wallet() walletAddress: string,
         @CurrentUser() user: { userId: string },
     ): Promise<OrderResponse> {
-        const order = await this.ordersService.createLendLimitOrder(dto, walletAddress, user.userId);
-        return this.mapToResponse(order, dto, walletAddress);
+        return this.ordersService.createLendLimitOrder(
+            dto,
+            walletAddress,
+            user.userId,
+        );
     }
 
     @Post("borrow/market")
     @HttpCode(HttpStatus.CREATED)
     async createBorrowMarketOrder(
-        @Body() dto: CreateBorrowMarketOrderDto,
+        @Body() dto: CreateMarketOrderDto,
         @Wallet() walletAddress: string,
         @CurrentUser() user: { userId: string },
     ): Promise<OrderResponse> {
-        const order = await this.ordersService.createBorrowMarketOrder(dto, walletAddress, user.userId);
-        return this.mapToResponse(order, dto, walletAddress);
+        return this.ordersService.createBorrowMarketOrder(
+            dto,
+            walletAddress,
+            user.userId,
+        );
     }
 
     @Post("borrow/limit")
     @HttpCode(HttpStatus.CREATED)
     async createBorrowLimitOrder(
-        @Body() dto: CreateBorrowLimitOrderDto,
+        @Body() dto: CreateLimitOrderDto,
         @Wallet() walletAddress: string,
         @CurrentUser() user: { userId: string },
     ): Promise<OrderResponse> {
-        const order = await this.ordersService.createBorrowLimitOrder(dto, walletAddress, user.userId);
-        return this.mapToResponse(order, dto, walletAddress);
+        return this.ordersService.createBorrowLimitOrder(
+            dto,
+            walletAddress,
+            user.userId,
+        );
     }
 
-    @Patch(":id/cancel")
+    @Post(":id/cancel")
     async cancelOrder(
         @Param("id", ParseUUIDPipe) id: string,
         @Wallet() walletAddress: string,
@@ -76,33 +90,12 @@ export class OrdersController {
         return this.ordersService.cancelOrder(id, walletAddress);
     }
 
-    private mapToResponse(
-        order: Order,
-        dto: { loanToken: string; maturities?: number[] },
-        walletAddress: string,
-    ): OrderResponse {
-        return {
-            statusCode: HttpStatus.CREATED,
-            data: {
-                orderId: order.id,
-                walletAddress: walletAddress,
-                loanToken: dto.loanToken,
-                maturities: dto.maturities ?? [],
-                timestamp: new Date(order.createdAt).getTime(),
-                side: order.side.toLowerCase(),
-                type: order.type.toLowerCase(),
-                status: order.status.toLowerCase(),
-                originalAmount: order.quantity,
-                remainingAmount: order.quantity,
-                settlementFeeAmount: order.settlementFee,
-                rate: Number(order.rate),
-                transactionHash: null,
-                blockNumber: null,
-                createdAt: order.createdAt,
-                updatedAt: order.updatedAt,
-                filledAt: null,
-                cancelledAt: null,
-            },
-        };
+    @Put(":id/update")
+    async updateOrder(
+        @Param("id", ParseUUIDPipe) id: string,
+        @Wallet() walletAddress: string,
+        @Body() dto: UpdateOrderDto,
+    ) {
+        return this.ordersService.updateOrder(id, walletAddress, dto);
     }
 }

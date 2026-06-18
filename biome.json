@@ -28,11 +28,20 @@
             }
         }
     },
-    "files": {},
+    "files": {
+        "includes": [
+            "**",
+            "!**/dist",
+            "!**/node_modules",
+            "!**/build",
+            "!**/coverage",
+            "!**/postman"
+        ]
+    },
     "assist": {
         "actions": {
             "source": {
-                "organizeImports": "on"
+                "organizeImports": "off"
             }
         }
     },

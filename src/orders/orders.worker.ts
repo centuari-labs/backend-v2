@@ -1,0 +1,1100 @@
+import { Injectable, Logger, OnModuleInit } from "@nestjs/common";
+import { Interval } from "@nestjs/schedule";
+import { InjectRepository } from "@nestjs/typeorm";
+import { In, Repository } from "typeorm";
+import { ConfigService } from "@nestjs/config";
+import { erc20Abi, type Abi, type TransactionReceipt } from "viem";
+import { ViemService } from "../core/viem/viem.service";
+import { ChainConfigService } from "../core/chain-config/chain-config.service";
+import { FaucetService } from "../faucet/faucet.service";
+import HubDepositorAbiJson from "../abi/HubDepositor.json";
+import { privateKeyToAccount } from "viem/accounts";
+import { keccak256, toHex } from "viem";
+
+const HubDepositorAbi = HubDepositorAbiJson as Abi;
+import { OrderRepository } from "./repositories/order.repository";
+import { OrdersService } from "./orders.service";
+import { MarketRepositories } from "../market/repository/market.repository";
+import { Token } from "../tokens/entities/token.entity";
+import { PortfolioService } from "../portfolio/portfolio.service";
+import { TokensService } from "../tokens/tokens.service";
+import { OrderSide } from "./constants/order.constants";
+import {
+    humanToBaseUnits,
+    baseUnitsToHuman,
+} from "../common/utils/number.utils";
+import { PriceService } from "../price/price.service";
+import { HEALTH_FACTOR_NO_DEBT } from "../portfolio/helpers/health-factor.helpers";
+
+const ORDER_CYCLE_INTERVAL_MS = 60_000;
+const CACHE_REFRESH_INTERVAL_MS = 600_000;
+
+const RATE_MIN = 500;
+const RATE_MAX = 1500;
+const MAX_SPREAD_BPS = 100; // 1% maximum spread in the order book
+const HALF_SPREAD = MAX_SPREAD_BPS / 2; // 50 bp
+const SPREAD_PERCENT_LIMIT = 0.01; // (bestAsk - bestBid) / bestBid threshold
+// Bot natural quote offsets are relative to mid: lend = mid * (1+pct),
+// borrow = mid * (1-pct). At 0.4%, total spread is 0.8% — safely under the
+// 1% cancel threshold so the bot's own quotes never trigger a cancel.
+const HALF_SPREAD_PCT = 0.004;
+const MID_RATE_DRIFT = 2; // bp drift per cycle (small so old orders stay in-band)
+const LEND_QUANTITY_USD_MIN = 10;
+const LEND_QUANTITY_USD_MAX = 500;
+const BORROW_QUANTITY_USD_MIN = 10;
+const BORROW_QUANTITY_USD_MAX = 500;
+const NUM_BOT_ACCOUNTS = 6;
+const MIN_GAS_BALANCE_WEI = BigInt(1e15); // ~0.001 ETH
+
+interface BotAccount {
+    privateKey: string;
+    wallet: string;
+    privyUserId: string;
+}
+
+interface TokenFundingSpec {
+    assetId: string;
+    tokenAddress: string;
+    decimals: number;
+    isCollateral: boolean;
+}
+
+@Injectable()
+export class OrdersWorker implements OnModuleInit {
+    private readonly logger = new Logger(OrdersWorker.name);
+    private ratesByAsset = new Map<
+        string,
+        { lend: number; borrow: number; mid: number }
+    >();
+    private assetMarketCache: Array<{
+        assetId: string;
+        symbol: string;
+        marketIds: string[];
+    }> = [];
+    private botAccounts: BotAccount[] = [];
+
+    constructor(
+        private readonly orderRepository: OrderRepository,
+        private readonly marketRepository: MarketRepositories,
+        @InjectRepository(Token)
+        private readonly tokenRepository: Repository<Token>,
+        private readonly ordersService: OrdersService,
+        private readonly viemService: ViemService,
+        private readonly faucetService: FaucetService,
+        private readonly configService: ConfigService,
+        private readonly chainConfig: ChainConfigService,
+        private readonly portfolioService: PortfolioService,
+        private readonly tokensService: TokensService,
+        private readonly priceService: PriceService,
+    ) {}
+
+    private initialized = false;
+    private cycleInProgress = false;
+    private readonly topUpInProgress = new Set<string>();
+
+    async onModuleInit(): Promise<void> {
+        if (!this.isEnabled) {
+            this.logger.log(
+                "OrdersWorker is disabled (set ORDER_WORKER_ENABLED=true to enable).",
+            );
+            return;
+        }
+        this.logger.log(
+            "OrdersWorker enabled — scheduling background initialization.",
+        );
+
+        if (!this.chainConfig.hubDepositorAddress) {
+            throw new Error("HUB_DEPOSITOR_ADDRESS is not configured");
+        }
+
+        this.botAccounts = this.deriveBotAccounts();
+
+        // Run heavy init in background so the HTTP server starts immediately
+        this.initializeInBackground();
+    }
+
+    private initializeInBackground(): void {
+        (async () => {
+            try {
+                await this.ensureAccountsExist();
+                await this.refreshAssetMarketCache();
+                await this.seedBotFunding();
+                this.initialized = true;
+                this.logger.log("OrdersWorker initialized — placing orders.");
+            } catch (e) {
+                this.logger.error(
+                    `OrdersWorker background initialization failed: ${(e as Error).message}`,
+                );
+            }
+        })();
+    }
+
+    private get isEnabled(): boolean {
+        // Flag-only gate, independent of NODE_ENV, so the market-making bot can
+        // run on testnet under NODE_ENV=production (which we need for real
+        // balances/auth/CORS). Never set ORDER_WORKER_ENABLED=true on mainnet.
+        return process.env.ORDER_WORKER_ENABLED === "true";
+    }
+
+    /**
+     * Converts a human-readable token amount (possibly a float) to base units as bigint,
+     * truncating any excess decimal places beyond the token's decimals.
+     */
+    private humanAmountToBaseUnitsBigInt(
+        amount: number,
+        decimals: number,
+    ): bigint {
+        const truncated = amount.toFixed(decimals);
+        return BigInt(humanToBaseUnits(truncated, decimals));
+    }
+
+    private async usdToTokenAmount(
+        usdAmount: number,
+        assetId: string,
+    ): Promise<number> {
+        const price = await this.priceService.getPrice(assetId);
+        if (price == null || price <= 0) {
+            this.logger.warn(
+                `[OrdersWorker] No price for asset ${assetId}; falling back to raw USD value as token amount`,
+            );
+            return usdAmount;
+        }
+        const tokenAmount = usdAmount / price;
+        this.logger.debug(
+            `[OrdersWorker] USD→Token: $${usdAmount} / $${price} = ${tokenAmount.toFixed(2)} tokens for asset ${assetId}`,
+        );
+        return tokenAmount;
+    }
+
+    private deriveBotAccounts(): BotAccount[] {
+        const operatorKey = this.configService.get<string>(
+            "OPERATOR_PRIVATE_KEY",
+        );
+        if (!operatorKey) {
+            throw new Error("OPERATOR_PRIVATE_KEY is not configured");
+        }
+        const formattedKey = operatorKey.startsWith("0x")
+            ? operatorKey
+            : `0x${operatorKey}`;
+        return Array.from({ length: NUM_BOT_ACCOUNTS }, (_, i) => {
+            const derivedKey = keccak256(toHex(`${formattedKey}-bot-${i}`));
+            const account = privateKeyToAccount(derivedKey as `0x${string}`);
+            return {
+                privateKey: derivedKey,
+                wallet: account.address,
+                privyUserId: `did:privy:worker-bot-${i}`,
+            };
+        });
+    }
+
+    private async ensureAccountsExist(): Promise<void> {
+        for (const bot of this.botAccounts) {
+            await this.orderRepository.getOrCreateAccount(
+                bot.wallet,
+                bot.privyUserId,
+            );
+        }
+        this.logger.log(
+            `Ensured ${this.botAccounts.length} bot accounts exist in DB`,
+        );
+    }
+
+    // ─── Seed Funding (one-shot on init) ──────────────────────────────
+
+    /**
+     * One-shot seed funding: call faucet once per bot, deposit everything into HubDepositor.
+     */
+    private async seedBotFunding(): Promise<void> {
+        const operatorKey = this.configService.get<string>(
+            "OPERATOR_PRIVATE_KEY",
+        );
+        if (!operatorKey) {
+            this.logger.error(
+                "OPERATOR_PRIVATE_KEY is not configured; cannot fund bots",
+            );
+            return;
+        }
+        const formattedKey = operatorKey.startsWith("0x")
+            ? operatorKey
+            : `0x${operatorKey}`;
+
+        const assetIds = Array.from(
+            new Set(this.assetMarketCache.map((e) => e.assetId)),
+        );
+        const tokens = await this.tokenRepository.find({
+            where: { id: In(assetIds) },
+        });
+        const tokenById = new Map(tokens.map((t) => [t.id, t]));
+
+        const collateralTokens = await this.tokenRepository.find({
+            where: {
+                isLoanToken: false,
+                chainId: this.chainConfig.chainId as unknown as number,
+            },
+        });
+
+        // Build specs for all tokens (loan + collateral)
+        const collateralAddressSet = new Set(
+            collateralTokens.map((t) => t.tokenAddress?.toLowerCase()),
+        );
+        const allSpecs: TokenFundingSpec[] = [];
+        for (const assetId of assetIds) {
+            const token = tokenById.get(assetId);
+            if (!token?.tokenAddress || token.decimals == null) continue;
+            allSpecs.push({
+                assetId: token.id,
+                tokenAddress: token.tokenAddress,
+                decimals: token.decimals,
+                isCollateral: collateralAddressSet.has(
+                    token.tokenAddress.toLowerCase(),
+                ),
+            });
+        }
+        for (const token of collateralTokens) {
+            if (!token.tokenAddress || token.decimals == null) continue;
+            // Avoid duplicates
+            if (allSpecs.some((s) => s.tokenAddress === token.tokenAddress))
+                continue;
+            allSpecs.push({
+                assetId: token.id,
+                tokenAddress: token.tokenAddress,
+                decimals: token.decimals,
+                isCollateral: true,
+            });
+        }
+
+        for (const bot of this.botAccounts) {
+            try {
+                await this.ensureGasForBot(formattedKey, bot.wallet);
+                await this.faucetAndDeposit(bot, allSpecs);
+            } catch (e) {
+                this.logger.error(
+                    `Failed seed funding for bot ${bot.wallet}: ${(e as Error).message}`,
+                );
+            }
+        }
+    }
+
+    // ─── Faucet + Deposit (single round) ──────────────────────────────
+
+    /**
+     * Call faucet once for all tokens, deposit whatever was received into HubDepositor,
+     * sync portfolio, and set collateral.
+     */
+    private async faucetAndDeposit(
+        bot: BotAccount,
+        specs: TokenFundingSpec[],
+    ): Promise<void> {
+        if (specs.length === 0) return;
+
+        // Filter to HubDepositor-supported tokens
+        const supportedResults = await Promise.all(
+            specs.map((s) =>
+                this.viemService
+                    .readContract<boolean>(
+                        this.chainConfig.chainId,
+                        this.chainConfig.hubDepositorAddress,
+                        HubDepositorAbi,
+                        "isSupportedAsset",
+                        [s.tokenAddress],
+                    )
+                    .then((supported) => ({ ...s, supported }))
+                    .catch(() => ({ ...s, supported: false })),
+            ),
+        );
+        const supportedSpecs = supportedResults.filter((r) => r.supported);
+
+        if (supportedSpecs.length === 0) {
+            this.logger.debug(
+                `No HubDepositor-supported tokens to fund for bot ${bot.wallet}; skipping`,
+            );
+            return;
+        }
+
+        const tokenAddresses = supportedSpecs.map((s) => s.tokenAddress);
+
+        // Ensure max approval for each token
+        for (const spec of supportedSpecs) {
+            const allowance = await this.viemService.readContract<bigint>(
+                this.chainConfig.chainId,
+                spec.tokenAddress,
+                erc20Abi,
+                "allowance",
+                [bot.wallet, this.chainConfig.hubDepositorAddress],
+            );
+            if (allowance === 0n) {
+                await this.writeContractWithNonceRetry(
+                    bot.privateKey,
+                    spec.tokenAddress,
+                    erc20Abi,
+                    "approve",
+                    [
+                        this.chainConfig.hubDepositorAddress,
+                        BigInt(
+                            "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+                        ),
+                    ],
+                );
+                await new Promise((r) => setTimeout(r, 1500));
+            }
+        }
+
+        // Call faucet once for all tokens
+        try {
+            await this.faucetService.requestTokensBatch(
+                this.chainConfig.chainId,
+                bot.wallet,
+                tokenAddresses,
+            );
+        } catch (e) {
+            this.logger.warn(
+                `Faucet request failed for bot ${bot.wallet}: ${(e as Error).message}`,
+            );
+        }
+
+        // Deposit whatever wallet balance we have into HubDepositor.
+        // indexer-v3 credits user_balance.available from the resulting
+        // BalanceLedger.Credited event; no eager DB write here.
+        for (const spec of supportedSpecs) {
+            try {
+                const walletBalance =
+                    await this.viemService.readContract<bigint>(
+                        this.chainConfig.chainId,
+                        spec.tokenAddress,
+                        erc20Abi,
+                        "balanceOf",
+                        [bot.wallet],
+                    );
+                if (walletBalance === 0n) continue;
+
+                await this.writeContractWithNonceRetry(
+                    bot.privateKey,
+                    this.chainConfig.hubDepositorAddress,
+                    HubDepositorAbi,
+                    "deposit",
+                    [spec.tokenAddress, walletBalance],
+                );
+            } catch (e) {
+                this.logger.error(
+                    `Failed to deposit token ${spec.tokenAddress} for bot ${bot.wallet}: ${(e as Error).message}`,
+                );
+            }
+        }
+
+        this.logger.log(
+            `Faucet + deposit complete for bot ${bot.wallet} (${supportedSpecs.length} token(s))`,
+        );
+
+        // Note: legacy off-chain `setAssetAsCollateral` was removed in
+        // Phase 2 of the loophole-fix work. Bot collateral is no longer
+        // marked off-chain. If a future test scenario needs bots to have
+        // on-chain `usedAsCollateral=true`, route through
+        // `CollateralService.flag` (which enqueues, then settlement engine
+        // applies on-chain) or call `CollateralManager.flagFor` directly
+        // with the operator key. The current bot orders work without it
+        // because Phase 1 matching engine does not HF-gate at order time.
+    }
+
+    private async ensureGasForBot(
+        operatorKey: string,
+        botAddress: string,
+    ): Promise<void> {
+        try {
+            const publicClient = this.viemService.getPublicClient(
+                this.chainConfig.chainId,
+            );
+            const balance = await publicClient.getBalance({
+                address: botAddress as `0x${string}`,
+            });
+            if (balance >= MIN_GAS_BALANCE_WEI) return;
+
+            const operatorAccount = privateKeyToAccount(
+                (operatorKey.startsWith("0x")
+                    ? operatorKey
+                    : `0x${operatorKey}`) as `0x${string}`,
+            );
+            const walletClient = this.viemService.getWalletClient(
+                operatorKey,
+                this.chainConfig.chainId,
+            );
+            const hash = await walletClient.sendTransaction({
+                account: operatorAccount,
+                to: botAddress as `0x${string}`,
+                value: MIN_GAS_BALANCE_WEI,
+            });
+            await publicClient.waitForTransactionReceipt({ hash });
+            this.logger.log(`Sent gas to bot ${botAddress} (tx: ${hash})`);
+        } catch (e) {
+            this.logger.error(
+                `Failed to fund gas for bot ${botAddress}: ${(e as Error).message}`,
+            );
+        }
+    }
+
+    // ─── On-demand top-ups (single faucet call) ──────────────────────
+
+    /**
+     * On-demand collateral top-up: faucet once + deposit for a single bot.
+     */
+    private async topUpCollateralForBot(bot: BotAccount): Promise<void> {
+        if (this.topUpInProgress.has(bot.wallet)) return;
+        this.topUpInProgress.add(bot.wallet);
+        try {
+            const operatorKey = this.configService.get<string>(
+                "OPERATOR_PRIVATE_KEY",
+            );
+            if (!operatorKey) return;
+            const formattedKey = operatorKey.startsWith("0x")
+                ? operatorKey
+                : `0x${operatorKey}`;
+
+            const collateralTokens = await this.tokenRepository.find({
+                where: {
+                    isLoanToken: false,
+                    chainId: this.chainConfig.chainId as unknown as number,
+                },
+            });
+            if (collateralTokens.length === 0) return;
+
+            await this.ensureGasForBot(formattedKey, bot.wallet);
+
+            const specs: TokenFundingSpec[] = collateralTokens
+                .filter((t) => t.tokenAddress && t.decimals != null)
+                .map((t) => ({
+                    assetId: t.id,
+                    tokenAddress: t.tokenAddress!,
+                    decimals: t.decimals!,
+                    isCollateral: true,
+                }));
+
+            await this.faucetAndDeposit(bot, specs);
+            this.logger.log(
+                `[topUpCollateral] Topped up collateral for bot ${bot.wallet}`,
+            );
+        } finally {
+            this.topUpInProgress.delete(bot.wallet);
+        }
+    }
+
+    /**
+     * On-demand loan token top-up: faucet once + deposit for a single bot and token.
+     */
+    private async topUpLoanTokenForBot(
+        bot: BotAccount,
+        assetId: string,
+    ): Promise<void> {
+        const key = `lend-${bot.wallet}`;
+        if (this.topUpInProgress.has(key)) return;
+        this.topUpInProgress.add(key);
+        try {
+            const operatorKey = this.configService.get<string>(
+                "OPERATOR_PRIVATE_KEY",
+            );
+            if (!operatorKey) return;
+            const formattedKey = operatorKey.startsWith("0x")
+                ? operatorKey
+                : `0x${operatorKey}`;
+
+            const token = await this.tokenRepository.findOne({
+                where: { id: assetId },
+            });
+            if (!token?.tokenAddress || token.decimals == null) return;
+
+            await this.ensureGasForBot(formattedKey, bot.wallet);
+
+            const specs: TokenFundingSpec[] = [
+                {
+                    assetId: token.id,
+                    tokenAddress: token.tokenAddress,
+                    decimals: token.decimals,
+                    isCollateral: false,
+                },
+            ];
+
+            await this.faucetAndDeposit(bot, specs);
+            this.logger.log(
+                `[topUpLoanToken] Topped up loan token ${token.symbol} for bot ${bot.wallet}`,
+            );
+        } finally {
+            this.topUpInProgress.delete(key);
+        }
+    }
+
+    // ─── Cache ───────────────────────────────────────────────────────────
+
+    @Interval(CACHE_REFRESH_INTERVAL_MS)
+    async refreshAssetMarketCache(): Promise<void> {
+        if (!this.isEnabled) return;
+
+        try {
+            const markets =
+                await this.marketRepository.findAllMarketsForCache();
+            const tokens = await this.tokenRepository.find();
+            const tokenSymbolMap = new Map<string, string>();
+            for (const t of tokens) {
+                tokenSymbolMap.set(t.id, t.symbol);
+            }
+
+            const grouped = new Map<string, string[]>();
+            for (const m of markets) {
+                const arr = grouped.get(m.assetId) ?? [];
+                arr.push(m.marketId);
+                grouped.set(m.assetId, arr);
+            }
+            this.assetMarketCache = Array.from(grouped.entries()).map(
+                ([assetId, marketIds]) => ({
+                    assetId,
+                    symbol: tokenSymbolMap.get(assetId) ?? "UNKNOWN",
+                    marketIds,
+                }),
+            );
+            this.logger.debug(
+                `Asset/market cache refreshed: ${this.assetMarketCache.map((e) => e.symbol).join(", ")}`,
+            );
+        } catch (error) {
+            this.logger.error(
+                `Failed to refresh asset/market cache: ${(error as Error).message}`,
+            );
+        }
+    }
+
+    // ─── Place orders (all bots × all assets per cycle) ──────────────
+
+    @Interval(ORDER_CYCLE_INTERVAL_MS)
+    async placeOrders(): Promise<void> {
+        if (!this.isEnabled || !this.initialized || this.cycleInProgress)
+            return;
+        if (this.assetMarketCache.length === 0) {
+            this.logger.warn(
+                "[OrdersWorker] placeOrders skipped: assetMarketCache is empty (no markets in DB)",
+            );
+            return;
+        }
+
+        this.cycleInProgress = true;
+        try {
+            for (const entry of this.assetMarketCache) {
+                // Refresh paired rates once per asset per cycle
+                this.refreshRatesForAsset(entry.assetId);
+
+                for (const bot of this.botAccounts) {
+                    // Reverse-direction natural rates (lend > borrow) prevent
+                    // bot from self-crossing, so we always place both sides.
+                    await this.placeLendOrderWithRetry(bot, entry);
+                    await this.placeBorrowOrderWithRetry(bot, entry);
+                }
+            }
+        } finally {
+            this.cycleInProgress = false;
+        }
+    }
+
+    /**
+     * Place a LEND order with up to 3 attempts:
+     *  1. Try directly
+     *  2. On failure → faucet + deposit → retry same amount
+     *  3. On failure → compute max available amount → retry reduced amount
+     */
+    private async placeLendOrderWithRetry(
+        bot: BotAccount,
+        entry: { assetId: string; marketIds: string[]; symbol: string },
+    ): Promise<void> {
+        const { assetId, marketIds, symbol } = entry;
+        const decimals =
+            await this.tokensService.getTokenDecimalsByAssetId(assetId);
+        if (decimals == null) return;
+
+        const account = await this.orderRepository.findAccountByWallet(
+            bot.wallet,
+        );
+        if (!account) return;
+
+        const lendMin = await this.usdToTokenAmount(
+            LEND_QUANTITY_USD_MIN,
+            assetId,
+        );
+        const lendMax = await this.usdToTokenAmount(
+            LEND_QUANTITY_USD_MAX,
+            assetId,
+        );
+        const amount = this.randomQuantity(lendMin, lendMax);
+        const rawRate = this.getLendRate(assetId);
+        const rate = await this.clampRateToSpread(
+            assetId,
+            OrderSide.Lend,
+            rawRate,
+        );
+
+        // Attempt 1: try directly
+        try {
+            const response = await this.ordersService.createLendLimitOrder(
+                { assetId, amount, marketIds, rate },
+                bot.wallet,
+                account.privyUserId,
+            );
+            this.logger.debug(
+                `[LEND] bot=${bot.wallet.slice(0, 8)} ${symbol} amount=${amount} rate=${rate}bp`,
+            );
+            await this.cancelIfSpreadExceeded(
+                response.orderId,
+                bot.wallet,
+                assetId,
+                symbol,
+            );
+            return;
+        } catch (e) {
+            this.logger.warn(
+                `[LEND] Attempt 1 failed for ${bot.wallet.slice(0, 8)} ${symbol}: ${(e as Error).message}`,
+            );
+        }
+
+        // Faucet + deposit, then attempt 2
+        await this.topUpLoanTokenForBot(bot, assetId);
+
+        try {
+            const response = await this.ordersService.createLendLimitOrder(
+                { assetId, amount, marketIds, rate },
+                bot.wallet,
+                account.privyUserId,
+            );
+            this.logger.debug(
+                `[LEND] bot=${bot.wallet.slice(0, 8)} ${symbol} amount=${amount} rate=${rate}bp (retry)`,
+            );
+            await this.cancelIfSpreadExceeded(
+                response.orderId,
+                bot.wallet,
+                assetId,
+                symbol,
+            );
+            return;
+        } catch (e) {
+            this.logger.warn(
+                `[LEND] Attempt 2 failed for ${bot.wallet.slice(0, 8)} ${symbol}: ${(e as Error).message}`,
+            );
+        }
+
+        // Attempt 3: reduced amount based on actual available balance
+        const maxAmount = await this.computeMaxLendAmount(
+            account.id,
+            assetId,
+            decimals,
+        );
+        if (maxAmount == null) {
+            this.logger.error(
+                `[LEND] Cannot place order for ${bot.wallet.slice(0, 8)} ${symbol}: no viable amount after top-up`,
+            );
+            return;
+        }
+
+        try {
+            const response = await this.ordersService.createLendLimitOrder(
+                { assetId, amount: maxAmount, marketIds, rate },
+                bot.wallet,
+                account.privyUserId,
+            );
+            this.logger.debug(
+                `[LEND] bot=${bot.wallet.slice(0, 8)} ${symbol} amount=${maxAmount} rate=${rate}bp (reduced)`,
+            );
+            await this.cancelIfSpreadExceeded(
+                response.orderId,
+                bot.wallet,
+                assetId,
+                symbol,
+            );
+        } catch (e) {
+            this.logger.error(
+                `[LEND] All 3 attempts failed for ${bot.wallet.slice(0, 8)} ${symbol}: ${(e as Error).message}`,
+            );
+        }
+    }
+
+    /**
+     * Place a BORROW order with up to 3 attempts:
+     *  1. Try directly
+     *  2. On failure → top up collateral → retry same amount
+     *  3. On failure → halve amount → retry reduced amount
+     */
+    private async placeBorrowOrderWithRetry(
+        bot: BotAccount,
+        entry: { assetId: string; marketIds: string[]; symbol: string },
+    ): Promise<void> {
+        const { assetId, marketIds, symbol } = entry;
+
+        const account = await this.orderRepository.findAccountByWallet(
+            bot.wallet,
+        );
+        if (!account) return;
+
+        const borrowMin = await this.usdToTokenAmount(
+            BORROW_QUANTITY_USD_MIN,
+            assetId,
+        );
+        const borrowMax = await this.usdToTokenAmount(
+            BORROW_QUANTITY_USD_MAX,
+            assetId,
+        );
+        const amount = this.randomQuantity(borrowMin, borrowMax);
+        const rawRate = this.getBorrowRate(assetId);
+        const rate = await this.clampRateToSpread(
+            assetId,
+            OrderSide.Borrow,
+            rawRate,
+        );
+
+        // Attempt 1: try directly
+        try {
+            const response = await this.ordersService.createBorrowLimitOrder(
+                { assetId, amount, marketIds, rate },
+                bot.wallet,
+                account.privyUserId,
+            );
+            this.logger.debug(
+                `[BORROW] bot=${bot.wallet.slice(0, 8)} ${symbol} amount=${amount} rate=${rate}bp`,
+            );
+            await this.cancelIfSpreadExceeded(
+                response.orderId,
+                bot.wallet,
+                assetId,
+                symbol,
+            );
+            return;
+        } catch (e) {
+            this.logger.warn(
+                `[BORROW] Attempt 1 failed for ${bot.wallet.slice(0, 8)} ${symbol}: ${(e as Error).message}`,
+            );
+        }
+
+        // Top up collateral, then attempt 2
+        await this.topUpCollateralForBot(bot);
+
+        try {
+            const response = await this.ordersService.createBorrowLimitOrder(
+                { assetId, amount, marketIds, rate },
+                bot.wallet,
+                account.privyUserId,
+            );
+            this.logger.debug(
+                `[BORROW] bot=${bot.wallet.slice(0, 8)} ${symbol} amount=${amount} rate=${rate}bp (retry)`,
+            );
+            await this.cancelIfSpreadExceeded(
+                response.orderId,
+                bot.wallet,
+                assetId,
+                symbol,
+            );
+            return;
+        } catch (e) {
+            this.logger.warn(
+                `[BORROW] Attempt 2 failed for ${bot.wallet.slice(0, 8)} ${symbol}: ${(e as Error).message}`,
+            );
+        }
+
+        // Attempt 3: halve the amount
+        const halvedAmount = (Number(amount) / 2).toFixed(2);
+        const minTokenAmount = await this.usdToTokenAmount(
+            BORROW_QUANTITY_USD_MIN,
+            assetId,
+        );
+        if (Number(halvedAmount) < minTokenAmount) {
+            this.logger.error(
+                `[BORROW] Cannot place order for ${bot.wallet.slice(0, 8)} ${symbol}: halved amount ${halvedAmount} below minimum`,
+            );
+            return;
+        }
+
+        try {
+            const response = await this.ordersService.createBorrowLimitOrder(
+                { assetId, amount: halvedAmount, marketIds, rate },
+                bot.wallet,
+                account.privyUserId,
+            );
+            this.logger.debug(
+                `[BORROW] bot=${bot.wallet.slice(0, 8)} ${symbol} amount=${halvedAmount} rate=${rate}bp (reduced)`,
+            );
+            await this.cancelIfSpreadExceeded(
+                response.orderId,
+                bot.wallet,
+                assetId,
+                symbol,
+            );
+        } catch (e) {
+            this.logger.error(
+                `[BORROW] All 3 attempts failed for ${bot.wallet.slice(0, 8)} ${symbol}: ${(e as Error).message}`,
+            );
+        }
+    }
+
+    /**
+     * Computes the maximum lend amount a bot can place based on available balance.
+     * Returns human-readable amount string, or null if below minimum.
+     */
+    private async computeMaxLendAmount(
+        accountId: string,
+        assetId: string,
+        decimals: number,
+    ): Promise<string | null> {
+        const portfolioBalanceRaw = await this.portfolioService.getAssetBalance(
+            accountId,
+            assetId,
+        );
+        const portfolioBalance = BigInt(portfolioBalanceRaw);
+
+        const totalOpenOrders = await this.orderRepository.getTotalOpenQuantity(
+            accountId,
+            assetId,
+            OrderSide.Lend,
+        );
+
+        const availableBalance = portfolioBalance - totalOpenOrders;
+        if (availableBalance <= 0n) return null;
+
+        // Apply 90% safety margin for fees
+        const safeBalance = (availableBalance * 90n) / 100n;
+        if (safeBalance <= 0n) return null;
+
+        const humanAmount = baseUnitsToHuman(safeBalance.toString(), decimals);
+        const numericAmount = Number(humanAmount);
+
+        // Check against minimum USD threshold
+        const price = await this.priceService.getPrice(assetId);
+        const usdValue =
+            price != null && price > 0 ? numericAmount * price : numericAmount;
+        if (usdValue < LEND_QUANTITY_USD_MIN) return null;
+
+        return numericAmount.toFixed(2);
+    }
+
+    // ─── On-chain helpers ─────────────────────────────────────────────────
+
+    private isNonceError(error: unknown): boolean {
+        const msg = ((error as Error).message ?? "").toLowerCase();
+        return (
+            msg.includes("nonce too low") ||
+            msg.includes("nonce too high") ||
+            msg.includes("lower than the current nonce") ||
+            msg.includes("higher than the next one expected")
+        );
+    }
+
+    private async writeContractWithNonceRetry(
+        privateKey: string,
+        address: string,
+        abi: readonly any[],
+        functionName: string,
+        args: any[],
+    ): Promise<TransactionReceipt> {
+        try {
+            const receipt = await this.viemService.writeContract(
+                this.chainConfig.chainId,
+                privateKey,
+                address,
+                abi,
+                functionName,
+                args,
+                { waitForReceipt: true },
+            );
+            return receipt as TransactionReceipt;
+        } catch (e) {
+            if (!this.isNonceError(e)) throw e;
+
+            this.logger.warn(
+                `Nonce error on ${functionName}; resetting wallet client and retrying`,
+            );
+            this.viemService.resetWalletClient(
+                privateKey,
+                this.chainConfig.chainId,
+            );
+            await new Promise((r) => setTimeout(r, 2000));
+            const receipt = await this.viemService.writeContract(
+                this.chainConfig.chainId,
+                privateKey,
+                address,
+                abi,
+                functionName,
+                args,
+                { waitForReceipt: true },
+            );
+            return receipt as TransactionReceipt;
+        }
+    }
+
+    // ─── Helpers ─────────────────────────────────────────────────────────
+
+    /**
+     * Checks if a specific bot account has sufficient available balance for a lend order.
+     */
+    private async botHasSufficientBalanceForLend(
+        accountId: string,
+        assetId: string,
+        quantityBaseUnits: string,
+    ): Promise<boolean> {
+        const portfolioBalanceRaw = await this.portfolioService.getAssetBalance(
+            accountId,
+            assetId,
+        );
+        const portfolioBalance = BigInt(portfolioBalanceRaw);
+
+        const totalOpenOrders = await this.orderRepository.getTotalOpenQuantity(
+            accountId,
+            assetId,
+            OrderSide.Lend,
+        );
+
+        const availableBalance = portfolioBalance - totalOpenOrders;
+        return BigInt(quantityBaseUnits) <= availableBalance;
+    }
+
+    /**
+     * Checks if a specific bot account's health factor remains >= 1 after a borrow order.
+     */
+    private async botHasSufficientHealthForBorrow(
+        accountId: string,
+        assetId: string,
+        amount: string,
+    ): Promise<boolean> {
+        const assetPrice = await this.priceService.getPrice(assetId);
+        if (assetPrice == null || assetPrice <= 0) return false;
+        const newOrderUsd = Number(amount) * assetPrice;
+
+        const hfResult = await this.portfolioService.getHealthFactorForAccount(
+            accountId,
+            {
+                additionalBorrowUsd: newOrderUsd,
+                includeOpenOrders: true,
+            },
+        );
+
+        return (
+            hfResult.healthFactor === HEALTH_FACTOR_NO_DEBT ||
+            (Number.isFinite(hfResult.healthFactor) &&
+                hfResult.healthFactor >= 1)
+        );
+    }
+
+    /**
+     * Generates a paired lend/borrow rate from a shared mid-rate per asset.
+     *
+     * Convention: lend = mid * (1 + HALF_SPREAD_PCT), borrow = mid * (1 - HALF_SPREAD_PCT)
+     * → lend > borrow, so the bot's own quotes do not auto-cross with each other
+     * across cycles. Total spread is 2 * HALF_SPREAD_PCT (0.8%), under the 1%
+     * cancel threshold. Mid drifts ±MID_RATE_DRIFT bp per cycle, small enough
+     * that older orders remain inside the active band of newer ones.
+     */
+    private refreshRatesForAsset(assetId: string): {
+        lend: number;
+        borrow: number;
+    } {
+        const existing = this.ratesByAsset.get(assetId);
+        let mid: number;
+        if (existing == null) {
+            mid =
+                RATE_MIN +
+                HALF_SPREAD +
+                Math.floor(
+                    Math.random() * (RATE_MAX - RATE_MIN - MAX_SPREAD_BPS + 1),
+                );
+        } else {
+            // Drift mid-rate slightly
+            const drift =
+                Math.floor(Math.random() * (MID_RATE_DRIFT * 2 + 1)) -
+                MID_RATE_DRIFT;
+            mid = Math.max(
+                RATE_MIN + HALF_SPREAD,
+                Math.min(RATE_MAX - HALF_SPREAD, existing.mid + drift),
+            );
+        }
+
+        const offset = Math.max(1, Math.round(mid * HALF_SPREAD_PCT));
+        const lend = Math.min(RATE_MAX, mid + offset);
+        const borrow = Math.max(RATE_MIN, mid - offset);
+
+        this.ratesByAsset.set(assetId, { lend, borrow, mid });
+        return { lend, borrow };
+    }
+
+    private getLendRate(assetId: string): number {
+        const rates = this.ratesByAsset.get(assetId);
+        return rates?.lend ?? this.refreshRatesForAsset(assetId).lend;
+    }
+
+    private getBorrowRate(assetId: string): number {
+        const rates = this.ratesByAsset.get(assetId);
+        return rates?.borrow ?? this.refreshRatesForAsset(assetId).borrow;
+    }
+
+    /**
+     * Clamps a rate so the resulting order book spread stays ≤ MAX_SPREAD_BPS.
+     *
+     * For LEND: ensures rate ≤ bestBorrowRate + MAX_SPREAD_BPS
+     * For BORROW: ensures rate ≥ bestLendRate - MAX_SPREAD_BPS
+     */
+    private async clampRateToSpread(
+        assetId: string,
+        side: OrderSide,
+        rate: number,
+    ): Promise<number> {
+        const { bestLendRate, bestBorrowRate } =
+            await this.orderRepository.getBestRatesForAsset(assetId);
+
+        let clamped = rate;
+
+        if (side === OrderSide.Lend && bestBorrowRate != null) {
+            const maxLendRate = bestBorrowRate + MAX_SPREAD_BPS;
+            clamped = Math.min(rate, maxLendRate);
+        } else if (side === OrderSide.Borrow && bestLendRate != null) {
+            const minBorrowRate = bestLendRate - MAX_SPREAD_BPS;
+            clamped = Math.max(rate, minBorrowRate);
+        }
+
+        clamped = Math.max(RATE_MIN, Math.min(RATE_MAX, clamped));
+
+        if (clamped !== rate) {
+            this.logger.debug(
+                `[clampRateToSpread] ${side} rate adjusted from ${rate}bp to ${clamped}bp for asset ${assetId} (bestLend=${bestLendRate}, bestBorrow=${bestBorrowRate})`,
+            );
+        }
+
+        return clamped;
+    }
+
+    private randomQuantity(min: number, max: number): string {
+        return (min + Math.random() * (max - min)).toFixed(2);
+    }
+
+    /**
+     * Called immediately after a bot order is placed. If the resulting order
+     * book spread (bestAsk - bestBid) / bestBid exceeds 1%, cancel the order
+     * we just placed.
+     */
+    private async cancelIfSpreadExceeded(
+        orderId: string,
+        walletAddress: string,
+        assetId: string,
+        symbol: string,
+    ): Promise<void> {
+        try {
+            const { bestLendRate, bestBorrowRate } =
+                await this.orderRepository.getBestRatesForAsset(assetId);
+
+            if (
+                bestLendRate == null ||
+                bestBorrowRate == null ||
+                bestBorrowRate <= 0
+            ) {
+                return;
+            }
+
+            const spread = (bestLendRate - bestBorrowRate) / bestBorrowRate;
+            if (spread <= SPREAD_PERCENT_LIMIT) return;
+
+            await this.ordersService.cancelOrder(orderId, walletAddress);
+            this.logger.log(
+                `[SpreadCheck] ${symbol}: cancelled ${orderId} (spread=${(spread * 100).toFixed(2)}%)`,
+            );
+        } catch (e) {
+            this.logger.warn(
+                `[SpreadCheck] Failed for ${orderId}: ${(e as Error).message}`,
+            );
+        }
+    }
+}

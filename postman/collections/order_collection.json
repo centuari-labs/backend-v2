@@ -1,0 +1,285 @@
+{
+    "info": {
+        "_postman_id": "7645ece5-af1f-4230-839e-c187da32c417",
+        "name": "Order",
+        "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+    },
+    "item": [
+        {
+            "name": "Lend limit order",
+            "id": "ce244a08-5df7-4c26-8fc8-f6151115ff18",
+            "request": {
+                "method": "POST",
+                "header": [
+                    {
+                        "key": "Content-Type",
+                        "value": "application/json",
+                        "type": "text",
+                        "uuid": "59d6b2e8-b2c4-4d3c-894d-15c42bde0a3c"
+                    },
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6IjJsR0pIc2VidkJPeHkxNWRUY2hkaTV2OU5xM2NvRVBsYlFDelFDbDlSeDAifQ.eyJzaWQiOiJjbWttdWR0cGswMzMzanUwYzA1cWZ1d2V2IiwiaXNzIjoicHJpdnkuaW8iLCJpYXQiOjE3NzA1NTg2MTgsImF1ZCI6ImNtZm1tb213dzAxNmZqbDBiZWU5aTJkczQiLCJzdWIiOiJkaWQ6cHJpdnk6Y21rM3ltN2gwMDI0Y2w4MGNuNXJzNjg0OSIsImV4cCI6MTc3MDU2MjIxOH0.wJR4R0Wl6fY05G1qlS34FcZjF0dls24i5g0D-zzHxCKeXpRdJYGSJd5Ch8v1_E2GnMBztML_J3HZ_9AxugDqPA",
+                        "type": "text",
+                        "uuid": "cadb3c73-d3be-4661-ac6c-dcf1feb0c772"
+                    }
+                ],
+                "body": {
+                    "mode": "raw",
+                    "raw": "{\n    \"assetId\": \"b66a2641-3339-4a48-805c-6da248f33dee\",\n    \"amount\": \"100\",\n    \"rate\": 550,\n    \"maturities\": [1720000000]\n  }",
+                    "options": {
+                        "raw": {
+                            "language": "json"
+                        }
+                    }
+                },
+                "url": {
+                    "raw": "{{localhost}}orders/lend/limit",
+                    "host": [
+                        "{{localhost}}orders"
+                    ],
+                    "path": [
+                        "lend",
+                        "limit"
+                    ]
+                }
+            },
+            "response": [
+                {
+                    "id": "order-lend-limit-resp-001",
+                    "name": "201 Created",
+                    "status": "Created",
+                    "code": 201,
+                    "_postman_previewlanguage": "json",
+                    "header": [
+                        {
+                            "key": "Content-Type",
+                            "value": "application/json"
+                        }
+                    ],
+                    "cookie": [],
+                    "body": "{\n  \"statusCode\": 201,\n  \"data\": {\n    \"orderId\": \"11111111-2222-3333-4444-555555555555\",\n    \"walletAddress\": \"0x1234567890abcdef1234567890abcdef12345678\",\n    \"assetId\": \"b66a2641-3339-4a48-805c-6da248f33dee\",\n    \"markets\": [\n      {\n        \"marketId\": \"00000000-0000-0000-0000-000000000001\",\n        \"maturity\": 1737052800\n      }\n    ],\n    \"timestamp\": 1736966400,\n    \"side\": \"LEND\",\n    \"type\": \"LIMIT\",\n    \"status\": \"OPEN\",\n    \"originalAmount\": \"100\",\n    \"settlementFeeAmount\": \"0.5\",\n    \"autoRollover\": false,\n    \"rate\": 5.5,\n    \"createdAt\": \"2025-01-15T10:00:00.000Z\",\n    \"updatedAt\": \"2025-01-15T10:00:00.000Z\"\n  }\n}"
+                }
+            ]
+        },
+        {
+            "name": "Lend market order",
+            "id": "3258b029-605d-4717-8745-de53ae8a170a",
+            "request": {
+                "method": "POST",
+                "header": [
+                    {
+                        "key": "Content-Type",
+                        "value": "application/json",
+                        "type": "text",
+                        "uuid": "7204cf1f-5dda-4cff-82ba-1bcbb2333ebf"
+                    },
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6IjJsR0pIc2VidkJPeHkxNWRUY2hkaTV2OU5xM2NvRVBsYlFDelFDbDlSeDAifQ.eyJzaWQiOiJjbWttdWR0cGswMzMzanUwYzA1cWZ1d2V2IiwiaXNzIjoicHJpdnkuaW8iLCJpYXQiOjE3NzA1NTg2MTgsImF1ZCI6ImNtZm1tb213dzAxNmZqbDBiZWU5aTJkczQiLCJzdWIiOiJkaWQ6cHJpdnk6Y21rM3ltN2gwMDI0Y2w4MGNuNXJzNjg0OSIsImV4cCI6MTc3MDU2MjIxOH0.wJR4R0Wl6fY05G1qlS34FcZjF0dls24i5g0D-zzHxCKeXpRdJYGSJd5Ch8v1_E2GnMBztML_J3HZ_9AxugDqPA",
+                        "type": "text",
+                        "uuid": "5d5fea6d-615e-41d9-9c1f-b107c77f19f9"
+                    }
+                ],
+                "body": {
+                    "mode": "raw",
+                    "raw": "{\n    \"assetId\": \"b66a2641-3339-4a48-805c-6da248f33dee\",\n    \"amount\": \"100\"\n  }",
+                    "options": {
+                        "raw": {
+                            "language": "json"
+                        }
+                    }
+                },
+                "url": {
+                    "raw": "{{localhost}}orders/lend/market",
+                    "host": [
+                        "{{localhost}}orders"
+                    ],
+                    "path": [
+                        "lend",
+                        "market"
+                    ]
+                }
+            },
+            "response": [
+                {
+                    "id": "order-lend-market-resp-001",
+                    "name": "201 Created",
+                    "status": "Created",
+                    "code": 201,
+                    "_postman_previewlanguage": "json",
+                    "header": [
+                        {
+                            "key": "Content-Type",
+                            "value": "application/json"
+                        }
+                    ],
+                    "cookie": [],
+                    "body": "{\n  \"statusCode\": 201,\n  \"data\": {\n    \"orderId\": \"22222222-3333-4444-5555-666666666666\",\n    \"walletAddress\": \"0x1234567890abcdef1234567890abcdef12345678\",\n    \"assetId\": \"b66a2641-3339-4a48-805c-6da248f33dee\",\n    \"markets\": [\n      {\n        \"marketId\": \"00000000-0000-0000-0000-000000000001\",\n        \"maturity\": 1737052800\n      }\n    ],\n    \"timestamp\": 1736966400,\n    \"side\": \"LEND\",\n    \"type\": \"MARKET\",\n    \"status\": \"OPEN\",\n    \"originalAmount\": \"100\",\n    \"settlementFeeAmount\": \"0.5\",\n    \"autoRollover\": false,\n    \"rate\": 4.5,\n    \"createdAt\": \"2025-01-15T10:00:00.000Z\",\n    \"updatedAt\": \"2025-01-15T10:00:00.000Z\"\n  }\n}"
+                }
+            ]
+        },
+        {
+            "name": "Borrow limit order",
+            "id": "1683ccbe-bb6e-4a89-adba-a30f07dd3e7e",
+            "request": {
+                "method": "POST",
+                "header": [
+                    {
+                        "key": "Content-Type",
+                        "value": "application/json",
+                        "type": "text",
+                        "uuid": "1abe90d3-059c-4215-982d-c36e4682d0fe"
+                    },
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6IjJsR0pIc2VidkJPeHkxNWRUY2hkaTV2OU5xM2NvRVBsYlFDelFDbDlSeDAifQ.eyJzaWQiOiJjbWttdWR0cGswMzMzanUwYzA1cWZ1d2V2IiwiaXNzIjoicHJpdnkuaW8iLCJpYXQiOjE3NzA1NTg2MTgsImF1ZCI6ImNtZm1tb213dzAxNmZqbDBiZWU5aTJkczQiLCJzdWIiOiJkaWQ6cHJpdnk6Y21rM3ltN2gwMDI0Y2w4MGNuNXJzNjg0OSIsImV4cCI6MTc3MDU2MjIxOH0.wJR4R0Wl6fY05G1qlS34FcZjF0dls24i5g0D-zzHxCKeXpRdJYGSJd5Ch8v1_E2GnMBztML_J3HZ_9AxugDqPA",
+                        "type": "text",
+                        "uuid": "aaa33d5e-1c00-4d54-bf36-aa34962e0602"
+                    }
+                ],
+                "body": {
+                    "mode": "raw",
+                    "raw": "{\n  \"assetId\": \"b66a2641-3339-4a48-805c-6da248f33dee\",\n  \"amount\": \"10\",\n  \"rate\": 2.5\n}\n",
+                    "options": {
+                        "raw": {
+                            "language": "json"
+                        }
+                    }
+                },
+                "url": {
+                    "raw": "{{localhost}}orders/borrow/limit",
+                    "host": [
+                        "{{localhost}}orders"
+                    ],
+                    "path": [
+                        "borrow",
+                        "limit"
+                    ]
+                }
+            },
+            "response": [
+                {
+                    "id": "order-borrow-limit-resp-001",
+                    "name": "201 Created",
+                    "status": "Created",
+                    "code": 201,
+                    "_postman_previewlanguage": "json",
+                    "header": [
+                        {
+                            "key": "Content-Type",
+                            "value": "application/json"
+                        }
+                    ],
+                    "cookie": [],
+                    "body": "{\n  \"statusCode\": 201,\n  \"data\": {\n    \"orderId\": \"33333333-4444-5555-6666-777777777777\",\n    \"walletAddress\": \"0x1234567890abcdef1234567890abcdef12345678\",\n    \"assetId\": \"b66a2641-3339-4a48-805c-6da248f33dee\",\n    \"markets\": [\n      {\n        \"marketId\": \"00000000-0000-0000-0000-000000000001\",\n        \"maturity\": 1737052800\n      }\n    ],\n    \"timestamp\": 1736966400,\n    \"side\": \"BORROW\",\n    \"type\": \"LIMIT\",\n    \"status\": \"OPEN\",\n    \"originalAmount\": \"10\",\n    \"settlementFeeAmount\": \"0.1\",\n    \"autoRollover\": false,\n    \"rate\": 2.5,\n    \"createdAt\": \"2025-01-15T10:00:00.000Z\",\n    \"updatedAt\": \"2025-01-15T10:00:00.000Z\"\n  }\n}"
+                }
+            ]
+        },
+        {
+            "name": "Borrow market order",
+            "id": "dc12cabf-63da-4079-9aea-5206b4f56718",
+            "request": {
+                "method": "POST",
+                "header": [
+                    {
+                        "key": "Content-Type",
+                        "value": "application/json",
+                        "type": "text",
+                        "uuid": "c79925ba-e2aa-4596-85e1-b32bb52ecdea"
+                    },
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6IjJsR0pIc2VidkJPeHkxNWRUY2hkaTV2OU5xM2NvRVBsYlFDelFDbDlSeDAifQ.eyJzaWQiOiJjbWttdWR0cGswMzMzanUwYzA1cWZ1d2V2IiwiaXNzIjoicHJpdnkuaW8iLCJpYXQiOjE3NzA1NTg2MTgsImF1ZCI6ImNtZm1tb213dzAxNmZqbDBiZWU5aTJkczQiLCJzdWIiOiJkaWQ6cHJpdnk6Y21rM3ltN2gwMDI0Y2w4MGNuNXJzNjg0OSIsImV4cCI6MTc3MDU2MjIxOH0.wJR4R0Wl6fY05G1qlS34FcZjF0dls24i5g0D-zzHxCKeXpRdJYGSJd5Ch8v1_E2GnMBztML_J3HZ_9AxugDqPA",
+                        "type": "text",
+                        "uuid": "9bc69f82-c052-488b-963c-3dab5f2bc5c3"
+                    }
+                ],
+                "body": {
+                    "mode": "raw",
+                    "raw": "{\n    \"assetId\": \"b66a2641-3339-4a48-805c-6da248f33dee\",\n    \"amount\": \"10\"\n  }",
+                    "options": {
+                        "raw": {
+                            "language": "json"
+                        }
+                    }
+                },
+                "url": {
+                    "raw": "{{localhost}}orders/borrow/market",
+                    "host": [
+                        "{{localhost}}orders"
+                    ],
+                    "path": [
+                        "borrow",
+                        "market"
+                    ]
+                }
+            },
+            "response": [
+                {
+                    "id": "order-borrow-market-resp-001",
+                    "name": "201 Created",
+                    "status": "Created",
+                    "code": 201,
+                    "_postman_previewlanguage": "json",
+                    "header": [
+                        {
+                            "key": "Content-Type",
+                            "value": "application/json"
+                        }
+                    ],
+                    "cookie": [],
+                    "body": "{\n  \"statusCode\": 201,\n  \"data\": {\n    \"orderId\": \"44444444-5555-6666-7777-888888888888\",\n    \"walletAddress\": \"0x1234567890abcdef1234567890abcdef12345678\",\n    \"assetId\": \"b66a2641-3339-4a48-805c-6da248f33dee\",\n    \"markets\": [\n      {\n        \"marketId\": \"00000000-0000-0000-0000-000000000001\",\n        \"maturity\": 1737052800\n      }\n    ],\n    \"timestamp\": 1736966400,\n    \"side\": \"BORROW\",\n    \"type\": \"MARKET\",\n    \"status\": \"OPEN\",\n    \"originalAmount\": \"10\",\n    \"settlementFeeAmount\": \"0.1\",\n    \"autoRollover\": false,\n    \"rate\": 2,\n    \"createdAt\": \"2025-01-15T10:00:00.000Z\",\n    \"updatedAt\": \"2025-01-15T10:00:00.000Z\"\n  }\n}"
+                }
+            ]
+        },
+        {
+            "name": "Cancel order",
+            "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+            "request": {
+                "method": "POST",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{localhost}}orders/:id/cancel",
+                    "host": [
+                        "{{localhost}}orders"
+                    ],
+                    "path": [
+                        ":id",
+                        "cancel"
+                    ],
+                    "variable": [
+                        {
+                            "key": "id",
+                            "value": "",
+                            "description": "Order UUID to cancel"
+                        }
+                    ]
+                }
+            },
+            "response": [
+                {
+                    "id": "order-cancel-resp-001",
+                    "name": "200 OK",
+                    "status": "OK",
+                    "code": 200,
+                    "_postman_previewlanguage": "json",
+                    "header": [
+                        {
+                            "key": "Content-Type",
+                            "value": "application/json"
+                        }
+                    ],
+                    "cookie": [],
+                    "body": "{\n  \"statusCode\": 200,\n  \"data\": {\n    \"orderId\": \"11111111-2222-3333-4444-555555555555\",\n    \"status\": \"CANCELLED\"\n  }\n}"
+                }
+            ]
+        }
+    ]
+}

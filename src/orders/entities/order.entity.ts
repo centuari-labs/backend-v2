@@ -6,7 +6,12 @@ import {
     PrimaryGeneratedColumn,
     UpdateDateColumn,
 } from "typeorm";
-import { OrderSide, OrderType, OrderStatus } from "../constants/order.constants";
+import {
+    CancelReason,
+    OrderSide,
+    OrderType,
+    OrderStatus,
+} from "../constants/order.constants";
 
 @Entity("orders")
 export class Order {
@@ -49,6 +54,9 @@ export class Order {
     @Column({ name: "settlement_fee", type: "numeric" })
     settlementFee: string;
 
+    @Column({ name: "filled_settlement_fee", type: "numeric", nullable: true })
+    filledSettlementFee: string | null;
+
     @Column({
         name: "status",
         type: "enum",
@@ -56,6 +64,17 @@ export class Order {
     })
     @Index()
     status: OrderStatus;
+
+    @Column({
+        name: "cancel_reason",
+        type: "enum",
+        enum: CancelReason,
+        nullable: true,
+    })
+    cancelReason: CancelReason | null;
+
+    @Column({ name: "auto_rollover", type: "boolean", default: false })
+    autoRollover: boolean;
 
     @CreateDateColumn({ name: "created_at" })
     createdAt: Date;

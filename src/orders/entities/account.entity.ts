@@ -1,4 +1,9 @@
-import { Column, CreateDateColumn, Entity, PrimaryGeneratedColumn } from "typeorm";
+import {
+    Column,
+    CreateDateColumn,
+    Entity,
+    PrimaryGeneratedColumn,
+} from "typeorm";
 
 @Entity("accounts")
 export class Account {
@@ -11,6 +16,9 @@ export class Account {
     @Column({ name: "user_wallet", type: "text" })
     userWallet: string;
 
-    @CreateDateColumn({ name: "created_at", type: "timestamptz" })
+    @Column({ name: "name", type: "text", nullable: true })
+    name: string | null;
+
+    @CreateDateColumn({ name: "created_at", type: "timestamp" })
     createdAt: Date;
 }

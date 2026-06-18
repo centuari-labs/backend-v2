@@ -15,8 +15,26 @@ export enum OrderStatus {
     PartiallyFilled = "PARTIALLY_FILLED",
 }
 
+export enum CancelReason {
+    UserCancelled = "USER_CANCELLED",
+    Ioc = "IOC",
+    // Order auto-expired because its market passed maturity (resting order can
+    // never validly match). Stamped by the matching-engine maturity sweep via
+    // the db-writer; status stays CANCELLED. Requires the matching
+    // `cancel_reason` enum value (migration 20260601120000).
+    MarketMatured = "MARKET_MATURED",
+}
+
 export const order_group_status = {
     active: "active",
     cancelled: "cancelled",
     completed: "completed",
 } as const;
+
+// Settlement fee configuration
+export const SETTLEMENT_FEE_RATE_BPS = 1; // 0.01%
+export const SETTLEMENT_FEE_MAX_CAP_USD = 0.05;
+
+// Trade fee configuration (must mirror matching engine defaults)
+export const MAKER_FEE_RATE_BPS = 10; // 0.1%
+export const TAKER_FEE_RATE_BPS = 20; // 0.2%

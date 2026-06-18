@@ -1,13 +1,17 @@
-import { Injectable, CanActivate, ExecutionContext, UnauthorizedException } from "@nestjs/common";
-import { PrivyService } from "../../core/privy/privy.service";
+import {
+    Injectable,
+    CanActivate,
+    ExecutionContext,
+    Logger,
+    UnauthorizedException,
+} from "@nestjs/common";
+import { AuthStrategyFactory } from "./strategies/auth-strategy.factory";
 
-/**
- * Guard that validates Privy JWT token from Authorization header
- * and attaches the user's wallet address to the request
- */
 @Injectable()
 export class AuthGuard implements CanActivate {
-    constructor(private readonly privyService: PrivyService) {}
+    private readonly logger = new Logger(AuthGuard.name);
+
+    constructor(private readonly strategyFactory: AuthStrategyFactory) {}
 
     async canActivate(context: ExecutionContext): Promise<boolean> {
         const request = context.switchToHttp().getRequest();
@@ -20,43 +24,22 @@ export class AuthGuard implements CanActivate {
         const [type, token] = authHeader.split(" ");
 
         if (type !== "Bearer" || !token) {
-            throw new UnauthorizedException("Invalid authorization header format");
+            throw new UnauthorizedException(
+                "Invalid authorization header format",
+            );
         }
 
         try {
-            const result = await this.privyService.verify(token);
-            
-            // Extract wallet address from Privy user
-            // Privy stores the wallet in linkedAccounts or similar
-            request.user = {
-                userId: result.userId,
-                walletAddress: await this.extractWalletAddress(result),
-            };
-
+            const strategy = this.strategyFactory.getStrategy(token);
+            request.user = await strategy.validate(token);
             return true;
         } catch (error) {
+            const message =
+                error instanceof Error ? error.message : String(error);
+            this.logger.warn(`Token validation failed: ${message}`);
+            // Keep the response message generic — never leak the cause to the
+            // client.
             throw new UnauthorizedException("Invalid or expired token");
-        }
-    }
-
-    private async extractWalletAddress(privyResult: { userId: string }): Promise<string> {
-        try {
-            const user = await this.privyService.getUser(privyResult.userId);
-            // Find the first linked account that is a wallet
-            // @ts-ignore - linkedAccounts types might be complex
-            const walletAccount = user.linkedAccounts.find(
-                (account: any) => account.type === 'wallet'
-            );
-
-            if (walletAccount && (walletAccount as any).address) {
-                return (walletAccount as any).address;
-            }
-            
-            // Fallback to userId if no wallet found (shouldn't happen for valid users)
-            return privyResult.userId;
-        } catch (error) {
-            console.error("Failed to extract wallet address:", error);
-            return privyResult.userId;
         }
     }
 }

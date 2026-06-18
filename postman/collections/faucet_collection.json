@@ -1,0 +1,111 @@
+{
+    "info": {
+        "_postman_id": "a6bb379b-a352-4e97-ab47-77286c5268c7",
+        "name": "Faucet",
+        "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+    },
+    "item": [
+        {
+            "name": "Faucet request",
+            "id": "bf4a86a8-534b-445f-8b09-7f365bfa7a39",
+            "request": {
+                "method": "POST",
+                "header": [
+                    {
+                        "key": "Content-Type",
+                        "value": "application/json",
+                        "type": "text",
+                        "uuid": "4fea7319-8a84-476a-98b8-7520ca43ed65"
+                    },
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer DEV_TOKEN_0x71C7656EC7ab88b098defB751B7401B5f6d8976F",
+                        "type": "text",
+                        "uuid": "16012311-7a8f-46ef-94d9-f666d1763e26"
+                    }
+                ],
+                "body": {
+                    "mode": "raw",
+                    "raw": "{\n  \"chainId\": 11155111,\n  \"recipientAddress\": \"0xYourWalletAddress\",\n  \"token\": [\n    \"0xYourUsdcContractAddress\",\n    \"0xYourWethContractAddress\",\n    \"0xYourWethContractAddress\"\n  ]\n}\n",
+                    "options": {
+                        "raw": {
+                            "language": "json"
+                        }
+                    }
+                },
+                "url": {
+                    "raw": "{{BASE_URL}}faucet/request-tokens",
+                    "host": [
+                        "{{BASE_URL}}faucet"
+                    ],
+                    "path": [
+                        "request-tokens"
+                    ]
+                }
+            },
+            "response": [
+                {
+                    "id": "faucet-request-resp-001",
+                    "name": "200 OK",
+                    "status": "OK",
+                    "code": 200,
+                    "_postman_previewlanguage": "json",
+                    "header": [
+                        {
+                            "key": "Content-Type",
+                            "value": "application/json"
+                        }
+                    ],
+                    "cookie": [],
+                    "body": "{\n  \"statusCode\": 200,\n  \"data\": {\n    \"chainId\": 11155111,\n    \"recipientAddress\": \"0xYourWalletAddress\",\n    \"transactionHash\": \"0xabc123def456789abc123def456789abc123def456789abc123def456789abcd\",\n    \"blockNumber\": \"12345678\",\n    \"status\": \"SUCCESS\",\n    \"results\": [\n      {\n        \"tokenAddress\": \"0xYourUsdcContractAddress\",\n        \"amount\": \"1000000000\"\n      },\n      {\n        \"tokenAddress\": \"0xYourWethContractAddress\",\n        \"amount\": \"1000000000000000000\"\n      }\n    ]\n  }\n}"
+                }
+            ]
+        },
+        {
+            "name": "Get tokens",
+            "id": "5f44fb64-73e7-4266-b68f-851bad00b233",
+            "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                    "raw": "http://localhost:3000/faucet/all-tokens/11155111",
+                    "protocol": "http",
+                    "host": [
+                        "localhost"
+                    ],
+                    "port": "3000",
+                    "path": [
+                        "faucet",
+                        "all-tokens",
+                        "11155111"
+                    ]
+                }
+            },
+            "response": [
+                {
+                    "id": "faucet-tokens-resp-001",
+                    "name": "200 OK",
+                    "status": "OK",
+                    "code": 200,
+                    "_postman_previewlanguage": "json",
+                    "header": [
+                        {
+                            "key": "Content-Type",
+                            "value": "application/json"
+                        }
+                    ],
+                    "cookie": [],
+                    "body": "{\n  \"statusCode\": 200,\n  \"data\": [\n    \"0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48\",\n    \"0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2\"\n  ]\n}"
+                }
+            ]
+        }
+    ],
+    "variable": [
+        {
+            "id": "133c275e-74e6-4b8e-ba1c-fdde9db58a8e",
+            "key": "BASE_URL",
+            "value": "",
+            "type": "default"
+        }
+    ]
+}

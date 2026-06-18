@@ -22,14 +22,6 @@ export class PrivyGuard implements CanActivate {
 
         const user = await this.privyAuth.verify(token);
 
-        const payload = await this.privyAuth.getUserInfo(
-            token,
-            user.issuer,
-            user.appId,
-        );
-
-        console.log("Privy user payload:", payload);
-
         req.user = user; // inject user ke request
         return true;
     }

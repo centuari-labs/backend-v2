@@ -2,8 +2,9 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { Client } from "pg";
 import "dotenv/config";
+import { getMigrationsDir } from "./migrations-dir";
 
-async function runMigrations() {
+export async function runMigrations() {
     const client = new Client({ connectionString: process.env.DATABASE_URL });
     await client.connect();
 
@@ -15,7 +16,7 @@ async function runMigrations() {
     );
   `);
 
-    const dir = join(__dirname, "../migrations");
+    const dir = getMigrationsDir(__dirname);
     const files = readdirSync(dir)
         .filter((f) => f.endsWith(".sql"))
         .sort();
@@ -54,7 +55,10 @@ async function runMigrations() {
     console.log("🎉 All migrations executed!");
 }
 
-runMigrations().catch((e) => {
-    console.error(e);
-    process.exit(1);
-});
+// Run when executed directly (e.g. pnpm db up)
+if (process.argv[1]?.includes("run-migration")) {
+    runMigrations().catch((e) => {
+        console.error(e);
+        process.exit(1);
+    });
+}

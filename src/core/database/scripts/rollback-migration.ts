@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { Client } from "pg";
 import "dotenv/config";
+import { getMigrationsDir } from "./migrations-dir";
 
 async function rollbackLastMigration() {
     const client = new Client({ connectionString: process.env.DATABASE_URL });
@@ -19,7 +20,7 @@ async function rollbackLastMigration() {
     const file = last.filename;
     console.log(`🕐 Rolling back: ${file}`);
 
-    const sqlPath = join(__dirname, "../migrations", file);
+    const sqlPath = join(getMigrationsDir(__dirname), file);
     const content = readFileSync(sqlPath, "utf8");
     const downPart = content.split("-- +goose Down")[1];
     if (!downPart) {

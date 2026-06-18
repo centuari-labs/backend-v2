@@ -1,5 +1,6 @@
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { getMigrationsDir } from "./migrations-dir";
 
 const args = process.argv.slice(2);
 if (args.length === 0) {
@@ -15,7 +16,7 @@ const timestamp = new Date()
     .replace(/[-T:.Z]/g, "")
     .slice(0, 14);
 const filename = `${timestamp}_${name}.sql`;
-const filePath = join(__dirname, "../migrations", filename);
+const filePath = join(getMigrationsDir(__dirname), filename);
 
 const template = `-- Migration: ${filename}
 -- +goose Up

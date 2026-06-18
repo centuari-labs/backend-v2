@@ -1,0 +1,52 @@
+{
+    "info": {
+        "_postman_id": "149e090b-8901-4c92-80d9-ac69f4430b60",
+        "name": "Rate history",
+        "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+    },
+    "item": [
+        {
+            "name": "Rate history",
+            "id": "73732021-90e6-4537-953d-15ccc74f9387",
+            "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                    "raw": "http://localhost:3000/rate-history?assetId=ac7ae153-ad3f-44aa-96e7-44c8d22e84ab",
+                    "protocol": "http",
+                    "host": [
+                        "localhost"
+                    ],
+                    "port": "3000",
+                    "path": [
+                        "rate-history"
+                    ],
+                    "query": [
+                        {
+                            "key": "assetId",
+                            "value": "ac7ae153-ad3f-44aa-96e7-44c8d22e84ab",
+                            "uuid": "7d5d29f1-4ab9-4bd4-acd7-8a1ed88e5935"
+                        }
+                    ]
+                }
+            },
+            "response": [
+                {
+                    "id": "rate-history-resp-001",
+                    "name": "200 OK",
+                    "status": "OK",
+                    "code": 200,
+                    "_postman_previewlanguage": "json",
+                    "header": [
+                        {
+                            "key": "Content-Type",
+                            "value": "application/json"
+                        }
+                    ],
+                    "cookie": [],
+                    "body": "{\n  \"statusCode\": 200,\n  \"data\": {\n    \"assetId\": \"ac7ae153-ad3f-44aa-96e7-44c8d22e84ab\",\n    \"rateHistory\": [\n      {\n        \"date\": \"2026-03-10T17:00:00.000Z\",\n        \"rate\": 0.05\n      },\n      {\n        \"date\": \"2026-03-11T17:00:00.000Z\",\n        \"rate\": 0.055\n      },\n      {\n        \"date\": \"2026-03-12T17:00:00.000Z\",\n        \"rate\": 0.06\n      },\n      {\n        \"date\": \"2026-03-13T17:00:00.000Z\",\n        \"rate\": 0.065\n      },\n      {\n        \"date\": \"2026-03-14T17:00:00.000Z\",\n        \"rate\": 0.07\n      }\n    ]\n  }\n}"
+                }
+            ]
+        }
+    ]
+}

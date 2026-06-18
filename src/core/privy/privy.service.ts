@@ -14,10 +14,19 @@ export class PrivyService {
     private readonly verificationKey: string | null;
 
     constructor() {
-        this.privy = new PrivyClient(
-            process.env.NEXT_PUBLIC_PRIVY_APP_ID as string,
-            process.env.NEXT_PUBLIC_PRIVY_PROJECT_SECRET as string,
-        );
+        // Fail closed at boot: a misconfigured prod (e.g. testnet config bleed,
+        // or a missing mainnet Privy app) must surface immediately, not as an
+        // opaque runtime auth failure. PRIVY_APP_ID must match the frontend's
+        // NEXT_PUBLIC_PRIVY_APP_ID — mainnet and testnet are separate Privy apps.
+        const appId = process.env.PRIVY_APP_ID;
+        const projectSecret = process.env.PRIVY_PROJECT_SECRET;
+        if (!appId || !projectSecret) {
+            throw new Error(
+                "[privy] PRIVY_APP_ID and PRIVY_PROJECT_SECRET must both be set. Mainnet and testnet use separate Privy apps; PRIVY_APP_ID must equal the frontend NEXT_PUBLIC_PRIVY_APP_ID.",
+            );
+        }
+
+        this.privy = new PrivyClient(appId, projectSecret);
 
         // Try to load verification key if it exists
         const keyPath = join(
@@ -28,14 +37,14 @@ export class PrivyService {
             "keys",
             "verificationKeyPrivy.key.pub",
         );
-        
+
         if (existsSync(keyPath)) {
             this.verificationKey = readFileSync(keyPath, "utf-8");
             this.logger.log("Verification key loaded successfully");
         } else {
             this.verificationKey = null;
             this.logger.warn(
-                "Verification key not found at keys/verificationKey.pub.key - getUserInfo will not work"
+                "Verification key not found at keys/verificationKey.pub.key - getUserInfo will not work",
             );
         }
     }
@@ -58,28 +67,12 @@ export class PrivyService {
 
             return result;
         } catch (err) {
-            console.error("Privy verification error:", err);
-            throw new UnauthorizedException("Invalid Privy token");
-        }
-    }
-
-    async getUserInfo(accessToken: string, issuer: string, audience: string) {
-        try {
-            const verificationKey = await this.getVerificationKey();
-            const payload = await jose.jwtVerify(accessToken, verificationKey, {
-                issuer: issuer,
-                audience: audience,
-            });
-            console.log(payload);
-
-            // const user = await this.privy.getUser(userId);
-            // return user;
-        } catch (err) {
             this.logger.error(
-                `Failed to fetch user info for userId: ${"a"}`,
-                err as any,
+                `Privy verification error: ${
+                    err instanceof Error ? err.message : String(err)
+                }`,
             );
-            throw new Error("Failed to fetch user info");
+            throw new UnauthorizedException("Invalid Privy token");
         }
     }
 
@@ -87,7 +80,9 @@ export class PrivyService {
         try {
             return await this.privy.getUser(userId);
         } catch (error) {
-            this.logger.error(`Failed to fetch user ${userId}: ${(error as Error).message}`);
+            this.logger.error(
+                `Failed to fetch user ${userId}: ${(error as Error).message}`,
+            );
             throw error;
         }
     }

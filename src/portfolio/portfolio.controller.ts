@@ -1,4 +1,5 @@
 import { Controller, Get, Post, Query, UseGuards, Body } from "@nestjs/common";
+import { Throttle } from "@nestjs/throttler";
 import { PortfolioService } from "./portfolio.service";
 import { RepayService } from "./repay.service";
 import { OrderHistoryQueryDto } from "./dto/order-history.dto";
@@ -87,6 +88,12 @@ export class PortfolioController {
         return this.portfolioService.getUserDetails(wallet);
     }
 
+    // On-chain operator path — tight per-wallet throttle blunts
+    // drain-the-operator scenarios. Same budget as `/withdraw`.
+    @Throttle({
+        short: { ttl: 1000, limit: 1 },
+        long: { ttl: 60_000, limit: 5 },
+    })
     @Post("withdraw-lend-position")
     async withdrawLendPosition(
         @Body() dto: WithdrawLendPositionDto,
@@ -108,6 +115,12 @@ export class PortfolioController {
         return this.portfolioService.getOpenOrders(wallet, query);
     }
 
+    // On-chain operator path — tight per-wallet throttle blunts
+    // drain-the-operator scenarios. Same budget as `/withdraw`.
+    @Throttle({
+        short: { ttl: 1000, limit: 1 },
+        long: { ttl: 60_000, limit: 5 },
+    })
     @Post("repay")
     async repay(
         @Body() dto: RepayRequestDto,

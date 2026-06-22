@@ -1,5 +1,9 @@
 import { Injectable, UnauthorizedException } from "@nestjs/common";
-import type { AuthUser, IAuthStrategy } from "./auth-strategy.interface";
+import type {
+    AuthPrincipal,
+    AuthUser,
+    IAuthStrategy,
+} from "./auth-strategy.interface";
 
 /**
  * Development-only auth strategy that accepts tokens in the format:
@@ -27,6 +31,11 @@ export class DevAuthStrategy implements IAuthStrategy {
         return token.startsWith(DevAuthStrategy.PREFIX);
     }
 
+    // Strict 20-byte hex address only — rejects "0x", oversized input, and
+    // arbitrary suffixes that would otherwise mint unbounded fake identities
+    // (each distinct dev "user" gets its own throttle bucket).
+    private static readonly ADDRESS_PATTERN = /^0x[0-9a-fA-F]{40}$/;
+
     async validate(token: string): Promise<AuthUser> {
         if (!DevAuthStrategy.isDevToken(token)) {
             throw new UnauthorizedException("Invalid dev token format");
@@ -34,7 +43,7 @@ export class DevAuthStrategy implements IAuthStrategy {
 
         const walletAddress = token.slice(DevAuthStrategy.PREFIX.length);
 
-        if (!walletAddress || !walletAddress.startsWith("0x")) {
+        if (!DevAuthStrategy.ADDRESS_PATTERN.test(walletAddress)) {
             throw new UnauthorizedException(
                 "Dev token must contain a valid wallet address",
             );
@@ -44,6 +53,16 @@ export class DevAuthStrategy implements IAuthStrategy {
             userId: `dev-user-${walletAddress.toLowerCase()}`,
             walletAddress,
         };
+    }
+
+    // Dev validation is fully local, so both stages reuse validate().
+    async verifyPrincipal(token: string): Promise<AuthPrincipal> {
+        const user = await this.validate(token);
+        return { userId: user.userId };
+    }
+
+    async resolveAuthUser(token: string): Promise<AuthUser> {
+        return this.validate(token);
     }
 
     getName(): string {

@@ -5,13 +5,13 @@ import {
     Logger,
     UnauthorizedException,
 } from "@nestjs/common";
-import { AuthStrategyFactory } from "./strategies/auth-strategy.factory";
+import { RequestAuthService } from "./strategies/request-auth.service";
 
 @Injectable()
 export class AuthGuard implements CanActivate {
     private readonly logger = new Logger(AuthGuard.name);
 
-    constructor(private readonly strategyFactory: AuthStrategyFactory) {}
+    constructor(private readonly requestAuth: RequestAuthService) {}
 
     async canActivate(context: ExecutionContext): Promise<boolean> {
         const request = context.switchToHttp().getRequest();
@@ -30,8 +30,11 @@ export class AuthGuard implements CanActivate {
         }
 
         try {
-            const strategy = this.strategyFactory.getStrategy(token);
-            request.user = await strategy.validate(token);
+            // Shared per-request resolver: if the global throttler already
+            // verified this token for its bucket key, the result is memoized
+            // and no second verification happens (AuthGuard stays the sole
+            // setter of request.user).
+            request.user = await this.requestAuth.getAuthUser(request);
             return true;
         } catch (error) {
             const message =

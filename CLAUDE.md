@@ -98,7 +98,9 @@ Request → AuthGuard → Controller → Service → Repository/NATS/Viem → Re
 ### Auth Flow
 
 ```
-AuthGuard → AuthStrategyFactory → PrivyAuthStrategy → sets request.user { userId, walletAddress }
+WalletThrottlerGuard (APP_GUARD) → RequestAuthService.getPrincipal   # stage-1: local JWT verify → throttle bucket key (user:<userId> | ip:<ip>)
+AuthGuard → RequestAuthService.getAuthUser → AuthStrategyFactory → PrivyAuthStrategy   # stage-2: full validation + getUser
+          → sets request.user { userId, walletAddress }   # AuthGuard remains the sole setter; both stages memoized per request
 ```
 
 ## Design Patterns

@@ -14,7 +14,6 @@ import { RedeemAccessCodeDto } from "./dto/redeem-access-code.dto";
 import { GenerateAccessCodesDto } from "./dto/generate-access-codes.dto";
 import { AuthGuard } from "../common/guards/auth.guard";
 import { AdminSecretGuard } from "../common/guards/admin-secret.guard";
-import { WalletThrottlerGuard } from "../common/guards/wallet-throttler.guard";
 import { CurrentUser } from "../common/decorators/wallet.decorator";
 import type { AuthUser } from "../common/guards/strategies/auth-strategy.interface";
 
@@ -38,7 +37,7 @@ export class AuthController {
     }
 
     @Post("redeem-access-code")
-    @UseGuards(AuthGuard, WalletThrottlerGuard)
+    @UseGuards(AuthGuard)
     async redeemAccessCode(
         @CurrentUser() user: AuthUser,
         @Body() body: RedeemAccessCodeDto,

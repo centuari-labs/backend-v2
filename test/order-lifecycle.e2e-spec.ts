@@ -8,6 +8,12 @@ jest.mock("../src/common/guards/strategies/privy-auth.strategy", () => ({
         async validate() {
             return { userId: "mock", walletAddress: "0xMock" };
         }
+        async verifyPrincipal() {
+            return { userId: "mock" };
+        }
+        async resolveAuthUser() {
+            return { userId: "mock", walletAddress: "0xMock" };
+        }
         getName() {
             return "privy";
         }
@@ -25,6 +31,7 @@ import { OrdersService } from "../src/orders/orders.service";
 
 import { AuthGuard } from "../src/common/guards/auth.guard";
 import { AuthStrategyFactory } from "../src/common/guards/strategies/auth-strategy.factory";
+import { RequestAuthService } from "../src/common/guards/strategies/request-auth.service";
 import { DevAuthStrategy } from "../src/common/guards/strategies/dev-auth.strategy";
 import { PrivyAuthStrategy } from "../src/common/guards/strategies/privy-auth.strategy";
 
@@ -79,11 +86,17 @@ describe("Order Lifecycle E2E", () => {
             providers: [
                 { provide: OrdersService, useValue: mockOrdersService },
                 AuthGuard,
+                RequestAuthService,
                 AuthStrategyFactory,
                 DevAuthStrategy,
                 {
                     provide: PrivyAuthStrategy,
-                    useValue: { validate: jest.fn(), getName: () => "privy" },
+                    useValue: {
+                        validate: jest.fn(),
+                        verifyPrincipal: jest.fn(),
+                        resolveAuthUser: jest.fn(),
+                        getName: () => "privy",
+                    },
                 },
             ],
         }).compile();

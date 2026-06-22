@@ -20,6 +20,12 @@ jest.mock("../../common/guards/strategies/privy-auth.strategy", () => ({
         async validate(_token: string) {
             return { userId: "u-1", walletAddress: AUTH_WALLET };
         }
+        async verifyPrincipal(_token: string) {
+            return { userId: "u-1" };
+        }
+        async resolveAuthUser(_token: string) {
+            return { userId: "u-1", walletAddress: AUTH_WALLET };
+        }
         getName() {
             return "privy";
         }
@@ -35,6 +41,7 @@ import { FaucetController } from "../../faucet/faucet.controller";
 import { FaucetService } from "../../faucet/faucet.service";
 import { AuthGuard } from "../../common/guards/auth.guard";
 import { AuthStrategyFactory } from "../../common/guards/strategies/auth-strategy.factory";
+import { RequestAuthService } from "../../common/guards/strategies/request-auth.service";
 import { PrivyAuthStrategy } from "../../common/guards/strategies/privy-auth.strategy";
 import type { FaucetResponseDto } from "../../faucet/dto/faucet.dto";
 
@@ -68,6 +75,7 @@ describe("Faucet POST /faucet/request-tokens — auth + recipient binding", () =
             providers: [
                 { provide: FaucetService, useValue: mockFaucetService },
                 AuthGuard,
+                RequestAuthService,
                 AuthStrategyFactory,
                 PrivyAuthStrategy,
             ],

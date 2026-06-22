@@ -5,6 +5,12 @@ jest.mock("../../common/guards/strategies/privy-auth.strategy", () => ({
         async validate() {
             return { userId: "mock", walletAddress: "0xMock" };
         }
+        async verifyPrincipal() {
+            return { userId: "mock" };
+        }
+        async resolveAuthUser() {
+            return { userId: "mock", walletAddress: "0xMock" };
+        }
         getName() {
             return "privy";
         }
@@ -16,11 +22,12 @@ import { ExecutionContext, UnauthorizedException } from "@nestjs/common";
 import { AuthGuard } from "../../common/guards/auth.guard";
 import { AuthStrategyFactory } from "../../common/guards/strategies/auth-strategy.factory";
 import { PrivyAuthStrategy } from "../../common/guards/strategies/privy-auth.strategy";
+import { RequestAuthService } from "../../common/guards/strategies/request-auth.service";
 import type { AuthUser } from "../../common/guards/strategies/auth-strategy.interface";
 
 /**
  * Integration tests for the auth flow:
- * AuthGuard → AuthStrategyFactory → PrivyAuthStrategy
+ * AuthGuard → RequestAuthService → AuthStrategyFactory → PrivyAuthStrategy
  */
 describe("Auth Flow Integration", () => {
     describe("AuthGuard with PrivyAuthStrategy", () => {
@@ -43,7 +50,12 @@ describe("Auth Flow Integration", () => {
 
         beforeEach(async () => {
             const module: TestingModule = await Test.createTestingModule({
-                providers: [AuthGuard, AuthStrategyFactory, PrivyAuthStrategy],
+                providers: [
+                    AuthGuard,
+                    RequestAuthService,
+                    AuthStrategyFactory,
+                    PrivyAuthStrategy,
+                ],
             }).compile();
 
             guard = module.get<AuthGuard>(AuthGuard);

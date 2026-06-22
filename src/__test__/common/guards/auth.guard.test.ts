@@ -3,6 +3,7 @@ import { ExecutionContext, UnauthorizedException } from "@nestjs/common";
 import { AuthGuard } from "../../../common/guards/auth.guard";
 import { AuthStrategyFactory } from "../../../common/guards/strategies/auth-strategy.factory";
 import type { IAuthStrategy } from "../../../common/guards/strategies/auth-strategy.interface";
+import { RequestAuthService } from "../../../common/guards/strategies/request-auth.service";
 
 // Mock jose and PrivyService to avoid jose ESM import issues
 jest.mock("jose", () => ({}));
@@ -10,31 +11,30 @@ jest.mock("../../../core/privy/privy.service");
 
 describe("AuthGuard", () => {
     let guard: AuthGuard;
-    let strategyFactory: jest.Mocked<AuthStrategyFactory>;
+    let requestAuth: RequestAuthService;
     let mockStrategy: jest.Mocked<IAuthStrategy>;
 
     beforeEach(async () => {
         mockStrategy = {
             validate: jest.fn(),
+            verifyPrincipal: jest.fn(),
+            resolveAuthUser: jest.fn(),
             getName: jest.fn().mockReturnValue("mock"),
-        };
-
-        const mockStrategyFactory = {
-            getStrategy: jest.fn().mockReturnValue(mockStrategy),
         };
 
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 AuthGuard,
+                RequestAuthService,
                 {
                     provide: AuthStrategyFactory,
-                    useValue: mockStrategyFactory,
+                    useValue: { getStrategy: jest.fn(() => mockStrategy) },
                 },
             ],
         }).compile();
 
         guard = module.get<AuthGuard>(AuthGuard);
-        strategyFactory = module.get(AuthStrategyFactory);
+        requestAuth = module.get<RequestAuthService>(RequestAuthService);
     });
 
     const createMockExecutionContext = (
@@ -53,24 +53,46 @@ describe("AuthGuard", () => {
         } as ExecutionContext;
     };
 
+    const mockValidToken = (userId: string, walletAddress: string) => {
+        mockStrategy.verifyPrincipal.mockResolvedValue({ userId });
+        mockStrategy.resolveAuthUser.mockResolvedValue({
+            userId,
+            walletAddress,
+        });
+    };
+
     describe("canActivate", () => {
         it("should return true and set request.user when valid Bearer token provided", async () => {
-            const mockToken = "valid-token";
-            const mockAuthUser = {
-                userId: "user-123",
-                walletAddress: "0x123",
-            };
+            mockValidToken("user-123", "0x123");
 
-            mockStrategy.validate.mockResolvedValue(mockAuthUser);
-
-            const context = createMockExecutionContext(`Bearer ${mockToken}`);
+            const context = createMockExecutionContext("Bearer valid-token");
             const result = await guard.canActivate(context);
 
             expect(result).toBe(true);
-            expect(mockStrategy.validate).toHaveBeenCalledWith(mockToken);
+            expect(mockStrategy.verifyPrincipal).toHaveBeenCalledWith(
+                "valid-token",
+            );
 
             const request = context.switchToHttp().getRequest();
-            expect(request.user).toEqual(mockAuthUser);
+            expect(request.user).toEqual({
+                userId: "user-123",
+                walletAddress: "0x123",
+            });
+        });
+
+        it("should verify exactly once when the throttler tracker ran first (AE4)", async () => {
+            mockValidToken("user-123", "0x123");
+
+            const context = createMockExecutionContext("Bearer valid-token");
+            const request = context.switchToHttp().getRequest();
+
+            // Simulate the global WalletThrottlerGuard resolving the bucket
+            // key before AuthGuard runs on the same request.
+            await requestAuth.getPrincipal(request);
+            await guard.canActivate(context);
+
+            expect(mockStrategy.verifyPrincipal).toHaveBeenCalledTimes(1);
+            expect(mockStrategy.resolveAuthUser).toHaveBeenCalledTimes(1);
         });
 
         it("should throw UnauthorizedException when Authorization header is missing", async () => {
@@ -103,8 +125,8 @@ describe("AuthGuard", () => {
             );
         });
 
-        it("should throw UnauthorizedException when strategy validation fails", async () => {
-            mockStrategy.validate.mockRejectedValue(
+        it("should respond with the same generic message when validation fails", async () => {
+            mockStrategy.verifyPrincipal.mockRejectedValue(
                 new UnauthorizedException("Invalid token"),
             );
 
@@ -118,20 +140,19 @@ describe("AuthGuard", () => {
             );
         });
 
-        it("should use strategy from factory", async () => {
-            const mockToken = "test-token";
-            const mockAuthUser = {
-                userId: "user-456",
-                walletAddress: "0x456",
-            };
+        it("should fail closed when wallet resolution fails", async () => {
+            mockStrategy.verifyPrincipal.mockResolvedValue({
+                userId: "user-123",
+            });
+            mockStrategy.resolveAuthUser.mockRejectedValue(
+                new UnauthorizedException("No wallet linked"),
+            );
 
-            mockStrategy.validate.mockResolvedValue(mockAuthUser);
+            const context = createMockExecutionContext("Bearer valid-token");
 
-            const context = createMockExecutionContext(`Bearer ${mockToken}`);
-            await guard.canActivate(context);
-
-            expect(strategyFactory.getStrategy).toHaveBeenCalled();
-            expect(mockStrategy.validate).toHaveBeenCalledWith(mockToken);
+            await expect(guard.canActivate(context)).rejects.toThrow(
+                "Invalid or expired token",
+            );
         });
     });
 });

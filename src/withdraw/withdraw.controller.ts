@@ -12,7 +12,8 @@ import {
 export class WithdrawController {
     constructor(private readonly withdrawService: WithdrawService) {}
 
-    // Withdraw triggers an on-chain payout — tightly rate-limit per IP.
+    // Withdraw triggers an on-chain payout — tight per-identity throttle
+    // (user bucket via the global tracker; IP bucket when unauthenticated).
     @Throttle({
         short: { ttl: 1000, limit: 1 },
         long: { ttl: 60000, limit: 5 },

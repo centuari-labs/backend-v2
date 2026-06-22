@@ -124,6 +124,85 @@ describe("PrivyService", () => {
         });
     });
 
+    describe("verify with local key (stale-key self-heal)", () => {
+        const pemKey =
+            "-----BEGIN PUBLIC KEY-----\nMOCK\n-----END PUBLIC KEY-----";
+        let service: PrivyService;
+
+        beforeEach(() => {
+            mockExistsSync.mockReturnValue(true);
+            mockReadFileSync.mockReturnValue(pemKey);
+            service = new PrivyService();
+        });
+
+        it("verifies locally using the key file (no network key fetch)", async () => {
+            mockVerifyAuthToken.mockResolvedValue({ userId: "did:privy:u1" });
+
+            const result = await service.verify("tok.en.a");
+
+            expect(result).toEqual({ userId: "did:privy:u1" });
+            expect(mockVerifyAuthToken).toHaveBeenCalledWith(
+                "tok.en.a",
+                pemKey,
+            );
+        });
+
+        it("self-heals when the local key is stale: falls back to the fetched key and stops trusting the file", async () => {
+            mockVerifyAuthToken.mockImplementation((_token, key) =>
+                key
+                    ? Promise.reject(new Error("bad signature"))
+                    : Promise.resolve({ userId: "did:privy:u1" }),
+            );
+
+            const result = await service.verify("tok.en.a");
+            expect(result).toEqual({ userId: "did:privy:u1" });
+            expect(mockVerifyAuthToken).toHaveBeenNthCalledWith(
+                1,
+                "tok.en.a",
+                pemKey,
+            );
+            expect(mockVerifyAuthToken).toHaveBeenNthCalledWith(2, "tok.en.a");
+
+            // Stale flag flipped: subsequent verifies skip the local key.
+            mockVerifyAuthToken.mockClear();
+            await service.verify("tok.en.b");
+            expect(mockVerifyAuthToken).toHaveBeenCalledTimes(1);
+            expect(mockVerifyAuthToken).toHaveBeenCalledWith("tok.en.b");
+        });
+
+        it("throws Unauthorized when both local and fetched-key verification fail", async () => {
+            mockVerifyAuthToken.mockRejectedValue(new Error("bad signature"));
+
+            await expect(service.verify("tok.en.a")).rejects.toThrow(
+                UnauthorizedException,
+            );
+        });
+    });
+
+    describe("onModuleInit prewarm", () => {
+        it("fires a non-blocking best-effort prewarm when no key file exists", async () => {
+            mockExistsSync.mockReturnValue(false);
+            mockVerifyAuthToken.mockRejectedValue(new Error("expected"));
+
+            const service = new PrivyService();
+            expect(() => service.onModuleInit()).not.toThrow();
+
+            // Flush the swallowed rejection.
+            await new Promise(process.nextTick);
+            expect(mockVerifyAuthToken).toHaveBeenCalledTimes(1);
+        });
+
+        it("skips the prewarm entirely when the local key file is present", () => {
+            mockExistsSync.mockReturnValue(true);
+            mockReadFileSync.mockReturnValue("PEM");
+
+            const service = new PrivyService();
+            service.onModuleInit();
+
+            expect(mockVerifyAuthToken).not.toHaveBeenCalled();
+        });
+    });
+
     describe("getUser", () => {
         let service: PrivyService;
 
